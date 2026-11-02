@@ -1,0 +1,14 @@
+# The doc tools (`just docs`, `just docs-lint`, the CI unit job): what they need, by name.
+# requirements.txt beside this is compiled from it and is what is installed, every version
+# exact, into a venv of their own (.build/docs-venv), constrained by the tool's own lock so
+# ansible-core is the version the tool runs (antsibull-docs reads the docs through ansible-doc):
+#   uv pip compile --universal --python-version 3.12 docs/tools/requirements.in \
+#     -c requirements.txt -o docs/tools/requirements.txt
+# A bump is a recompile, reviewed as a commit.
+ansible-core
+antsibull-docs>=2.28,<3
+ansible-pygments
+sphinx
+sphinx-ansible-theme>=0.10
+pdoc
+pyyaml

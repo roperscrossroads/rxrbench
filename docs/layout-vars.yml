@@ -1,0 +1,409 @@
+---
+# The variables of a layout, one entry each: docs/LAYOUT.md's tables are generated from this
+# file, and so is each role spec's type and description of one (`just docs-layout`; a unit test
+# checks both). Text is Markdown, as LAYOUT.md shows it; a spec gets it in Ansible's markup.
+# An entry is {name, type, text}; a row that is not one variable is {label, text}.
+tables:
+  go-aheads:
+    - name: bench_apply_allowed
+      type: bool
+      text: >-
+        `true` lets `just apply` (and every other writing play) write to this layout's boards;
+        without it a layout can only be planned. Every writing play passes one gate
+        (`playbooks/tasks/gate.yml`) and hands the go-ahead to each writing module
+        (`apply_allowed`), which refuses without it
+    - name: bench_first_flash
+      type: bool
+      text: >-
+        per board: `true` lets a board that does not answer as the image's family be written (an
+        ESP32 is erased whole first)
+    - name: bench_uf2_enter_as
+      type: str
+      text: >-
+        per board, or `-e` for one run: the family whose way of asking for UF2 mode the board's app
+        takes, when no family's read can say what it runs (a first flash). Needed only when the
+        plan refuses because two families' shells run on the app's USB vendor and ask
+        differently (two Zephyr firmwares on 2fe3). When the board says it runs another family,
+        the flash refuses: what the board says wins (docs/ARCHITECTURE.md#entering-uf2-mode)
+    - name: bench_full_erase
+      type: bool
+      text: >-
+        for one run (`just apply <layout> -e bench_full_erase=true`): an `esp-image` board on its
+        image's partition table gets a full install, the whole chip with every data partition as
+        the image has it (its config and identity gone), instead of an update, which writes its
+        app partitions only, as a vendor's web installer does without its full-erase box
+    - name: bench_boot_radio_ok
+      type: bool
+      text: >-
+        per board: `true` lets a fresh write (a first flash, a family switch) of an image whose
+        catalog `boot_radio` breaks the RF rules go ahead: the board's antenna is on a dummy load,
+        or it is shielded. Without it the flasher refuses, naming what the image would transmit on
+    - name: bench_console_elsewhere
+      type: bool
+      text: >-
+        per board: `true` lets a picoboot image whose shell is not on the board's USB port (the
+        manifest's `console`, from its build) be written to a board the bench reaches by its
+        console: its console is wired elsewhere (a UART on the bench host)
+    - name: bench_app_manager_overwrite
+      type: bool
+      text: >-
+        per board: `true` lets an ESP32 whose partition table shows an app manager (a firmware in
+        its own partition that installs other images in slots beside it) be written at 0x0 or into
+        those slots, which orphans every installed app: `bench_overwrite: [all]` for this board. Without
+        it (or `bench_overwrite` naming each region the write takes) every ESP32 writer refuses such a
+        chip: a plan by the write rule over the survey's record of the chip, the apply over the table
+        and images it reads before writing
+    - name: bench_overwrite
+      type: list
+      text: >-
+        per board: the regions of the chip a write may take although they hold firmware the board
+        does not run, by their partition labels (`[ota_1, game]`), or `[all]`
+        (docs/ARCHITECTURE.md#partitions-and-the-write-rule). Without it, an ESP32 write that would
+        cover such a region, or
+        a new partition table that would drop one, is refused and names each region. On a chip
+        with an app manager every data region (`nvs`, a filesystem) is shared by its apps, so a
+        region erase or restore there names it too (`[nvs, spiffs]`).
+        `bench_app_manager_overwrite: true` is `[all]`
+    - name: bench_foreign
+      type: str
+      text: >-
+        per layout or board: what a plan does with what the survey found on a chip that the layout
+        does not own (other firmware in an app slot, data every app of a chip with an app manager
+        shares; docs/ARCHITECTURE.md#partitions-and-the-write-rule): `info` (the default) prints it,
+        `warn` prints it as a
+        warning, `refuse` stops the board. Read from the survey's facts, with their date; a write
+        checks the chip itself whatever this says. Regions `bench_overwrite` names are left out
+        too, and what the board's family says its declaration owns there (a Launcher layout:
+        Launcher, the apps it declares, and the shared data when it declares every app on the chip)
+  images:
+    - name: bench_store
+      type: str
+      text: >-
+        the controller's image store root (a plugin's staging recipes fill it)
+    - name: bench_image
+      type: str
+      text: >-
+        the directory of a board's staged image (`manifest.json` beside the image); no image, no
+        flash
+    - name: bench_flasher
+      type: str
+      text: >-
+        `esptool`, `esp-image`, `uf2`, `picoboot`, `smp`, `swd` or `sim` (a plugin may name its
+        own): how the image is written. The catalog's class or the registry's `swd` route sets it, a
+        layout may override
+    - name: bench_picoboot_enter
+      type: list
+      text: >-
+        per board, `picoboot` only: the ways into the ROM bootloader, in order, over the board
+        type's `uf2.enter` (`reset-interface`, `touch-1200`, `shell:<command>`, `manual`)
+    - name: bench_picoboot_manual_wait
+      type: int
+      text: >-
+        per board, `picoboot` only: the seconds `manual` waits for BOOTSEL to be held while reset is
+        pressed (default 0: not offered)
+    - name: bench_picoboot_enter_wait
+      type: int
+      text: >-
+        per board, `picoboot` only, over the board type's `uf2.enter_wait`: seconds to wait for the
+        bootloader after each way in (default 10)
+    - name: bench_picoboot_ask_timeout
+      type: int
+      text: >-
+        per board, `picoboot` only, over the board type's `uf2.ask_timeout`: seconds a touch or
+        shell command may take before that way counts as failed (default 15)
+    - name: bench_flash_unknown
+      type: bool
+      text: >-
+        `false` refuses a board that answers as its family but reports neither a build nor a hash,
+        instead of writing it forward. Default `true`: firmware older than the build id could not be
+        rolled otherwise. Whatever it says, the read-back after a write must match the image, and an
+        image with no build or hash is always refused
+    - name: bench_check_depth
+      type: str
+      text: >-
+        `full` (the default) or `spot`, for a layout, a board or one run (`-e
+        bench_check_depth=spot`): how much the checks before a write read (docs/ARCHITECTURE.md#checking-depth).
+        `spot` reads only what a read's design says is enough for its decision, and only where a
+        read has a spot form; a first flash, a family switch and the other moments that read in
+        full ignore it. In a plan, a flasher that offers it (esp-image, smp) takes what the
+        board runs from its last full read instead of asking it, while the bench host's plug
+        watcher has seen nothing on its port since; a write by hand or over the air that makes no
+        USB event is not seen (docs/ARCHITECTURE.md#checking-depth): keep `full` on
+        a bench where hands or other tools write to boards. Each flasher's result says which
+        depth it used and why (`checked`, `identity_checked`)
+    - name: bench_tools
+      type: dict
+      text: >-
+        where the bench host keeps a flasher's tools, when not where the default install puts them:
+        a dict with any of `esptool`, `imginfo`, `uf2_tool`, `devreg`. UF2 boards are flashed
+        through `~/rxrbench/bin/uf2_flash.py`
+    - name: bench_ble_rebond
+      type: str
+      text: >-
+        `smp` over BLE, what to do with a bond the host holds when the first exchange fails: `auto`
+        (default) removes it only when the board, asked on its console, no longer holds it; `force`
+        removes it without asking; `never` leaves it
+    - name: bench_sim_run
+      type: str
+      text: >-
+        the simulated bench's run directory (sockets, logs)
+    - name: bench_socket
+      type: str
+      text: >-
+        a board's broker socket path; the sim layer sets it, a real bench host's brokers are found
+        by name
+    - name: bench_bootloader
+      type: dict
+      text: >-
+        the UF2 bootloader a layout wants (`name`, `version`, pinned by `sha256`): `just boot`, the
+        mesh plugin's step
+    - name: bench_bootloader_policy
+      type: str
+      text: >-
+        when an ESP32 bootloader is rewritten: `key` (its signing key differs, the default) or
+        `exact` (its bytes differ)
+    - name: bench_bootloader_carrier
+      type: str
+      text: >-
+        a staged image directory (like `bench_image`) small enough to carry a UF2 board through a
+        bootloader update; a board whose installed image reaches the bootloader's staging area is
+        refused without one
+    - name: bench_devreg_tool
+      type: str
+      text: >-
+        the devreg script on the host that reaches a Linux device, when it is not the deployed
+        `~/.devreg/devreg.py` (a layout whose modules run on the controller names the repository's
+        own)
+    - label: "a plugin's own"
+      text: >-
+        what its families read: `rxrbench.linux`'s README lists a Linux device's (`bench_bundle`,
+        `bench_wait_good`, where a bundle lands, the unit that gates a slot), `rxrbench.mesh`'s a
+        mesh node's
+    - name: bench_card_image
+      type: str
+      text: >-
+        the whole-disk image `just card` writes through a registered reader
+  tool-options:
+    - name: bench_tests
+      type: list
+      text: >-
+        `just device-test`: a list of `{name, cmd, expect, refuse, rc, timeout}`; an empty list
+        declares none (the board is named as untested, and a run where no board has any is
+        refused)
+    - name: bench_scenarios
+      type: list
+      text: >-
+        `just scenario`: a list of `{name, steps}`, each step `{board, cmd, expect, refuse, rc,
+        timeout, within, name}`: the command runs on the board named, judged there, with `within`
+        seconds to come true; a failed step ends its scenario. Declared once for the layout
+        (group_vars), since a scenario spans boards
+    - name: bench_test_bindings
+      type: dict
+      text: >-
+        `just scenario`, `just run`: the library tests this layout runs, `{<test>: {<role>:
+        <board>}}`. A library test is `<site>/tests/<name>.yml` (the layout's own site): `needs.roles`
+        says what each role's board must be (`families`, `via`, `features`), its steps name roles
+        (`board: $a`). Each role is bound to a board here; a role left out is refused with the boards
+        that would fit it, a board that misses a need with what it misses, and nothing runs until
+        every binding holds. A bound test runs as a scenario of its name and its record carries the
+        binding (docs/ARCHITECTURE.md#runs-tests-and-campaigns)
+    - name: bench_diag_commands
+      type: list
+      text: >-
+        `just diag`: what to collect beyond the vocabulary's defaults
+    - name: bench_diag_console_bytes
+      type: int
+      text: >-
+        `just diag`: how much of the console log to collect
+    - name: bench_broker_boards
+      type: list
+      text: >-
+        the boards a bench host runs serial brokers for (`just hosts-setup`); defaults to every
+        board with a console on that host
+    - name: bench_locate
+      type: str
+      text: >-
+        per board: the indicator `just locate` uses, naming the plugin's `locate_<word>.yml`; the
+        inventory publishes the family's own (`bench_led` is the family's word for it), and a layout
+        sets another (a buzzer wired to the board)
+    - name: bench_secret_policy
+      type: dict
+      text: >-
+        `{<kind>: {escrow: false}}` leaves a secret a board made alone: not escrowed, not given back
+    - label: "`bench_host_*`"
+      text: >-
+        the bench_host role's knobs: deployed files, directories, links, pruning
+        (`roles/bench_host/defaults`)
+  published:
+    - name: bench_board
+      type: str
+      text: >-
+        the board's name in the layout
+    - name: bench_devreg
+      type: str
+      text: >-
+        the board's name in the device registry
+    - name: bench_family
+      type: str
+      text: >-
+        the firmware family the board declares (`firmware.family`)
+    - name: bench_fw_kind
+      type: str
+      text: >-
+        what the registry says the board runs: `port`, `stock`, or `unknown` (the default)
+    - name: bench_plugin
+      type: str
+      text: >-
+        the plugin collection that brings the board's family (unset for a built-in one)
+    - name: bench_families
+      type: dict
+      text: >-
+        every loaded family as data (`module_utils/familyspec.py`): what a module on a bench host
+        takes as `families`
+    - name: bench_update
+      type: str
+      text: >-
+        how the family is updated: none for this tool's flashers, else its plugin's step
+        (`update_<word>.yml`)
+    - name: bench_vocabulary
+      type: str
+      text: >-
+        the family's configuration language, which names its plugin's task file
+    - name: bench_config_via
+      type: str
+      text: >-
+        how the family's configuration is written (a console, a phone API tunnel, the network)
+    - name: bench_identity_key
+      type: str
+      text: >-
+        what names an image of the family (the key of its identity a catalog image records)
+    - name: bench_board_tag
+      type: str
+      text: >-
+        the registry's board type for the board: an image must be built for it
+    - name: bench_compatible
+      type: str
+      text: >-
+        the registry's `compatible` for the device: an update bundle must carry it
+    - name: bench_may_transmit
+      type: bool
+      text: >-
+        the registry's word on whether the board may transmit at all
+    - name: bench_usb_serial
+      type: str
+      text: >-
+        the registry's `match.usb_serial`: the chip a flasher that selects by it is handed
+        (`picoboot`)
+    - name: bench_chip_mac
+      type: str
+      text: >-
+        an ESP32's MAC as the registry holds it (`policy.chip_mac`, else a `usb_serial` that is a
+        MAC, else the MAC a `serial_by_id` carries): what `esp-image`, the esptool routes and
+        `erase-chip` check in their loader session before they write
+    - name: bench_rf_rules
+      type: dict
+      text: >-
+        the RF rules this board was checked against: the site's ceiling, tightened by the layout's
+        `rf_rules`; handed to the modules that write a radio, which check again what they are about
+        to write
+    - name: bench_mcu
+      type: str
+      text: >-
+        the board type's chip (`catalog/boards.yml`: core's, each plugin's and a site's, later over
+        earlier): what esptool is told
+    - name: bench_psram
+      type: raw
+      text: >-
+        the board type's PSRAM, which a first flash checks
+    - name: bench_routes
+      type: dict
+      text: >-
+        one route per verb (`shell`, `flash`, `config`, `diag`): bearer, host, address, what it can
+        do
+    - name: bench_access_host
+      type: str
+      text: >-
+        the bench host the board is reached from
+    - name: bench_present
+      type: bool
+      text: >-
+        whether the board is taken to be there: the plug watcher sees it, or could not tell (no
+        fresh index, a simulated board, a chip behind a debug probe, a board the registry gives no
+        chip id or MAC: assumed present, the last with a warning, and its first read decides). A
+        board the watcher would know and does not see is skipped, and so is one whose first read
+        finds nothing there
+    - name: bench_via
+      type: str
+      text: >-
+        how a command reaches the device, from the route chosen for its shell: `console` (through
+        its serial broker), `ssh`, or none. `just diag` and `just device-test` use it; a device with no
+        console is in the `no_console` group and gets no broker
+    - name: bench_can
+      type: list
+      text: >-
+        what can be done to a device flashed its way beside writing its image: `regions` (backup,
+        restore and erase of its config regions), `chip` (chip backup and restore). Empty for a
+        flasher that can do neither; the plays skip or refuse by this, never by a flasher's name
+    - name: bench_flash_regions
+      type: list
+      text: >-
+        from the catalog image's `regions`, else its family's `flash_regions`: the ranges of a
+        chip with no partition table and no flash map in its images (`[{label, kind, start, size,
+        role}]`), checked when the layout loads. A flasher that can read the chip asks the write
+        rule over them, and refuses a write over the `boot` range unless `bench_overwrite` names
+        it (docs/ARCHITECTURE.md#partitions-and-the-write-rule)
+    - name: bench_sources
+      type: dict
+      text: >-
+        from the catalog: where each family's source tree is on this machine
+    - name: bench_secret_kinds
+      type: list
+      text: >-
+        the secrets the board holds, each with its origin, its task files and whether the site
+        escrows it
+    - name: bench_key_escrow
+      type: str
+      text: >-
+        how the board's identity key is escrowed, for a family's own tasks
+    - name: bench_family_tasks
+      type: str
+      text: >-
+        the family's own task file within its plugin's vocabulary
+    - name: bench_diag_defaults
+      type: list
+      text: >-
+        what `just diag` asks the family by default
+    - name: bench_family_facts
+      type: dict
+      text: >-
+        what the family's task files need to know of this board, each also as `bench_<key>` (what
+        they are is its plugin's README's to list)
+    - name: bench_repo
+      type: str
+      text: >-
+        the tool's repository (its `venv/`, `tools/`, `runs/`, `backups/`, `.build/`): a layout
+        names a path under it with this, never with `playbook_dir`
+    - name: bench_site_dir
+      type: str
+      text: >-
+        where the site is (`module_utils/site.py`)
+    - name: bench_registry
+      type: str
+      text: >-
+        the site's device registry file
+    - name: bench_facts_dir
+      type: str
+      text: >-
+        where the site keeps the boards' facts (what the survey and `just boot` record)
+    - name: bench_layout
+      type: str
+      text: >-
+        the layout's name
+    - name: bench_layout_dir
+      type: str
+      text: >-
+        the layout's directory
+    - name: bench_layers
+      type: list
+      text: >-
+        the layers the layout inherits, lowest first
