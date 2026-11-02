@@ -1,0 +1,165 @@
+---
+# The same checks on a Forgejo instance (Forgejo Actions reads .forgejo/workflows and then
+# ignores .github/workflows; GitHub ignores this directory). Two of the GitHub workflow's jobs:
+# the unit tests and lint, and the simulated Zephyr bench (Zephyr 4.5.0 only). The container
+# sims need a Docker daemon inside the job and the simulated bench host needs KVM, so they run
+# on GitHub only (docs/SIMULATED.md).
+#
+# The jobs ask for the label `docker`: a runner that runs each job in its own container (a
+# Debian image with node, which the checkout action needs), as root. Python comes from uv, at
+# the version the workstation runs.
+name: test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NUTTX_TAG: nuttx-12.13.0
+  ZEPHYR: "4.5.0"
+
+jobs:
+  unit:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          # a runner takes `github.token` from a secret named FORGEJO_TOKEN (then GITEA_TOKEN,
+          # GITHUB_TOKEN) when one is defined, which an organisation may have for something
+          # else; this is the job's own token
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Python, and the system python3 with PyYAML as on a bench host
+        run: |
+          apt-get update -q
+          apt-get install -y -q python3 python3-venv python3-pip python3-yaml
+          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh  # upstream (privacy: allow)
+      - name: The tool's venv
+        run: |
+          uv venv -q --python 3.12 --seed venv
+          ./venv/bin/pip install -q -r requirements.txt rust-just==1.45.0
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+          echo "$PWD/venv/bin" >> "$GITHUB_PATH"
+      - name: Unit tests
+        run: ./venv/bin/pytest -q -rs tests/unit
+      - name: Core alone, without the bundled plugins (core-portability P1)
+        run: ./venv/bin/python tools/core_only.py -rs
+      - name: Lint
+        run: |
+          ./venv/bin/yamllint -s .
+          ./venv/bin/ansible-lint
+          ./venv/bin/python tools/privacy_check.py
+      - name: The docs as antsibull-docs reads them
+        run: ./venv/bin/python tools/docs.py lint
+
+  sim:
+    runs-on: docker
+    needs: unit
+    env:
+      RXRBENCH_ZEPHYR_WORKSPACE: /root/ws
+      RXRBENCH_NUTTX_WORKSPACE: /root/ws/nuttx-ws
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # the job's own token (see the unit job)
+      - name: Host build tools and Python
+        run: |
+          apt-get update -q
+          apt-get install -y -q python3 python3-venv python3-pip python3-yaml ninja-build gperf \
+            device-tree-compiler gcc g++ gcc-multilib g++-multilib qemu-system-arm xz-utils wget \
+            file make bison flex
+          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh  # upstream (privacy: allow)
+      - name: A Zephyr workspace from the repository's manifest, and the SDK's Arm toolchain
+        run: |
+          # the west workspace holds the tool as its manifest project (`self: path: rxrbench`)
+          mkdir -p /root/ws && cp -a . /root/ws/rxrbench
+          uv venv -q --python 3.12 --seed /root/ws/.venv
+          # CMake from PyPI: Zephyr 4.5 wants 3.28, newer than the distribution's
+          /root/ws/.venv/bin/pip install -q west cmake==3.31.6
+          echo "/root/ws/.venv/bin" >> "$GITHUB_PATH"
+          export PATH="/root/ws/.venv/bin:$PATH"
+          cd /root/ws
+          west init -l rxrbench --mf "west-zephyr-$ZEPHYR.yml"
+          west update -o=--depth=1
+          west zephyr-export
+          pip install -q -r zephyr/scripts/requirements-base.txt \
+            -r bootloader/mcuboot/scripts/requirements.txt
+          west sdk install -t arm-zephyr-eabi -b /root/sdk
+          d=$(ls -d /root/sdk/*/ | head -1); echo "ZEPHYR_SDK_INSTALL_DIR=${d%/}" >> "$GITHUB_ENV"
+      - name: The tool's venv
+        working-directory: /root/ws/rxrbench
+        run: |
+          uv venv -q --python 3.12 --seed venv
+          ./venv/bin/pip install -q -r requirements.txt
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+      - name: What this machine has of what the benches need
+        working-directory: /root/ws/rxrbench
+        run: ./venv/bin/python tools/doctor.py --require zephyr,qemu
+      - name: The simulated boards
+        working-directory: /root/ws/rxrbench
+        run: |
+          ./venv/bin/python tools/zephyr_sim.py build --name zephyr-shell \
+            --app zephyr/samples/subsys/shell/shell_module
+          ./venv/bin/python tools/zephyr_sim.py build --name zephyr-shell-b \
+            --app zephyr/samples/subsys/shell/shell_module \
+            --conf collections/ansible_collections/rxrbench/core/sim/zephyr/prompt-b.conf
+      - name: The SMP server, signed as MCUboot images at two versions (MCUmgr on native_sim)
+        working-directory: /root/ws/rxrbench
+        run: |
+          c=collections/ansible_collections/rxrbench/core/sim/zephyr
+          app=zephyr/samples/subsys/mgmt/mcumgr/smp_svr
+          ./venv/bin/python tools/zephyr_sim.py build --name zsmp --app $app --conf $c/smp-shell.conf \
+            --overlay $c/big-flash.overlay --family zephyr_mcumgr --sign 1.0.0
+          ./venv/bin/python tools/zephyr_sim.py build --name zsmp-b --app $app --conf $c/smp-shell.conf \
+            --conf $c/zsmp-b.conf --overlay $c/big-flash.overlay --family zephyr_mcumgr --sign 1.1.0
+      - name: The MCUmgr client venv the SMP module runs with
+        working-directory: /root/ws/rxrbench
+        run: |
+          uv venv -q --python 3.13 --seed /root/.venv-mcumgr
+          /root/.venv-mcumgr/bin/pip install -q \
+            -r collections/ansible_collections/rxrbench/core/host/venvs/mcumgr.txt
+      - name: NuttX, its apps and its sim board at two builds (the nuttx plugin's board)
+        working-directory: /root/ws/rxrbench
+        run: |
+          w="$RXRBENCH_NUTTX_WORKSPACE"; u=https://github.com/apache; mkdir -p "$w"   # upstream (privacy: allow)
+          git clone -q --depth 1 -b "$NUTTX_TAG" "$u/nuttx" "$w/nuttx"
+          git clone -q --depth 1 -b "$NUTTX_TAG" "$u/nuttx-apps" "$w/apps"
+          python3 -m venv "$w/.venv" && "$w/.venv/bin/pip" install -q kconfiglib
+          n=collections/ansible_collections/rxrbench/nuttx/tools/nuttx_sim.py
+          ./venv/bin/python "$n" build --name nsh
+          ./venv/bin/python "$n" build --name nsh-b --set 'CONFIG_NSH_PROMPT_STRING="nsh-b> "'
+      - name: The zephyr plugin's application, at three versions
+        working-directory: /root/ws/rxrbench
+        run: |
+          z=collections/ansible_collections/rxrbench/zephyr/sim
+          for v in 1.0 1.1 2.0; do
+            ./venv/bin/python tools/zephyr_sim.py build --name zapp-$v --app $z/zapp --conf $z/zephyr/zapp-$v.conf
+          done
+      - name: The emulated MCU's images (the SMP server under MCUboot on the MPS2 AN385, two versions)
+        working-directory: /root/ws/rxrbench
+        run: |
+          c=collections/ansible_collections/rxrbench/core/sim/zephyr
+          app=zephyr/samples/subsys/mgmt/mcumgr/smp_svr
+          ./venv/bin/python tools/zephyr_qemu.py build --name zq --app $app --conf $c/smp-shell-mcu.conf \
+            --version 1.0.0
+          ./venv/bin/python tools/zephyr_qemu.py build --name zq-b --app $app --conf $c/smp-shell-mcu.conf \
+            --conf $c/zq-b.conf --version 2.0.0
+      - name: sops and age, for the encrypted store the secrets test uses (pinned, checksummed)
+        working-directory: /root/ws/rxrbench
+        run: |
+          ./venv/bin/python tools/pins.py install sops age
+          ./venv/bin/python tools/pins.py path >> "$GITHUB_PATH"
+      - name: Everything the sim files need is there
+        working-directory: /root/ws/rxrbench
+        run: ./venv/bin/python tools/doctor.py --require zephyr,qemu,nuttx,smp,secrets
+      - name: The simulated Zephyr bench, and what a device keeps
+        working-directory: /root/ws/rxrbench
+        run: >-
+          ./venv/bin/pytest -q -rs tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
+          tests/sim/test_mcumgr_sim.py tests/sim/test_nuttx_sim.py tests/sim/test_qemu_sim.py
+          tests/sim/test_core_only_sim.py tests/sim/test_run_state_sim.py tests/sim/test_campaign_sim.py
