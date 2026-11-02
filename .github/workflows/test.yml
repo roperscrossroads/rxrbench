@@ -1,0 +1,322 @@
+---
+# The bench on a PC, in CI (docs/SIMULATED.md). Five jobs: the unit tests and lint (the docs'
+# too) on every push; the container sims (Linux devices, stock Meshtastic); the mesh sims (zephyrtastic
+# built for native_sim from its own public, pinned workspace); the simulated Zephyr bench
+# (Zephyr's shell sample built for native_sim, two boards behind real brokers, planned, flashed
+# and tested), once per Zephyr release in west-zephyr-<version>.yml; and, where the runner has
+# QEMU, the whole thing on the simulated bench host.
+name: test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NUTTX_TAG: nuttx-12.13.0
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: The tool's venv
+        run: |
+          # devreg runs under the machine's own python3, as on a bench host: it needs PyYAML there
+          python3 -m pip install -q pyyaml
+          python3 -m venv venv
+          # just (pinned, as the mesh-sim job's): the README's commands table is checked against it
+          ./venv/bin/pip install -q -r requirements.txt rust-just==1.45.0
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+      - name: Unit tests
+        run: ./venv/bin/pytest -q -rs tests/unit
+      - name: Core alone, without the bundled plugins (core-portability P1)
+        run: ./venv/bin/python tools/core_only.py -rs
+      - name: Lint
+        run: |
+          ./venv/bin/yamllint -s .
+          ./venv/bin/ansible-lint
+          ./venv/bin/python tools/privacy_check.py
+      - name: The docs as antsibull-docs reads them (the pinned doc tools, their own venv)
+        # ansible-lint passes a DOCUMENTATION it cannot read; this fails it, and a markup or
+        # argument spec antsibull-docs would render wrong
+        run: ./venv/bin/python tools/docs.py lint
+
+  containers:
+    # The simulated benches that need only Docker: Linux devices as containers with an ssh
+    # server (the Linux plugin), and stock Meshtastic's own Linux build with its simulated radio,
+    # configured over its network API (the mesh plugin's simmt). A skip is a failure here: a
+    # sim that did not run tested nothing.
+    runs-on: ubuntu-24.04
+    needs: unit
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: The tool's venv
+        run: |
+          python3 -m pip install -q pyyaml
+          python3 -m venv venv
+          ./venv/bin/pip install -q -r requirements.txt
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+      - name: The pinned tools the secrets tests use (sops, age)
+        run: |
+          ./venv/bin/python tools/pins.py install sops age
+          echo "$HOME/.local/share/rxrbench/bin" >> "$GITHUB_PATH"
+      - name: The pinned stock Meshtastic image
+        run: ./venv/bin/python collections/ansible_collections/rxrbench/mesh/sim/stock/simmt.py pull
+      - name: The container sims
+        run: |
+          ./venv/bin/pytest -q -rs tests/sim/test_linux_sim.py tests/sim/test_meshtastic_stock_sim.py \
+            | tee sims.out
+          # pytest's own summary line, not the logs above it (which say "skipping" of tasks)
+          if tail -n 1 sims.out | grep -qE "[0-9]+ skipped"; then
+            echo "a container sim was skipped"; exit 1
+          fi
+
+  mesh-sim:
+    # The mesh plugin on simulated boards: zephyrtastic (a public Zephyr firmware) built for
+    # native_sim from its own manifest, at a pinned commit, with the Zephyr patches it carries
+    # (west patch apply), then the sim boards behind real brokers: plan, apply, secrets, a family
+    # of images. zephcore's sims (and the family switch, which needs it) have no public firmware
+    # and run on a workstation only. A skip here is a failure.
+    runs-on: ubuntu-24.04
+    needs: unit
+    env:
+      ZEPHYRTASTIC_REV: 1117570e96cc3b18b175b57ba1057800a2d47edb   # the build the bench runs
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: rxrbench
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          repository: roperscrossroads/zephyrtastic
+          ref: ${{ env.ZEPHYRTASTIC_REV }}
+          path: zephyrtastic
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Host build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q cmake ninja-build gperf device-tree-compiler gcc g++ xz-utils wget
+      - name: zephyrtastic's Zephyr workspace (its own manifest; native_sim needs no vendor HAL)
+        uses: zephyrproject-rtos/action-zephyr-setup@5ec39f5cba83346d83a836dfed1524270c660e28  # v1.0.14, privacy: allow
+        with:
+          app-path: zephyrtastic
+          toolchains: arm-zephyr-eabi
+          west-project-filter: -hal_espressif,-hal_nordic,-hal_stm32,-hal_xtensa
+      - name: The Zephyr patches zephyrtastic carries
+        working-directory: zephyrtastic
+        run: west patch apply
+      - name: Under act (just ci mesh-sim) the tool is the workspace itself, not checked out into it
+        if: ${{ env.ACT }}
+        run: "[ -e rxrbench ] || ln -s . rxrbench"
+      - name: The tool's venv, just, sops and age
+        working-directory: rxrbench
+        run: |
+          python3 -m pip install -q pyyaml
+          python3 -m venv venv
+          ./venv/bin/pip install -q -r requirements.txt rust-just==1.45.0
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+          ./venv/bin/python tools/pins.py install sops age
+          echo "$HOME/.local/share/rxrbench/bin" >> "$GITHUB_PATH"
+      - name: The sim boards, class 0 and class 90 (a site that says only where the source is)
+        working-directory: rxrbench
+        run: |
+          site="$RUNNER_TEMP/ci-site"; mkdir -p "$site/catalog"
+          printf 'sources:\n  zephyrtastic: {tree: %s/zephyrtastic, workspace: %s}\n' \
+            "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" > "$site/catalog/firmware.yml"
+          RXRBENCH_SITE="$site" ./venv/bin/just sim-build zephyrtastic 0
+          RXRBENCH_SITE="$site" ./venv/bin/just sim-build zephyrtastic 90
+      - name: The mesh sims
+        working-directory: rxrbench
+        run: |
+          set -o pipefail
+          # the one test of these that needs zephcore (no public source) is left out by name, so
+          # that any other skip still fails the job
+          ./venv/bin/pytest -q -rs tests/sim/test_sim_board.py tests/sim/test_managed_sim.py \
+            tests/sim/test_secrets_sim.py tests/sim/test_sim_layout.py tests/sim/test_sim_flash.py \
+            --deselect tests/sim/test_secrets_sim.py::test_a_key_a_board_made_is_escrowed_compared_and_never_shown \
+            | tee sims.out
+          if tail -n 1 sims.out | grep -qE "[0-9]+ skipped"; then
+            echo "a mesh sim was skipped"; exit 1
+          fi
+
+  sim:
+    runs-on: ubuntu-24.04
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        # 4.5.0 is what the workstation's sim images are built from (and what `vm` takes);
+        # 4.4.1 the previous release, where the emulated MCU's tests skip (test_qemu_sim.py)
+        zephyr: ["4.5.0", "4.4.1"]
+    env:
+      # the west workspace is the job's directory; the tool is checked out inside it
+      RXRBENCH_ZEPHYR_WORKSPACE: ${{ github.workspace }}
+      RXRBENCH_NUTTX_WORKSPACE: ${{ github.workspace }}/nuttx-ws
+      ZEPHYR_SDK_INSTALL_DIR: ${{ github.workspace }}/zephyr-sdk   # where the action puts it (privacy: allow)
+    defaults:
+      run:
+        working-directory: rxrbench
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: rxrbench
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Host build tools (before the Zephyr setup, whose SDK installer needs cmake)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q cmake ninja-build gperf device-tree-compiler gcc g++ \
+            qemu-system-arm xz-utils wget
+      - name: A Zephyr to build the boards from (west, the modules, the SDK's Arm toolchain)
+        uses: zephyrproject-rtos/action-zephyr-setup@5ec39f5cba83346d83a836dfed1524270c660e28  # v1.0.14, privacy: allow
+        with:
+          app-path: rxrbench
+          manifest-file-name: west-zephyr-${{ matrix.zephyr }}.yml
+          toolchains: arm-zephyr-eabi
+      - name: What the workspace still needs (the CMake package, imgtool for sysbuild's signing)
+        working-directory: .
+        run: |
+          west zephyr-export
+          pip3 install -q -r bootloader/mcuboot/scripts/requirements.txt
+      - name: The tool's venv
+        run: |
+          # devreg runs under the machine's own python3, as on a bench host: it needs PyYAML there
+          python3 -m pip install -q pyyaml
+          python3 -m venv venv
+          ./venv/bin/pip install -q -r requirements.txt
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+      - name: What this machine has of what the benches need (docs/GETTING-STARTED.md#requirements)
+        run: ./venv/bin/python tools/doctor.py --require zephyr,qemu
+      - name: The simulated boards
+        run: |
+          ./venv/bin/python tools/zephyr_sim.py build --name zephyr-shell \
+            --app zephyr/samples/subsys/shell/shell_module
+          ./venv/bin/python tools/zephyr_sim.py build --name zephyr-shell-b \
+            --app zephyr/samples/subsys/shell/shell_module \
+            --conf collections/ansible_collections/rxrbench/core/sim/zephyr/prompt-b.conf
+      - name: The SMP server, signed as MCUboot images at two versions (MCUmgr on native_sim)
+        run: |
+          c=collections/ansible_collections/rxrbench/core/sim/zephyr
+          app=zephyr/samples/subsys/mgmt/mcumgr/smp_svr
+          ./venv/bin/python tools/zephyr_sim.py build --name zsmp --app $app --conf $c/smp-shell.conf \
+            --overlay $c/big-flash.overlay --family zephyr_mcumgr --sign 1.0.0
+          ./venv/bin/python tools/zephyr_sim.py build --name zsmp-b --app $app --conf $c/smp-shell.conf \
+            --conf $c/zsmp-b.conf --overlay $c/big-flash.overlay --family zephyr_mcumgr --sign 1.1.0
+      - name: The MCUmgr client venv the SMP module runs with (hosts-install makes it on a bench host)
+        run: |
+          python3 -m venv "$HOME/.venv-mcumgr"
+          "$HOME/.venv-mcumgr/bin/pip" install -q \
+            -r collections/ansible_collections/rxrbench/core/host/venvs/mcumgr.txt
+      - name: NuttX, its apps and its sim board at two builds (the nuttx plugin's board)
+        run: |
+          w="$RXRBENCH_NUTTX_WORKSPACE"; u=https://github.com/apache; mkdir -p "$w"   # upstream (privacy: allow)
+          git clone -q --depth 1 -b "$NUTTX_TAG" "$u/nuttx" "$w/nuttx"
+          git clone -q --depth 1 -b "$NUTTX_TAG" "$u/nuttx-apps" "$w/apps"
+          python3 -m venv "$w/.venv" && "$w/.venv/bin/pip" install -q kconfiglib
+          n=collections/ansible_collections/rxrbench/nuttx/tools/nuttx_sim.py
+          ./venv/bin/python "$n" build --name nsh
+          ./venv/bin/python "$n" build --name nsh-b --set 'CONFIG_NSH_PROMPT_STRING="nsh-b> "'
+      - name: The zephyr plugin's application, at three versions
+        run: |
+          z=collections/ansible_collections/rxrbench/zephyr/sim
+          for v in 1.0 1.1 2.0; do
+            ./venv/bin/python tools/zephyr_sim.py build --name zapp-$v --app $z/zapp --conf $z/zephyr/zapp-$v.conf
+          done
+      - name: The emulated MCU's images (the SMP server under MCUboot on the MPS2 AN385, two versions)
+        run: |
+          c=collections/ansible_collections/rxrbench/core/sim/zephyr
+          app=zephyr/samples/subsys/mgmt/mcumgr/smp_svr
+          ./venv/bin/python tools/zephyr_qemu.py build --name zq --app $app --conf $c/smp-shell-mcu.conf \
+            --version 1.0.0
+          ./venv/bin/python tools/zephyr_qemu.py build --name zq-b --app $app --conf $c/smp-shell-mcu.conf \
+            --conf $c/zq-b.conf --version 2.0.0
+      - name: sops and age, for the encrypted store the secrets test uses (pinned, checksummed)
+        run: |
+          ./venv/bin/python tools/pins.py install sops age
+          ./venv/bin/python tools/pins.py path >> "$GITHUB_PATH"
+      - name: Everything the seven sim files need is there
+        run: ./venv/bin/python tools/doctor.py --require zephyr,qemu,nuttx,smp,secrets
+      - name: The simulated Zephyr bench, and what a device keeps
+        run: >-
+          ./venv/bin/pytest -q -rs tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
+          tests/sim/test_mcumgr_sim.py tests/sim/test_nuttx_sim.py tests/sim/test_qemu_sim.py
+          tests/sim/test_core_only_sim.py tests/sim/test_run_state_sim.py tests/sim/test_campaign_sim.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: sim-images-${{ matrix.zephyr }}
+          path: rxrbench/.build/store          # Zephyr and NuttX: vm's layout has boards of both
+          retention-days: 7
+
+  vm:
+    runs-on: ubuntu-24.04
+    needs: sim
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: sim-images-4.5.0
+          path: .build/store
+      # GitHub's Linux runners expose /dev/kvm, but only root may open it until a udev rule
+      # opens it up; without it the simulated host boots under TCG, several times slower.
+      - name: KVM for QEMU
+        run: |
+          if [ -e /dev/kvm ] && [ ! -w /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+          ls -l /dev/kvm || echo "no /dev/kvm on this runner"
+      - name: The tool's venv, and QEMU
+        run: |
+          # devreg runs under the machine's own python3, as on a bench host: it needs PyYAML there
+          python3 -m pip install -q pyyaml
+          python3 -m venv venv
+          ./venv/bin/pip install -q -r requirements.txt
+          for r in collections/ansible_collections/*/*/requirements.txt; do
+            ./venv/bin/pip install -q -r "$r"
+          done
+          ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
+          chmod +x .build/store/zephyr/*/zephyr.exe .build/store/nuttx/*/nuttx   # artifacts drop the mode
+          sudo apt-get update -q && sudo apt-get install -y -q qemu-system-x86 qemu-utils
+          ls -l /dev/kvm || echo "no KVM: the host boots under TCG"
+      # The cloud image (~600 MB) is pinned by release in vmhost.py: cached under that file's hash,
+      # so a run downloads it only when the pin moves.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: ~/.cache/rxrbench/vmhost/base.img
+          key: vmhost-base-${{ hashFiles('collections/ansible_collections/rxrbench/core/sim/vmhost.py') }}
+      - name: The simulated bench host's image
+        run: ./venv/bin/python collections/ansible_collections/rxrbench/core/sim/vmhost.py setup
+      - name: The whole bench on the simulated host
+        run: ./venv/bin/pytest -q -rs tests/sim/test_vmhost.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: failure()
+        with:
+          name: vmhost-logs
+          path: ~/.cache/rxrbench/vmhost/run
+          retention-days: 7

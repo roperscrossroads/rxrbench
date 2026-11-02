@@ -1,0 +1,20 @@
+---
+# The Zephyr workspace CI builds the simulated boards in (.github/workflows/test.yml): upstream
+# Zephyr at a release tag, with only the modules the native_sim and MPS2 images need.
+manifest:
+  projects:
+    - name: zephyr
+      url: https://github.com/zephyrproject-rtos/zephyr  # upstream (privacy: allow)
+      revision: v4.5.0
+      clone-depth: 1
+      import:
+        name-allowlist:
+          - cmsis
+          - cmsis_6
+          - mbedtls
+          - tf-psa-crypto
+          - mcuboot
+          - zcbor
+          - picolibc
+  self:
+    path: rxrbench
