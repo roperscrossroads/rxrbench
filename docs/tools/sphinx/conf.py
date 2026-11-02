@@ -16,6 +16,14 @@ pygments_style = "ansible"
 highlight_language = "YAML+Jinja"
 
 html_theme = "sphinx_ansible_theme"
+# Every page's top bar links back to the project and to the reference's front page
+html_theme_options = {
+    "topbar_links": {
+        "rxrbench on GitHub": "https://github.com/roperscrossroads/rxrbench",
+        "Reference home": "https://roperscrossroads.github.io/rxrbench/",
+    },
+    "documentation_home_url": "https://roperscrossroads.github.io/rxrbench/",
+}
 html_show_sphinx = False
 display_version = False
 html_use_smartypants = True

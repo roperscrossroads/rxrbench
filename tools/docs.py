@@ -52,19 +52,41 @@ OUT = os.path.join(REPO, ".build", "docs")
 COLLECTIONS = os.path.join(REPO, "collections")
 NAMESPACE = os.path.join(COLLECTIONS, "ansible_collections", "rxrbench")
 
+REPO_URL = "https://github.com/roperscrossroads/rxrbench"
 INDEX = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>rxrbench reference</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:3rem auto;padding:0 1rem}
-a{font-weight:600}li{margin:.6rem 0}</style></head>
+<style>
+:root{--bg:#fff;--fg:#1d1d1f;--muted:#5f6368;--link:#0b57d0;--note:#fff4e5;--rule:#e3e3e3}
+@media (prefers-color-scheme:dark){:root{--bg:#141414;--fg:#e8e8e8;--muted:#a0a0a0;--link:#8ab4f8;--note:#2f2614;--rule:#333}}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif;max-width:46rem;margin:3rem auto;padding:0 1rem}
+a{color:var(--link);font-weight:600}li{margin:.6rem 0}
+.note{background:var(--note);padding:.6rem .9rem;border-radius:6px}
+footer{color:var(--muted);font-size:.9rem;border-top:1px solid var(--rule);margin-top:2.5rem;padding-top:.8rem}
+</style></head>
 <body><h1>rxrbench reference</h1>
-<p>Generated from the tree by <code>just docs</code> (.build/docs); not committed.</p>
+<p>rxrbench is declarative bench automation for embedded devices, on Ansible: a layout declares a
+bench, a plan says what an apply would write, and every write is checked against a device registry.
+Source, guides and issues: <a href="{repo}">github.com/roperscrossroads/rxrbench</a>.</p>
+<p class="note"><strong>Alpha quality:</strong> use it, verify it, don't trust it yet
+(<a href="{repo}#status-alpha">what that means</a>).</p>
+<h2>The generated reference</h2>
 <ul>
 <li><a href="ansible/html/index.html">The collections</a>: every module, plugin and role of the six
-collections, from their own documentation (antsibull-docs and Sphinx).</li>
+collections, with their options, examples and return values.</li>
 <li><a href="python/index.html">The Python API</a>: module_utils, plugin_utils and the simulated
-benches of each collection, from their docstrings (pdoc).</li>
-</ul></body></html>
+benches of each collection, from their docstrings.</li>
+</ul>
+<h2>The guides</h2>
+<ul>
+<li><a href="{repo}#readme">README</a>: what it is, and a quick start with no hardware.</li>
+<li><a href="{repo}/blob/main/docs/GETTING-STARTED.md">Getting started</a>: requirements, a
+simulated bench, a first real board.</li>
+<li><a href="{repo}/blob/main/docs/OVERVIEW.md">Overview</a> and
+<a href="{repo}/blob/main/docs/ARCHITECTURE.md">architecture</a>.</li>
+</ul>
+<footer>Built from the code, {built}, with antsibull-docs, Sphinx and pdoc.</footer>
+</body></html>
 """
 
 
@@ -145,12 +167,23 @@ def build():
     shutil.copy(os.path.join(SPHINX, "index.rst"), os.path.join(rst, "index.rst"))
     subprocess.run([_bin("sphinx-build"), "-q", "-b", "html", "-c", SPHINX, "-W", "--keep-going",
                     rst, os.path.join(OUT, "ansible", "html")], env=env, cwd=REPO, check=True)
-    subprocess.run([_bin("pdoc"), "-o", os.path.join(OUT, "python"), "--docformat", "markdown"]
+    subprocess.run([_bin("pdoc"), "-o", os.path.join(OUT, "python"), "--docformat", "markdown",
+                    "--edit-url", f"ansible_collections={REPO_URL}/blob/main/collections/ansible_collections/"]
                    + python_packages(), env=env, cwd=REPO, check=True)
     with open(os.path.join(OUT, "index.html"), "w") as f:
-        f.write(INDEX)
+        f.write(INDEX.replace("{repo}", REPO_URL).replace("{built}", _built()))
     pages = sum(len(fs) for _, _, fs in os.walk(OUT) if fs)
     print(f"docs: built {os.path.relpath(OUT, REPO)}/index.html ({pages} files)")
+
+
+def _built():
+    """Which version and commit the reference was built from, for its front page."""
+    with open(os.path.join(NAMESPACE, "core", "galaxy.yml")) as f:
+        version = next((ln.split(":", 1)[1].strip() for ln in f if ln.startswith("version:")), "?")
+    sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True,
+                         text=True, check=False).stdout.strip()
+    commit = f' at <a href="{REPO_URL}/commit/{sha}">{sha}</a>' if sha else ""
+    return f"version {version}{commit}"
 
 
 def serve(port=8765):
