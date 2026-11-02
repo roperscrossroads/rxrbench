@@ -1,0 +1,103 @@
+---
+# Erase one board's whole flash chip (`just erase-chip <layout> <board>`): bootloader, partition
+# table, applications and config (docs/ARCHITECTURE.md#chip-and-region-flows). One config region is erase.yml's.
+# Every route with the chip level (bench_can `chip`): an ESP32 through its ROM loader (its MAC,
+# which the registry must hold, read in the erasing session), an RP2040 or RP2350 through its
+# ROM bootloader (its chip id), a chip behind a debug probe (its unique id), a simulated board's
+# flash file; and a plugin's flasher, by its family's `erase` task file (Family.chip_tasks).
+# The chip is read and checked before the erase, which is refused without a chip backup of it
+# (`just backup <layout> <board>` first), unless -e erase_without_backup=true says its contents
+# are not wanted. It must read erased afterwards. --check reads the chip and erases nothing.
+# Then `just boot` / `just apply` (first flash) bring the board back.
+- name: Erase a board's whole chip
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    plugin_erase: "{{ (bench_chip_tasks | default({})).erase | default('', true) }}"
+  tasks:
+    - name: One board, named
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          a whole-chip erase writes one board: name it (just erase-chip <layout> <board>; this
+          run would reach {{ ansible_play_hosts_all | join(', ') }})
+        quiet: true
+      run_once: true
+
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    - name: Its whole chip can be erased
+      ansible.builtin.assert:
+        that: "'chip' in bench_can or plugin_erase | length > 0"
+        fail_msg: >-
+          {{ bench_board }}: no way to erase the whole chip of a device flashed by
+          {{ bench_flasher | default('?') }}{{ ' (one config region: just erase '
+          ~ bench_layout ~ ' ' ~ bench_board ~ ' <region>)' if 'regions' in bench_can else '' }}.
+          Nothing was erased
+        quiet: true
+
+    - name: Erase the whole chip
+      rxrbench.core.chip_erase:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        mac: "{{ bench_chip_mac | default(omit, true) }}"
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        without_backup: "{{ erase_without_backup | default(false) | bool }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        family: "{{ bench_family | default(omit) }}"
+        socket: "{{ bench_socket | default(omit) }}"
+      register: erased
+      when: plugin_erase | length == 0
+
+    # A plugin's chip: core cannot tell which chip a plugin's backup was read from, so it asks
+    # for a chip backup of this board on the workstation (backup.yml copies every one there);
+    # the plugin's task file guards the chip itself (devreg guard), as its flasher does.
+    - name: A chip backup of this board, by its plugin
+      ansible.builtin.find:
+        paths: "{{ bench_repo }}/backups/{{ bench_board }}/chip"
+        file_type: directory
+      delegate_to: localhost
+      register: plugin_backups
+      check_mode: false
+      when: plugin_erase | length > 0
+
+    - name: Refused without one
+      ansible.builtin.fail:
+        msg: >-
+          refused: {{ bench_board }} has no chip backup in backups/{{ bench_board }}/chip, and an
+          erase cannot be undone. Take one first (just backup {{ bench_layout }}
+          {{ bench_board }}), or, for a chip whose contents are not wanted, say so:
+          -e erase_without_backup=true. Nothing was erased
+      when:
+        - plugin_erase | length > 0
+        - not ansible_check_mode
+        - plugin_backups.matched | default(0) == 0
+        - not (erase_without_backup | default(false) | bool)
+
+    - name: Erase the whole chip, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ plugin_erase }}"
+      when: plugin_erase | length > 0
+
+    - name: A bootloader read the erase made stale is forgotten
+      ansible.builtin.include_role:
+        name: rxrbench.core.board
+        tasks_from: forget_bootloader
+      when: erased is changed and not ansible_check_mode
+
+    - name: What was erased
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: {{ erased.msg | default(erased) }}"

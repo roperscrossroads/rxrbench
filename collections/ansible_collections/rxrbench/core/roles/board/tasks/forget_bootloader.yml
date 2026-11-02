@@ -1,0 +1,18 @@
+---
+# A write that can replace a board's bootloader (a whole chip or image, a first flash) makes the
+# bootloader read `just boot` recorded stale: forgotten, so the next plan reads it again or says
+# it does not know, instead of comparing a chip it no longer describes.
+- name: The recorded bootloader read is forgotten
+  ansible.builtin.command:
+    argv:
+      - "{{ bench_repo }}/venv/bin/python"
+      - "{{ bench_repo }}/tools/facts_note.py"
+      - --facts-dir
+      - "{{ bench_facts_dir }}"
+      - --key
+      - "{{ bench_board }}"
+      - --probe
+      - bootloader
+      - --forget
+  delegate_to: localhost
+  changed_when: false

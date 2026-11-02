@@ -1,0 +1,69 @@
+---
+# Put a layout's boards back to a named snapshot (`just snapshot`): each board's chip is
+# compared block by block with its snapshot and only the blocks that differ are written. Each
+# board must have a snapshot of that name, read from its own chip, and a whole-chip path
+# (`chip` in bench_can); a layout with others is refused and they are named, unless
+# -e partial=true leaves them out. Four boards at a time (-e parallel=N); --check makes every
+# check and writes nothing.
+- name: Switch the boards to a snapshot
+  hosts: boards
+  gather_facts: false
+  serial: "{{ parallel | default(4) }}"
+  tasks:
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+    - name: A snapshot by name, on a layout that may be written to
+      ansible.builtin.assert:
+        that:
+          - snapshot_name is defined and snapshot_name is match('^[A-Za-z0-9._-]+$')
+        fail_msg: >-
+          name the snapshot (just switch <layout> <name>)
+        quiet: true
+      run_once: true
+
+    - name: Every board's whole chip can be written back
+      ansible.builtin.include_tasks: tasks/coverage.yml
+      vars:
+        coverage_caps: [chip]
+        coverage_what: whole-chip path
+
+    - name: Write the snapshot back
+      rxrbench.core.chip_restore:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        backup: "{{ snapshot_name }}"
+        socket: "{{ bench_socket | default(omit) }}"
+      register: switched
+      when: "'chip' in bench_can"
+
+    - name: A bootloader read the write made stale is forgotten
+      ansible.builtin.include_role:
+        name: rxrbench.core.board
+        tasks_from: forget_bootloader
+      when: switched is changed and not ansible_check_mode
+
+    - name: What changed
+      vars:
+        count: >-
+          {{ (switched.differing_blocks if ansible_check_mode else switched.written_blocks) | default('?') }}
+      ansible.builtin.debug:
+        msg: >-
+          {{ bench_board }}: snapshot {{ snapshot_name }} ({{ count }} of {{ switched.blocks | default('?') }}
+          blocks {{ 'to write' if ansible_check_mode else 'written' }})
+      when: switched is not skipped
+
+    - name: Left out (partial=true)
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: no whole-chip path for {{ bench_flasher | default('?') }} boards; left out"
+      when: switched is skipped

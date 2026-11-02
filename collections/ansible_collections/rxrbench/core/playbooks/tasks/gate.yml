@@ -1,0 +1,51 @@
+---
+# The gate every writing play passes, once, before it touches a device (module_utils/gate.py is
+# the same gate inside each writing module). A board the plug watcher does not see is skipped,
+# not failed; a layout must say bench_apply_allowed before anything is written to it, and a
+# plan (--check) is always allowed.
+- name: Skip a board that is not plugged in
+  when: not (bench_present | default(true) | bool)
+  block:
+    - name: Not plugged in
+      ansible.builtin.debug:
+        msg: "{{ bench_board }} is not plugged in (the plug watcher does not see it): skipped"
+    - name: End this board
+      ansible.builtin.meta: end_host
+
+# A device reached over ssh is not seen by any plug watcher: whether it is there is asked
+# once here, over its own route (the play's connection is the bench host's, which says
+# nothing about the device), and one that does not answer is skipped the same way.
+- name: Skip a device over ssh that does not answer
+  when: bench_via | default('') == 'ssh'
+  block:
+    - name: Reach the device
+      rxrbench.core.device_run:
+        route: "{{ bench_routes.shell }}"
+        commands: [{name: reach, cmd: "true", rc: 0}]
+        timeout: "{{ bench_reach_timeout | default(20) }}"
+        read_only: true
+      register: gate_reach
+      ignore_errors: true
+      check_mode: false
+
+    - name: Not reachable
+      ansible.builtin.debug:
+        msg: "{{ bench_board }} does not answer over ssh ({{ gate_why | trim | truncate(160) }}): skipped"
+      vars:
+        gate_why: >-
+          {{ (gate_reach.results | default([{}]))[0].output | default(gate_reach.msg | default("no answer")) }}
+      when: gate_reach is failed
+
+    - name: End this board
+      ansible.builtin.meta: end_host
+      when: gate_reach is failed
+
+- name: This layout may be written to
+  ansible.builtin.assert:
+    that: bench_apply_allowed | default(false) | bool
+    fail_msg: >-
+      layout {{ bench_layout }} does not set bench_apply_allowed: it can be planned (--check)
+      but not written to
+    quiet: true
+  when: not ansible_check_mode
+  check_mode: false

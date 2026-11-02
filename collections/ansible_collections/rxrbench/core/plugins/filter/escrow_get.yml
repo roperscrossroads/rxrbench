@@ -1,0 +1,13 @@
+---
+DOCUMENTATION:
+  name: escrow_get
+  short_description: One escrowed secret of a board's escrow file
+  description:
+    - "C(escrow | rxrbench.core.escrow_get(family, kind)) returns the record escrowed for a
+      family's secret of that kind, with keys C(id), C(value), C(fingerprint) and C(exported), or
+      an empty dict."
+    - "Every kind, the identity key among them, is kept under C(secrets.<family>.<kind>)."
+    - P(rxrbench.core.escrow_put#filter) writes a record; P(rxrbench.core.secret_verdict#filter)
+      judges one.
+  author:
+    - Adam Roper (@roperscrossroads)

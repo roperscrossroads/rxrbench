@@ -1,0 +1,55 @@
+---
+# Give each board of a layout the secrets escrowed for it (`just keys-export`): a board that
+# was erased or flashed with another layout comes back as the node it was. A board that
+# already holds its own is left alone; a board with no escrow is skipped and named. With
+# --check it says which boards would get theirs back.
+- name: Restore escrowed secrets
+  hosts: boards
+  gather_facts: false
+  # boards at a time (-e parallel=N); a busy broker is waited for, not a failure
+  serial: "{{ parallel | default(4) }}"
+  vars:
+    secret_escrow_file: "{{ bench_site_dir }}/identity/{{ bench_board }}.sops.yaml"
+    restore_kinds: >-
+      {{ (bench_secret_kinds | default([]) | selectattr('escrow') | list)
+         if bench_plugin is defined else [] }}
+  tasks:
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    - name: Is there an escrow file
+      ansible.builtin.stat:
+        path: "{{ secret_escrow_file }}"
+      register: secret_escrow_stat
+      delegate_to: localhost
+      check_mode: false
+
+    - name: Read it
+      ansible.builtin.set_fact:
+        board_escrow_doc: >-
+          {{ (lookup('community.sops.sops', secret_escrow_file) | from_yaml)
+             if secret_escrow_stat.stat.exists else {} }}
+      no_log: true
+
+    - name: Nothing escrowed for this board
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: no {{ bench_family }} {{ secret.kind }} escrowed; left as it is"
+      loop: "{{ restore_kinds }}"
+      loop_control:
+        loop_var: secret
+        label: "{{ secret.kind }}"
+      when: not (board_escrow_doc | rxrbench.core.escrow_get(bench_family, secret.kind))
+
+    # Each by its plugin's write step, which is handed the escrowed secret (`board_escrowed`)
+    # and leaves a board that already holds it alone.
+    - name: Give each escrowed secret back
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "secret_{{ secret.tasks }}_write"
+      vars:
+        board_escrowed: "{{ board_escrow_doc | rxrbench.core.escrow_get(bench_family, secret.kind) }}"
+      loop: "{{ restore_kinds }}"
+      loop_control:
+        loop_var: secret
+        label: "{{ secret.kind }}"
+      when: (board_escrow_doc | rxrbench.core.escrow_get(bench_family, secret.kind)) | length > 0

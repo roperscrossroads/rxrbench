@@ -1,0 +1,46 @@
+---
+# Write one device's results under runs/<time>/<device>/<kind>/ on this machine: a text file
+# per command (what a person reads) and one JSON file (what a tool reads). bench_runs_dir
+# moves the whole tree.
+- name: Where this device's results go
+  ansible.builtin.set_fact:
+    record_dir: >-
+      {{ bench_runs_dir | default(bench_repo ~ '/runs') }}/{{ bench_run }}/{{ bench_board }}
+
+- name: Make the run's directory
+  ansible.builtin.file:
+    path: "{{ record_dir }}/{{ record_kind }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+
+- name: Write each command's output
+  ansible.builtin.copy:
+    content: "{{ item.output }}\n"
+    dest: "{{ record_dir }}/{{ record_kind }}/{{ item.name }}.txt"
+    mode: "0644"
+  loop: "{{ record_results }}"
+  loop_control:
+    label: "{{ item.name }}"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+  diff: false
+
+- name: Write the record
+  ansible.builtin.copy:
+    content: >-
+      {{ {'device': bench_board, 'family': bench_family, 'layout': bench_layout,
+          'run': bench_run, 'kind': record_kind,
+          'results': record_results} | to_nice_json }}
+    dest: "{{ record_dir }}/{{ record_kind }}.json"
+    mode: "0644"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+  diff: false

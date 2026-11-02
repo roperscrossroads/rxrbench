@@ -1,0 +1,281 @@
+---
+# One board, from what it is to what its layout declares. Every step reads the board, changes
+# only what differs and reads it again, so a second run changes nothing.
+#
+# Order: the image, then the config the family's vocabulary writes. A layout that names no
+# image for a board (bench_image) does not flash it; a family may say a board of it takes no
+# config, and then it gets the image only.
+
+# A board's flasher runs on its bench host, so the image has to be there. Copying it is done
+# in a plan too: it touches no board, and the plan needs the manifest to read. A simulated
+# board on this machine is the one case the image is read where it is.
+- name: Where the flasher finds the image
+  ansible.builtin.set_fact:
+    board_image: >-
+      {{ bench_image if bench_flasher == 'sim' and ansible_connection | default('ssh') == 'local'
+         else board_host_store ~ '/' ~ (bench_image | basename) }}
+  when: bench_image is defined and bench_flasher is defined
+
+# Said before the copy, so a plan of an image never staged says what to do rather than the
+# copy's "Could not find or access".
+- name: The declared image is in the image store
+  ansible.builtin.assert:
+    that: bench_image is exists
+    fail_msg: >-
+      {{ bench_board }}: {{ (firmware | default({})).image | default(bench_image | basename, true) }}
+      is not in the image store ({{ bench_image }}): stage it first (`just stage <image>` for a
+      catalogued release, `just stage-image` for a build of your own)
+    quiet: true
+  when: bench_image is defined and bench_flasher is defined
+
+- name: Stage the declared image on the bench host
+  ansible.builtin.copy:
+    src: "{{ bench_image }}/"
+    dest: "{{ board_image }}/"
+    mode: preserve
+  check_mode: false
+  # A plan's recap counts what would change on the device; the copy is the bench's own
+  # housekeeping, so a plan does not report it (on a host that has never held the image, the
+  # first plan would otherwise say two changes for one). An apply reports it when it copied.
+  register: board_staged
+  changed_when: board_staged.changed and not ansible_check_mode
+  when: bench_image is defined and bench_flasher is defined and board_image != bench_image
+
+# What the survey (and `just boot`) learned about the board: a first flash reads its security
+# state and PSRAM; every ESP32 plan reads whether an app manager lives on the chip (the apply
+# asks the chip itself before it writes).
+- name: The board's survey facts
+  ansible.builtin.set_fact:
+    board_facts: >-
+      {{ lookup('ansible.builtin.file', bench_facts_dir ~ '/' ~ bench_board ~ '.yaml', errors='ignore')
+         | default('', true) | from_yaml | default({}, true) }}
+  when:
+    - bench_image is defined and bench_flasher is defined
+    - bench_flasher not in ['smp', 'swd', 'picoboot', 'esp-image']
+
+# What the survey recorded on the chip that this layout does not own (chip_findings.yml).
+- name: What the survey found on the chip
+  ansible.builtin.include_tasks: chip_findings.yml
+
+# `just boot` put MCUboot where the board had none (or one with another key) for this family:
+# the app it ran no longer boots and its console is silent, which an apply would refuse as an
+# unknown chip. Running that boot said the switch is meant, so this write is the first
+# flash it asked for (once: a write, or a board that answers again, forgets it).
+- name: A first flash the boot step asked for
+  ansible.builtin.set_fact:
+    board_boot_switch: >-
+      {{ ((board_facts | default({})).get('probes', {}).get('boot_switch') or {}).get('family')
+         == bench_family }}
+  when:
+    - bench_image is defined and bench_flasher is defined
+    - bench_flasher not in ['smp', 'swd', 'picoboot', 'esp-image']
+
+- name: Why it is a first flash
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: `just boot` put MCUboot for {{ bench_family }} where it had
+      {{ 'another MCUboot (another key)' if board_replaced == 'mcuboot'
+         else 'no MCUboot (' ~ board_replaced ~ ')' }} ({{ board_facts.probes.boot_switch.gathered | default('?') }}):
+      whatever it ran no longer boots, so this apply writes the image as a first flash
+  vars:
+    board_replaced: "{{ board_facts.probes.boot_switch.replaced | default('unknown') }}"
+  when:
+    - board_boot_switch | default(false) | bool
+    - not (bench_first_flash | default(false) | bool)
+
+- name: The declared image
+  rxrbench.core.board_flash:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    families: "{{ bench_families }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    flash_unknown: "{{ bench_flash_unknown | default(true) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    image: "{{ board_image }}"
+    flasher: "{{ bench_flasher }}"
+    board_tag: "{{ bench_board_tag | default(omit) }}"
+    declared: "{{ firmware | default(omit) }}"
+    chip: "{{ bench_mcu | default(omit) }}"
+    tools: "{{ bench_tools | default(omit) }}"
+    psram: "{{ bench_psram | default(omit) }}"
+    run_dir: "{{ bench_sim_run | default(omit) }}"
+    first_flash: "{{ bench_first_flash | default(false) | bool }}"
+    boot_switch: "{{ board_boot_switch | default(false) | bool }}"
+    boot_radio: "{{ bench_boot_radio_problems | default([]) }}"
+    boot_radio_ok: "{{ bench_boot_radio_ok | default(false) | bool }}"
+    app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+    overwrite: "{{ bench_overwrite | default([]) }}"
+    facts_tags: "{{ (board_facts | default({})).get('tags', []) }}"
+    facts_chip: >-
+      {{ ((board_facts | default({})).get('probes', {}).get('esptool', {}) or {})
+         | dict2items | selectattr('key', 'in', ['partitions', 'gathered']) | items2dict }}
+    bootloader_version: >-
+      {{ ((board_facts | default({})).get('probes', {}).get('bootloader', {}) or {})
+         .get('version') | default(omit, true) }}
+    uf2_enter_as: "{{ bench_uf2_enter_as | default(omit) }}"
+  when:
+    - bench_image is defined and bench_flasher is defined
+    - bench_flasher not in ['smp', 'swd', 'picoboot', 'esp-image']
+  register: board_flashed
+
+# A chip behind a debug probe: no console and no broker. The probe and the chip's unique id
+# come from the registry (reach.swd), through the route chosen for `flash`.
+- name: The declared image, through the debug probe
+  rxrbench.core.swd_flash:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    flash_unknown: "{{ bench_flash_unknown | default(true) | bool }}"
+    board: "{{ bench_board }}"
+    image: "{{ board_host_store }}/{{ bench_image | basename }}"
+    probe: "{{ bench_routes.flash.probe }}"
+    chip: "{{ bench_routes.flash.chip }}"
+    uid: "{{ bench_routes.flash.uid }}"
+    nrst: "{{ bench_routes.flash.nrst | default(false) | bool }}"
+    board_tag: "{{ bench_board_tag | default(omit) }}"
+    flash_regions: "{{ bench_flash_regions | default([]) }}"
+    overwrite: "{{ bench_overwrite | default([]) }}"
+  when: bench_image is defined and bench_flasher is defined and bench_flasher == 'swd'
+
+# A chip with a ROM bootloader that speaks PICOBOOT (RP2040, RP2350): written and read with
+# picotool, whatever firmware it runs, found by its flash id (the registry's usb_serial); the
+# board type's `uf2` block says what an image may be and how the board is put into its
+# bootloader. No console is needed, so the board has no broker unless its family has one.
+- name: The declared image, through the chip's ROM bootloader
+  rxrbench.core.picoboot_flash:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    image: "{{ board_host_store }}/{{ bench_image | basename }}"
+    chip_id: "{{ bench_usb_serial }}"
+    uf2: "{{ bench_board_type.uf2 }}"
+    board_tag: "{{ bench_board_tag | default(omit) }}"
+    declared: "{{ firmware | default(omit) }}"
+    enter: "{{ bench_picoboot_enter | default(omit) }}"
+    manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+    enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+    ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+    console_expected: "{{ bench_via | default(none) == 'console' }}"
+    console_elsewhere: "{{ bench_console_elsewhere | default(false) | bool }}"
+  when: bench_image is defined and bench_flasher is defined and bench_flasher == 'picoboot'
+  register: board_picoboot
+
+# A whole ESP32 image (a release's merged .bin at 0x0) through the ROM loader: the chip found
+# by its MAC (bench_chip_mac), compared by the stub's hashes; an update writes its apps only,
+# a first flash (or -e bench_full_erase=true) the whole chip.
+- name: The board's survey facts, for a whole-image write
+  ansible.builtin.set_fact:
+    board_facts: >-
+      {{ lookup('ansible.builtin.file', bench_facts_dir ~ '/' ~ bench_board ~ '.yaml', errors='ignore')
+         | default('', true) | from_yaml | default({}, true) }}
+  when: bench_image is defined and bench_flasher is defined and bench_flasher == 'esp-image'
+
+- name: The declared image, written whole through the ROM loader
+  rxrbench.core.esp_image_flash:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    image: "{{ board_host_store }}/{{ bench_image | basename }}"
+    chip: "{{ bench_mcu }}"
+    psram: "{{ bench_psram | default(omit) }}"
+    mac: "{{ bench_chip_mac | default(omit, true) }}"
+    board_tag: "{{ bench_board_tag | default(omit) }}"
+    declared: "{{ firmware | default(omit) }}"
+    tools: "{{ bench_tools | default(omit) }}"
+    first_flash: "{{ bench_first_flash | default(false) | bool }}"
+    full_erase: "{{ bench_full_erase | default(false) | bool }}"
+    boot_radio: "{{ bench_boot_radio_problems | default([]) }}"
+    boot_radio_ok: "{{ bench_boot_radio_ok | default(false) | bool }}"
+    app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+    overwrite: "{{ bench_overwrite | default([]) }}"
+    facts_tags: "{{ (board_facts | default({})).get('tags', []) }}"
+    facts_chip: >-
+      {{ ((board_facts | default({})).get('probes', {}).get('esptool', {}) or {})
+         | dict2items | selectattr('key', 'in', ['partitions', 'gathered']) | items2dict }}
+  when: bench_image is defined and bench_flasher is defined and bench_flasher == 'esp-image'
+  register: board_esp_image
+
+- name: The boot step's first flash is done (or was not needed)
+  ansible.builtin.command:
+    argv:
+      - "{{ bench_repo }}/venv/bin/python"
+      - "{{ bench_repo }}/tools/facts_note.py"
+      - --facts-dir
+      - "{{ bench_facts_dir }}"
+      - --key
+      - "{{ bench_board }}"
+      - --probe
+      - boot_switch
+      - --forget
+  delegate_to: localhost
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - board_boot_switch | default(false) | bool
+    - board_flashed is succeeded
+
+- name: A bootloader read the write made stale
+  ansible.builtin.include_tasks: forget_bootloader.yml
+  when:
+    - not ansible_check_mode
+    - >-
+      (board_esp_image | default({})) is changed
+      or (board_flashed | default({})).first_flash | default(false)
+      or (board_flashed | default({})).family_switch | default(false)
+
+# An update over MCUmgr instead of a wired flash: the layout says `bench_flasher: smp`.
+# Its Python is the bench host's venv with smpclient, not the one the other modules use.
+- name: The declared image, over MCUmgr
+  rxrbench.core.smp_flash:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    families: "{{ bench_families }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    flash_unknown: "{{ bench_flash_unknown | default(true) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    image: "{{ board_host_store }}/{{ bench_image | basename }}"
+    # ble, udp on a network route (eth, wifi), or the console's serial port
+    transport: >-
+      {{ 'ble' if bench_routes.flash.bearer == 'ble'
+         else 'udp' if bench_routes.flash.bearer in ['eth', 'wifi'] else 'serial' }}
+    address: "{{ bench_routes.flash.addr | default(bench_routes.flash.ip | default(omit)) }}"
+    bearer: "{{ bench_routes.flash.bearer if bench_routes.flash.bearer in ['eth', 'wifi'] else omit }}"
+    udp_port: "{{ bench_routes.flash.port | default(omit) }}"
+    board_tag: "{{ bench_board_tag | default(omit) }}"
+    declared: "{{ firmware | default(omit) }}"
+    rebond: "{{ bench_ble_rebond | default(omit) }}"
+    console: "{{ (bench_routes.shell | default({})).get('bearer', '') == 'usb' }}"
+    port_from: "{{ 'broker' if bench_kind | default('') == 'sim' else 'devreg' }}"
+    run_dir: "{{ bench_sim_run | default(omit) }}"
+  vars:
+    ansible_python_interpreter: "{{ board_smp_python }}"
+  when: bench_image is defined and bench_flasher is defined and bench_flasher == 'smp'
+
+# Config, in the configuration language the board's family speaks (its row's `vocabulary`):
+# the task file of that name in its plugin's board role. A family with no vocabulary is
+# flashed and left as it is.
+- name: Config after a family switch or a first flash is planned once it is written
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: the flash planned above changes its firmware (a family switch, a first
+      flash, or an image read by its bytes), so its {{ (bench_vocabulary ~ ' ') if bench_vocabulary
+      | default('', true) else '' }}config cannot be read before it: apply writes the image,
+      then brings it to the declared state.
+  when:
+    - ansible_check_mode
+    - board_flashed.family_switch | default(false) or board_flashed.first_flash | default(false)
+      or board_picoboot.changed | default(false) or board_esp_image.changed | default(false)
+
+- name: Bring the board's config to its declared state
+  ansible.builtin.include_role:
+    name: "{{ bench_plugin }}.board"
+    tasks_from: "{{ bench_vocabulary }}"
+  when:
+    - bench_plugin is defined
+    - bench_vocabulary is not none and bench_vocabulary | length > 0
+    # a board picoboot or the whole-image writer would write is read by its bytes, not its firmware: what runs on it
+    # until then may be anything, so its config is planned once the image is there
+    - not (ansible_check_mode and (board_flashed.family_switch | default(false)
+           or board_flashed.first_flash | default(false)
+           or board_picoboot.changed | default(false)
+           or board_esp_image.changed | default(false)))

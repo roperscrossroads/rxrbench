@@ -1,0 +1,82 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  dpkg:
+    short_description: "Wait for the host's package manager to be free"
+    description:
+      - >-
+        A host whose last dpkg run was interrupted (a power cut, an unattended upgrade stopped at
+        shutdown) refuses every install with "dpkg was interrupted" until that run is finished. apt
+        decides that by the updates journal (/var/lib/dpkg/updates), not by dpkg --audit, so both are
+        looked at. A healthy host sees nothing change. Included before the first apt task of a role.
+    options: {}
+  main:
+    short_description: "What every bench host and the workstation carry for rxrbench"
+    description:
+      - >-
+        The default install: apt packages, pinned binaries, pinned venvs, then a smoke test of each.
+        Idempotent: a second run changes nothing. Never writes over a tool the user installed.
+    options:
+      bench_repo: &bench_repo
+        type: str
+        description: >-
+          The tool's repository (its C(venv/), C(tools/), C(runs/), C(backups/), C(.build/)): a layout names a
+          path under it with this, never with C(playbook_dir).
+      default_install_apt: &default_install_apt
+        type: list
+        description: >-
+          Debian packages every bench host carries, pinned by the distribution.
+      default_install_apt_optional: &default_install_apt_optional
+        type: list
+        description: >-
+          Debian packages installed where the distribution carries them (picotool is in Debian 13,
+          not Ubuntu 24.04).
+      default_install_arch: &default_install_arch
+        type: str
+        description: >-
+          The host's architecture (C(aarch64), C(x86_64)): which pinned binaries it gets.
+      default_install_binaries: &default_install_binaries
+        type: dict
+        description: >-
+          The pinned single-file tools (uv, probe-rs, sops, age): one table, host/binaries.yml,
+          which tools/pins.py reads too.
+      default_install_home: &default_install_home
+        type: str
+        description: >-
+          The home directory the default install puts everything under.
+      default_install_plugin_venvs: &default_install_plugin_venvs
+        type: dict
+        description: >-
+          The loaded plugins' own venvs (their host/host.yml), each with its lockfile's path.
+      default_install_python: &default_install_python
+        type: str
+        description: >-
+          The Python version the tool venvs are made with (through uv).
+      default_install_root: &default_install_root
+        type: str
+        description: >-
+          Where the tool's own pinned binaries go (C(pkg/) and C(bin/)), never over a tool the user
+          installed (C(~/.local/bin) is theirs).
+      default_install_venvs: &default_install_venvs
+        type: dict
+        description: >-
+          One venv per tool family, C({<name>: {imports}}), each synced from
+          C(host/venvs/<name>.txt).
+  plugwatch:
+    short_description: "The plug watcher: a user service that reports boards plugged in and out"
+    description:
+      - >-
+        A bench host: the plug watcher (host/plugwatch.py), a user service under the bench venv.
+    options:
+      default_install_home: *default_install_home
+  relay:
+    short_description: "The relay of the simulated bench"
+    description:
+      - >-
+        The workstation: relay the bench hosts' plug watchers to ntfy and the message command, every
+        30 s.
+    options:
+      bench_repo: *bench_repo
+      default_install_home: *default_install_home

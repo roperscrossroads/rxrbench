@@ -1,0 +1,85 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  main:
+    short_description: "What rxrbench owns on a bench host: its tools, registry, directories"
+    description:
+      - >-
+        Bench hosts are shared machines. This role owns only what it names here, and on a host that
+        also does other work it must stay that way.
+    options:
+      bench_host_devreg: &bench_host_devreg
+        type: str
+        description: >-
+          Where devreg is on the bench host (resolve and guard before every write).
+      bench_host_dirs_extra: &bench_host_dirs_extra
+        type: list
+        description: >-
+          Directories under the home to create, nothing else; a site sets it in
+          C(<site>/host-files.yml).
+      bench_host_downloads: &bench_host_downloads
+        type: list
+        description: >-
+          A site's own files fetched once and pinned by sha256, C({url, sha256, dest under home})
+          each.
+      bench_host_files: &bench_host_files
+        type: list
+        description: >-
+          The files every bench host carries, copied from their sources on every C(just
+          hosts-setup): the device registry, devreg and devlock, the core host tools. C({src, dest
+          under home, mode}) each.
+      bench_host_linger: &bench_host_linger
+        type: bool
+        description: >-
+          C(true) enables lingering for the login user, so the brokers and the plug watcher (user
+          services) run without a login session. The one thing this role needs root for.
+      bench_host_links: &bench_host_links
+        type: list
+        description: >-
+          Links under the home, C({path, to}); a site sets it in C(<site>/host-files.yml).
+      bench_host_loose_keys: &bench_host_loose_keys
+        type: list
+        description: >-
+          Key material found lying loose in a bench host's home directory: reported, never read;
+          removed only with C(bench_host_purge_loose_keys).
+      bench_host_plugin_downloads: &bench_host_plugin_downloads
+        type: list
+        description: >-
+          The files the loaded plugins name in their C(host/host.yml), fetched once and pinned by
+          sha256.
+      bench_host_plugin_tools: &bench_host_plugin_tools
+        type: list
+        description: >-
+          The tools of the loaded plugin collections (their host/bin/), deployed to rxrbench/bin.
+      bench_host_prune: &bench_host_prune
+        type: list
+        description: >-
+          Directories under the home where every C(*.sh) and C(*.py) that neither this role nor the
+          site's list deploys is removed; a site sets it in C(<site>/host-files.yml).
+      bench_host_purge_loose_keys: &bench_host_purge_loose_keys
+        type: bool
+        description: >-
+          C(true) removes the files C(bench_host_loose_keys) lists, once their values are held
+          elsewhere.
+      bench_host_registry_src: &bench_host_registry_src
+        type: str
+        description: >-
+          The registry copied to the bench host: the one the inventory names.
+      bench_host_root_dirs: &bench_host_root_dirs
+        type: list
+        description: >-
+          The directories under C(~/rxrbench) that everything this tool puts on a bench host lives
+          in: C(bin) deployed tools, C(lib) the broker and plug watcher, C(state), C(logs) console
+          logs, C(store) staged images, C(backups), C(firmware) bootloader files, C(bench) a site's
+          own scripts.
+      bench_host_site_files: &bench_host_site_files
+        type: list
+        description: >-
+          A site's own files for its bench hosts, C({glob, dest under home, mode}) each; a site sets
+          it in C(<site>/host-files.yml).
+      bench_site_dir: &bench_site_dir
+        type: str
+        description: >-
+          Where the site is (C(module_utils/site.py)).

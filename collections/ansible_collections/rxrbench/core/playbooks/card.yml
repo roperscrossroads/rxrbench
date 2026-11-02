@@ -1,0 +1,42 @@
+---
+# Write the SD card for one Linux device. This erases the card: the node's identity, host
+# keys and config on it go too. A device that is running is updated with apply, not this.
+#
+#   just card <layout> <device> <reader>     the plan: every check, nothing written
+#   ... -e card_confirm=<reader>             the write (needs passwordless sudo; without it,
+#                                            run the kit by hand as the plan prints it)
+#
+# Never part of apply, and never run for more than one device at a time.
+- name: Write a device's card
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  tasks:
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+    - name: One device, a Linux one, with a card image declared
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - bench_card_image is defined
+          - card_reader is defined
+        fail_msg: >-
+          give exactly one Linux device (--limit <device>) whose layout declares
+          bench_card_image, and the reader's registry name (-e card_reader=<name>)
+        quiet: true
+
+    - name: Write the card
+      rxrbench.core.card_write:
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        device: "{{ card_reader }}"
+        image: "{{ bench_card_image }}"
+        compatible: "{{ bench_compatible | default(omit) }}"
+        confirm: "{{ card_confirm | default(omit) }}"
+        kit: "{{ lookup('ansible.builtin.env', 'RXRBENCH_CARD_KIT', default='') | default(omit, true) }}"
+      register: card
+      # The check is the whole point of the plan, and it reads only.
+      check_mode: "{{ card_confirm is not defined }}"
+
+    - name: What happened
+      ansible.builtin.debug:
+        msg: "{{ card.msg | default('written and read back: ' ~ card.path) }}"

@@ -1,0 +1,17 @@
+---
+# Where the broker lives on a bench host. Everything is under the login user's home; nothing
+# here needs root except enabling lingering, which bench_host does.
+serial_broker_home: "{{ ansible_facts['user_dir'] }}/rxrbench/lib"
+serial_broker_log_dir: "{{ ansible_facts['user_dir'] }}/rxrbench/logs"
+serial_broker_devreg: "{{ ansible_facts['user_dir'] }}/.devreg/devreg.py"
+# The broker runs devreg (resolve, guard) with its own interpreter, so devreg's one
+# dependency is pinned beside the broker's.
+serial_broker_packages:
+  - pyserial==3.5
+  - pyyaml==6.0.2
+
+# The boards on this bench host whose consoles the broker owns (one broker per board), and
+# every board of the layout on this host: a broker of one of those that is not wanted is
+# retired. A broker for a board outside the layout is left alone.
+serial_broker_boards: []
+serial_broker_known: "{{ serial_broker_boards }}"

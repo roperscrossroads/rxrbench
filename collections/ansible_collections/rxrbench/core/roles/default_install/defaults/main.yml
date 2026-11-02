@@ -1,0 +1,39 @@
+---
+# The default install (docs/GETTING-STARTED.md#the-default-install-on-a-bench-host): what every
+# bench host, and the workstation,
+# carries for rxrbench. Everything pinned: a version change is a reviewed commit here.
+default_install_home: "{{ ansible_facts['user_dir'] }}"
+# The tool's own binaries live here, never over a tool the user installed (~/.local/bin is theirs).
+default_install_root: "{{ default_install_home }}/.local/share/rxrbench"
+default_install_arch: "{{ ansible_facts['architecture'] }}"   # aarch64 (the Pis), x86_64
+
+default_install_apt:
+  - openocd           # GDB debugging; the udev rules for ST-Link / CMSIS-DAP / J-Link
+  - stlink-tools      # st-info, st-flash
+  - dfu-util          # an STM32's ROM USB DFU (no probe needed)
+  - stm32flash        # an STM32's UART bootloader
+  - bmap-tools        # card writing
+  - libusb-1.0-0      # the probes, from pyOCD
+  - usbutils          # lsusb
+  - python3-yaml      # devreg and the UF2 tools read the registry with the host's own python3
+  - python3-venv      # `just setup` on a workstation (python3 -m venv)
+
+# Installed where the distribution carries them (picotool is in Debian 13, not Ubuntu 24.04).
+default_install_apt_optional:
+  - picotool          # RP2040 boards and probes
+
+# The pinned single-file tools (uv, probe-rs, sops, age): one table, host/binaries.yml, which
+# tools/pins.py reads too.
+default_install_binaries: "{{ lookup('ansible.builtin.file', role_path ~ '/../../host/binaries.yml') | from_yaml }}"
+
+# One venv per tool family (their pins conflict), each synced from host/venvs/<name>.txt.
+# `bench` runs the plug watcher and the host tools that need pyserial or PyYAML. Modules run under
+# the layout's ansible_python_interpreter; the broker has its own venv (role serial_broker).
+default_install_python: "3.13"
+default_install_venvs:
+  esp: {imports: [esptool, espefuse]}
+  bench: {imports: [serial, yaml, pyudev]}
+  mcumgr: {imports: [smpclient, smpmgr, bleak]}
+  swd: {imports: [pyocd, usb]}
+# The loaded plugins' own venvs (their host/host.yml), each with its lockfile's path.
+default_install_plugin_venvs: "{{ lookup('rxrbench.core.bench_plugins', what='host').venvs }}"

@@ -1,0 +1,4 @@
+# rxrbench modules' interpreter on a bench host, the serial broker and the plug watcher
+pyserial
+pyyaml
+pyudev  # the plug watcher

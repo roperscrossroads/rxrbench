@@ -1,0 +1,55 @@
+---
+# Pull diagnostics from every device of a layout: what it says about itself, its recent
+# console or journal. Changes nothing on a device. One directory per device per run:
+#   runs/<time>/<device>/diag/<name>.txt   and   .../diag.json
+- name: Diagnostics
+  hosts: boards
+  gather_facts: false
+  # What is collected when the layout does not say (bench_diag_commands) is the family's
+  # (bench_diag_defaults, from families/<f>.py); a device whose family says nothing gets only
+  # its console.
+  tasks:
+    - name: One name for this run
+      ansible.builtin.set_fact:
+        bench_run: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+      run_once: true
+
+    # Through whatever carries a command to it (bench_via): its console, or ssh.
+    - name: Ask the device
+      rxrbench.core.device_run:
+        board: "{{ bench_board if bench_via == 'console' else omit }}"
+        socket: "{{ (bench_socket | default(omit)) if bench_via == 'console' else omit }}"
+        dialect: >-
+          {{ (bench_families[bench_family].console | default(none, true))
+             if bench_via == 'console' else omit }}
+        route: "{{ (bench_routes.diag | default(bench_routes.shell)) if bench_via == 'ssh' else omit }}"
+        commands: "{{ bench_diag_commands | default(bench_diag_defaults) }}"
+        console_tail: "{{ (bench_diag_console_bytes | default(65536)) if bench_via == 'console' else omit }}"
+        read_only: true
+        fail_on_failure: false
+      register: diag_said
+      when: bench_via is not none
+
+    # A chip behind a debug probe has neither: what it is is read through the probe, without
+    # halting it (its unique id, device id, flash size, the target voltage).
+    - name: Read the chip through its probe
+      rxrbench.core.swd_identify:
+        board: "{{ bench_board }}"
+        probe: "{{ bench_routes.flash.probe }}"
+        chip: "{{ bench_routes.flash.chip }}"
+        uid: "{{ bench_routes.flash.uid }}"
+        nrst: "{{ bench_routes.flash.nrst | default(false) | bool }}"
+      register: diag_probe
+      when: bench_via is none and (bench_flasher | default('')) == 'swd'
+
+    - name: Nothing carries a command to it
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: no console, no ssh route and no debug probe; nothing asked"
+      when: bench_via is none and (bench_flasher | default('')) != 'swd'
+
+    - name: Keep what it said
+      ansible.builtin.include_tasks: tasks/record.yml
+      vars:
+        record_kind: diag
+        record_results: "{{ diag_said.results if bench_via is not none else diag_probe.results }}"
+      when: bench_via is not none or (bench_flasher | default('')) == 'swd'

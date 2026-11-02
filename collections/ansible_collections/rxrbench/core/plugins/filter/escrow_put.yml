@@ -1,0 +1,13 @@
+---
+DOCUMENTATION:
+  name: escrow_put
+  short_description: A board's escrow file with one secret's record set
+  description:
+    - "C(escrow | rxrbench.core.escrow_put(board, family, kind, record, when)) returns the file's
+      content with that record set, the rest unchanged. An empty or missing file starts as
+      C({board: <board>})."
+    - "C(record) is what a read step returns (C(id), C(value), C(fingerprint)); C(when) becomes
+      its C(exported) time."
+    - "Every kind, the identity key among them, is kept under C(secrets.<family>.<kind>)."
+  author:
+    - Adam Roper (@roperscrossroads)

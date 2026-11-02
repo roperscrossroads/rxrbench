@@ -1,0 +1,134 @@
+---
+# Back up every board of a layout at the levels its flasher has, on its bench host, then copy to
+# the workstation (backups/, never committed: they hold the nodes' private keys). Nothing is
+# written to a board; each board reboots once per level. A board with no backup path (`regions`
+# or `chip` in bench_can) is named and the play refused, unless -e partial=true leaves it out.
+#
+#   regions   the config regions (identity key, bonds, channels, config): small, and
+#             written back over the same family's image by `just restore`. The layout's
+#             declared image supplies the flash map; a board that does not run it is refused.
+#   chip      every byte of the flash (`-e chip=false` skips it): only blocks that are not
+#             erased are read (~30 s of hashing plus ~100 KB/s of data: about 1 min for a board
+#             with 4 MB used, 2.5 min for a full one); brings a board back whatever ran on it
+#             since (`just restore-chip`).
+# Four boards at a time by default (-e parallel=N).
+- name: Back up the config regions and the whole chip
+  hosts: boards
+  gather_facts: false
+  # boards at a time (-e parallel=N); a busy broker is waited for, not a failure
+  serial: "{{ parallel | default(4) }}"
+  vars:
+    backups_local: "{{ bench_repo }}/backups/{{ bench_board }}"
+  tasks:
+    - name: Every board has a backup path
+      ansible.builtin.include_tasks: tasks/coverage.yml
+      vars:
+        coverage_caps: [regions, chip]
+        coverage_what: backup path
+        coverage_hint: "Their node keys are escrowed by `just keys-export`."
+
+    - name: Stage the image whose flash map is used
+      ansible.builtin.copy:
+        src: "{{ bench_image }}/"
+        dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}/"
+        mode: preserve
+      check_mode: false
+      when: "'regions' in bench_can"
+
+    - name: Read the config regions
+      rxrbench.core.region_backup:
+        families: "{{ bench_families }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        mac: "{{ bench_chip_mac | default(omit, true) }}"
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        flash_regions: "{{ bench_flash_regions | default([]) }}"
+      register: backup
+      when:
+        - "'regions' in bench_can"
+        - (bench_chip_tasks | default({})).region_backup is not defined
+
+    # Config regions a plugin's own flasher reads: the task file its family names
+    # (Family.chip_tasks), which registers backup as the module above returns it.
+    - name: Read the config regions, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_chip_tasks.region_backup }}"
+      when:
+        - "'regions' in bench_can"
+        - (bench_chip_tasks | default({})).region_backup is defined
+
+    - name: Read the whole chip
+      rxrbench.core.chip_backup:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        families: "{{ bench_families }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        family: "{{ bench_family | default(omit) }}"
+        socket: "{{ bench_socket | default(omit) }}"
+      register: chip_backup
+      when:
+        - "'chip' in bench_can"
+        - chip | default(true) | bool
+        - (bench_chip_tasks | default({})).backup is not defined
+
+    # A chip a plugin's own flasher writes: the task file its family names (Family.chip_tasks),
+    # which registers chip_backup as the module above returns it.
+    - name: Read the whole chip, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_chip_tasks.backup }}"
+      when:
+        - "'chip' in bench_can"
+        - chip | default(true) | bool
+        - (bench_chip_tasks | default({})).backup is defined
+
+    - name: Copy the region backup to the workstation
+      ansible.builtin.fetch:
+        src: "{{ backup.path }}/{{ item }}"
+        dest: "{{ backups_local }}/{{ backup.path | basename }}/"
+        flat: true
+      loop: "{{ ['meta.json'] + backup.regions | map(attribute='file') | list }}"
+      when: backup.path is defined
+
+    - name: Copy the chip backup to the workstation
+      ansible.builtin.fetch:
+        src: "{{ chip_backup.path }}/{{ item }}"
+        dest: "{{ backups_local }}/chip/{{ chip_backup.path | basename }}/"
+        flat: true
+      loop: "{{ chip_backup.files | default(['meta.json', 'flash.bin.gz']) }}"
+      when: chip_backup.path is defined
+
+    - name: Where it went
+      ansible.builtin.debug:
+        msg: >-
+          {{ bench_board }}:
+          {{ ('regions ' ~ (backup.path | basename) ~ ' ('
+              ~ (backup.regions | default([]) | map(attribute='name') | join(', ')) ~ '); ')
+             if backup.path is defined else '' }}{{ ('chip ' ~ (chip_backup.path | basename) ~ ' ('
+              ~ ([chip_backup.chip.mac | default(none), chip_backup.chip.flash_size | default(none)]
+                 | select | join(', ')) ~ '); ') if chip_backup.path is defined else ''
+          }}{{ 'copies in backups/' ~ bench_board ~ '/' }}
+      when: backup.path is defined or chip_backup.path is defined
+
+    - name: Left out (partial=true)
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: no backup path for {{ bench_flasher | default('?') }} boards; left out"
+      when: "'regions' not in bench_can and 'chip' not in bench_can"

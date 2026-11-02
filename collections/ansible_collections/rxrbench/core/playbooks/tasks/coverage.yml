@@ -1,0 +1,26 @@
+---
+# Plays that cover a layout's boards as one set (backup, snapshot, switch): a board with none of
+# the capabilities the play needs (`coverage_caps`, from bench_can) would leave the result
+# quietly incomplete, so the play is refused and those boards named, unless -e partial=true says
+# to leave them out. The whole play is checked once, before any board is read or written.
+#   coverage_caps  [capability, ...]: any one of them covers a board
+#   coverage_what  what the boards lack, for the message ("whole-chip path")
+#   coverage_hint  what does cover them instead, if anything (may be empty)
+- name: Boards the play cannot cover are named, not skipped
+  ansible.builtin.assert:
+    that: uncovered | length == 0 or (partial | default(false) | bool)
+    fail_msg: >-
+      no {{ coverage_what }} for {{ uncovered | join(', ') }}
+      ({{ uncovered | map('extract', hostvars, 'bench_flasher') | map('default', '?') | unique | join(', ') }}):
+      this run would not cover them.
+      {{ coverage_hint | default('') }} Leave them out with -e partial=true, or narrow the run
+      with --limit.
+    quiet: true
+  vars:
+    uncovered: >-
+      {% set ns = namespace(covered=[]) %}{% for cap in coverage_caps %}{% set ns.covered = ns.covered
+      + (ansible_play_hosts_all | map('extract', hostvars) | selectattr('bench_can', 'defined')
+         | selectattr('bench_can', 'contains', cap) | map(attribute='inventory_hostname') | list)
+      %}{% endfor %}{{ ansible_play_hosts_all | reject('in', ns.covered) | list }}
+  run_once: true
+  any_errors_fatal: true

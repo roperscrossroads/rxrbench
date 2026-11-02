@@ -1,0 +1,64 @@
+---
+# Bench hosts are shared machines. This role owns only what it names here, and on a host
+# that also does other work it must stay that way.
+bench_host_linger: true
+bench_host_devreg: "{{ ansible_facts['user_dir'] }}/.devreg/devreg.py"
+
+# Key material that has been found lying loose in a bench host's home directory. Reported,
+# never read; removed only when this is set, once the values are held elsewhere.
+bench_host_loose_keys: []    # a site lists its own, e.g. "{{ ansible_facts['user_dir'] }}/.old-psk.hex"
+bench_host_purge_loose_keys: false
+
+# What a bench host runs that rxrbench does not install from a package: the device registry
+# and devreg (resolve / guard before every write), and the flashing tools. Copied from
+# their source repos on every `just hosts-setup`, so a host never runs a hand-copied version.
+# A site points these at its own sources.
+# Sources: the registry the inventory names (bench_registry); the tools from this repo's
+# devreg/ and host/bin/, and every loaded plugin's host/bin/ (to the same rxrbench/bin).
+bench_host_registry_src: "{{ bench_registry }}"
+bench_host_files:
+  - {src: "{{ bench_host_registry_src }}", dest: .devreg/registry.yaml, mode: "0644"}
+  - {src: "{{ bench_repo }}/devreg/devreg.py", dest: .devreg/devreg.py, mode: "0755"}
+  - {src: "{{ bench_repo }}/devreg/devlock.py", dest: .devreg/devlock.py, mode: "0644"}
+  # any board with a UF2 bootloader (the board types it reads are written by the role: the
+  # tool's, each plugin's and the site's as one file, rxrbench/catalog/boards.yml)
+  - {src: "{{ role_path }}/../../host/bin/uf2_flash.py", dest: rxrbench/bin/uf2_flash.py, mode: "0755"}
+  # MCUmgr OS-group diagnostics (taskstat, osinfo, mempool) over BLE: ~/.venv-mcumgr/bin/python
+  - {src: "{{ role_path }}/../../host/bin/smp_stat.py", dest: rxrbench/bin/smp_stat.py, mode: "0755"}
+  # a CP2102 bridge's USB serial (`just cp210x-serial <host> ...`): ~/.venv-swd has pyusb
+  - {src: "{{ role_path }}/../../host/bin/cp210x_serial.py", dest: rxrbench/bin/cp210x_serial.py, mode: "0755"}
+  # a microcontroller behind an SWD probe (identify, read, write, erase), for swd_flash: openocd
+  - {src: "{{ role_path }}/../../host/bin/swd_chip.py", dest: rxrbench/bin/swd_chip.py, mode: "0755"}
+  # what is behind a registered debug probe, for the survey (family bare's tool): swd_chip.py id --look
+  - {src: "{{ role_path }}/../../host/bin/swd_survey.py", dest: rxrbench/bin/swd_survey.py, mode: "0755"}
+  # an nRF52840's factory and user information over SWD, read-only: probe-rs
+  - {src: "{{ role_path }}/../../host/bin/nrf_ids.py", dest: rxrbench/bin/nrf_ids.py, mode: "0755"}
+  # a whole ESP32 chip block by block, for chip_backup / chip_restore: ~/.venv-esp/bin/python
+  - {src: "{{ role_path }}/../../host/bin/chip_blocks.py", dest: rxrbench/bin/chip_blocks.py, mode: "0755"}
+
+# The tools of the loaded plugin collections (their host/bin/), deployed to rxrbench/bin.
+bench_host_plugin_tools: "{{ query('rxrbench.core.bench_plugins', 'host/bin/*.py') }}"
+
+# Files fetched once and pinned by sha256 ({url, sha256, dest under home}): a site's own, and
+# those the loaded plugins name in their host/host.yml (a bootloader update, say).
+bench_host_downloads: []
+bench_host_plugin_downloads: "{{ lookup('rxrbench.core.bench_plugins', what='host').downloads }}"
+
+# A site's own files for its bench hosts (scripts of the firmware project, say): the file
+# <site>/host-files.yml, when it exists, sets
+#   bench_host_site_files: [{glob: <controller path glob, ~ allowed>, dest: <dir under home>, mode}]
+#   bench_host_prune:      [<dir under home>, ...]
+#   bench_host_dirs_extra: [<dir under home>, ...]       created, nothing else
+#   bench_host_links:      [{path: <under home>, to: <target>}]
+# In a pruned directory every *.sh / *.py that neither this role nor the site's list deploys
+# is removed, so a script retired from the source does not linger on the host.
+bench_host_site_files: []
+bench_host_prune: []
+bench_host_dirs_extra: []
+bench_host_links: []
+
+# Everything this tool puts on a bench host lives under one root, ~/rxrbench:
+#   bin/ deployed CLIs   lib/ broker, plug watcher, their venv   state/ plug watcher snapshot
+#   logs/ console logs   store/ staged images   backups/ region, chip and bridge backups
+#   firmware/ bootloader files   bench/ a site's own scripts
+bench_host_root_dirs: [bin, lib, state, logs, store, backups, firmware, bench, catalog/site]

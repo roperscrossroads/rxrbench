@@ -1,0 +1,47 @@
+---
+# A bench host: the plug watcher (host/plugwatch.py), a user service under the bench venv.
+- name: The plug watcher's directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ default_install_home }}/rxrbench/lib"
+    - "{{ default_install_home }}/rxrbench/state"
+    - "{{ default_install_home }}/.config/systemd/user"
+
+- name: The plug watcher
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../host/plugwatch.py"
+    dest: "{{ default_install_home }}/rxrbench/lib/plugwatch.py"
+    mode: "0755"
+  register: default_install_plugwatch_script
+
+- name: The plug watcher's unit
+  ansible.builtin.copy:
+    dest: "{{ default_install_home }}/.config/systemd/user/rxrbench-plugwatch.service"
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=rxrbench plug watcher (USB snapshot for the workstation's relay)
+      Documentation=file://{{ default_install_home }}/rxrbench/lib/plugwatch.py
+
+      [Service]
+      ExecStart={{ default_install_home }}/.venv-bench/bin/python -u \
+          {{ default_install_home }}/rxrbench/lib/plugwatch.py
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=default.target
+  register: default_install_plugwatch_unit
+
+- name: Run the plug watcher
+  ansible.builtin.systemd_service:
+    name: rxrbench-plugwatch.service
+    scope: user
+    daemon_reload: "{{ default_install_plugwatch_unit is changed }}"
+    enabled: true
+    state: >-
+      {{ 'restarted' if (default_install_plugwatch_unit is changed
+                         or default_install_plugwatch_script is changed) else 'started' }}

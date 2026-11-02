@@ -1,0 +1,4 @@
+# ESP32: flash, identity, eFuses (survey deep, first flash, bootloader)
+esptool==5.4.0
+# kept from the hand-built ~/.venv-esp: no known user yet; drop once confirmed unused
+websockets

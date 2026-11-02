@@ -1,0 +1,13 @@
+---
+# Make a device show itself so it can be found on the bench (`just locate <layout> <board>
+# [seconds]`): by whatever indicator its family has, an LED, a light or a buzzer, or the one
+# its layout names (`bench_locate`). Changes nothing that persists; 0 seconds stops it.
+- name: Locate a board
+  hosts: boards
+  gather_facts: false
+  tasks:
+    - name: Show itself
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "locate_{{ bench_locate }}"
+      when: bench_plugin is defined and (bench_locate | default('', true) | length) > 0

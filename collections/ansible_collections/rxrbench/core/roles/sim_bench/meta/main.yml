@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  author: Adam Roper
+  description: The simulated boards of a layout on a bench host, each behind a broker
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+    - name: Ubuntu
+      versions: [noble]
+dependencies: []

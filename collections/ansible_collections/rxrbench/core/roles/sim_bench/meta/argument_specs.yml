@@ -1,0 +1,42 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  main:
+    short_description: "A layout's simulated boards on a bench host, each behind a broker"
+    description:
+      - >-
+        The simulated bench on a bench host (docs/SIMULATED.md): the layout's simulated boards (kind:
+        sim) run there as processes under one user unit, each behind a broker, the way a real board is
+        behind its broker. Everything is under the login user's home.
+    options:
+      bench_layout: &bench_layout
+        type: str
+        description: >-
+          The layout's name.
+      sim_bench_boards: &sim_bench_boards
+        type: list
+        description: >-
+          The simulated boards (registry C(kind: sim)) of the layout on this host; the host play
+          computes it.
+      sim_bench_broker: &sim_bench_broker
+        type: str
+        description: >-
+          The broker the serial_broker role installed.
+      sim_bench_dialects: &sim_bench_dialects
+        type: str
+        description: >-
+          The broker's console rules (C(dialects.d)).
+      sim_bench_home: &sim_bench_home
+        type: str
+        description: >-
+          Where the simulated boards run on the bench host, as processes under one user unit.
+      sim_bench_python: &sim_bench_python
+        type: str
+        description: >-
+          The broker's venv python (it has PyYAML).
+      sim_bench_store: &sim_bench_store
+        type: str
+        description: >-
+          The simulated boards' factory images.

@@ -1,0 +1,33 @@
+---
+# Bring a layout's bench hosts to what rxrbench needs: devreg present, user services that
+# survive logout, and a serial broker for each board named in bench_broker_boards.
+- name: Bench hosts
+  hosts: bench_hosts
+  gather_facts: true
+  # On the plain `hosts` inventory (a new bench, no board enrolled yet) no devreg inventory
+  # has published the repository and site paths: take them as survey and install do.
+  pre_tasks:
+    - name: The repository and site paths, on the plain hosts inventory
+      ansible.builtin.include_vars:
+        file: vars/site.yml
+      when: bench_registry is not defined
+  roles:
+    - role: rxrbench.core.bench_host
+    - role: rxrbench.core.serial_broker
+      vars:
+        # a simulated board's broker is the sim bench's (below), not a unit of its own
+        serial_broker_boards: >-
+          {{ groups['host_' ~ inventory_hostname] | default([])
+             | intersect(bench_broker_boards | default(groups['boards'] | default([])))
+             | difference(groups['no_console'] | default([]))
+             | difference(groups['kind_sim'] | default([])) | sort }}
+        serial_broker_known: "{{ groups['host_' ~ inventory_hostname] | default([]) | sort }}"
+    # The layout's simulated boards on this host (docs/SIMULATED.md), as processes behind
+    # brokers under one user unit.
+    - role: rxrbench.core.sim_bench
+      vars:
+        sim_bench_boards: >-
+          {{ groups['host_' ~ inventory_hostname] | default([])
+             | intersect(groups['kind_sim'] | default([])) | sort }}
+      when: groups['host_' ~ inventory_hostname] | default([])
+            | intersect(groups['kind_sim'] | default([])) | length > 0

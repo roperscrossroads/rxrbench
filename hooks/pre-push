@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Before anything leaves this machine: the whole tracked tree, and the message of every commit
+# about to be pushed, must be free of site-private text (CONTRIBUTING.md#public-and-private). The
+# pre-commit hook sees only what is staged and pre-merge-commit only a merge; a rebase, a
+# cherry-pick or an amend that stages nothing slips past both. This is the net under them.
+#
+# A remote inside the site (`git config --bool remote.<name>.internal true`: a private forge
+# on the site's own network) is not publication: the tree is still checked, so what is
+# tracked stays publishable, but the messages of the history are not, since the site's names
+# in them are the site's own. A public remote gets a history whose every message passes, or
+# a fresh one (CONTRIBUTING.md#public-and-private).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+./venv/bin/python tools/privacy_check.py
+remote="${1:-}"
+if [ -n "$remote" ] && [ "$(git config --bool --get "remote.$remote.internal" 2>/dev/null || true)" = "true" ]; then
+    echo "pre-push: $remote is an internal remote; the tree is checked, the history's messages are not"
+    exit 0
+fi
+zero=0000000000000000000000000000000000000000
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue          # a deletion
+    if [ "$remote_sha" = "$zero" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+    git rev-list "$range" | while read -r sha; do
+        msg=$(mktemp); git log -1 --format=%B "$sha" > "$msg"
+        if ! ./venv/bin/python tools/privacy_check.py --msg "$msg" > /dev/null; then
+            echo "commit $sha: its message carries site-private text (see above)"; rm -f "$msg"; exit 1
+        fi
+        rm -f "$msg"
+    done
+done

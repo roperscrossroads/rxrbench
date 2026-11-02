@@ -1,0 +1,17 @@
+---
+# Read every device's actual state. Changes nothing.
+- name: Device facts
+  hosts: boards
+  gather_facts: false
+  tasks:
+    # In the language the board's family speaks: the facts step of its plugin's board role.
+    - name: Read the board
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "facts_{{ bench_vocabulary }}"
+      when: bench_plugin is defined and (bench_vocabulary | default('', true) | length) > 0
+
+    - name: Nothing to read it with
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: its family has no facts step"
+      when: not (bench_plugin is defined and (bench_vocabulary | default('', true) | length) > 0)

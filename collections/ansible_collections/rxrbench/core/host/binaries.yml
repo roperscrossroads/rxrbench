@@ -1,0 +1,48 @@
+---
+# The single-file tools rxrbench installs itself, pinned: a version and a sha256 per
+# architecture, from the upstream release. One table, read by the default install on every
+# bench host and workstation (role default_install) and by `tools/pins.py` (`just setup`, CI).
+# They land in ~/.local/share/rxrbench (pkg/<name>-<version>/, linked into bin/), never over a
+# tool the user installed; the justfile puts that bin/ at the end of PATH.
+#
+# A bump is a reviewed commit here: the new version, and each checksum taken from the release's
+# own checksum file where it publishes one (sops), else from the release asset's recorded
+# digest, checked against the downloaded file (uv, probe-rs, age).
+#
+# Fields: url ({version}, {arch}); arch: the release's names for aarch64 / x86_64 when they
+# differ; format: tar.gz | tar.xz | raw (a bare executable; default from the URL); files: what
+# goes in bin/ (from an archive, its top directory stripped).
+uv:
+  version: "0.12.22"
+  url: "https://github.com/astral-sh/uv/releases/download/{version}/uv-{arch}-unknown-linux-gnu.tar.gz"
+  sha256:
+    aarch64: 6f66a14e8239871fb477f9746c941fedfa77e8fe28a8bc7c07e1dc7f53a66712
+    x86_64: b9980552309f09c15172b8be828555e375097f16deb459795ce7bfd200380f0b
+  files: [uv, uvx]
+probe-rs:
+  version: "0.32.0"
+  url: >-
+    https://github.com/probe-rs/probe-rs/releases/download/v{version}/probe-rs-tools-{arch}-unknown-linux-gnu.tar.xz
+  sha256:
+    aarch64: 7c818cfd77808e806bf8f4d108c9137910b4fb28e0fe5c464d39782dbbc8af31
+    x86_64: c2ccc46049e52a5d403ef212078cd637ecda55b662708327960558f83e851ff5
+  files: [probe-rs, cargo-flash, cargo-embed]
+# The encrypted store (channel keys, passwords, escrowed identities): community.sops runs sops
+# on the workstation; age is its key format.
+sops:
+  version: "3.13.3"
+  url: "https://github.com/getsops/sops/releases/download/v{version}/sops-v{version}.linux.{arch}"
+  arch: {aarch64: arm64, x86_64: amd64}
+  format: raw
+  sha256:
+    aarch64: 53b0abacd38ef1b12a66d6c100956691b9cefce018d91f81e73ddf7438b94d77
+    x86_64: e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b
+  files: [sops]
+age:
+  version: "1.3.2"
+  url: "https://github.com/FiloSottile/age/releases/download/v{version}/age-v{version}-linux-{arch}.tar.gz"
+  arch: {aarch64: arm64, x86_64: amd64}
+  sha256:
+    aarch64: 6b8dc4333c53a5a57c9e5834e3a48f92605d7154014cd07269ff3327db5d37f4
+    x86_64: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+  files: [age, age-keygen]

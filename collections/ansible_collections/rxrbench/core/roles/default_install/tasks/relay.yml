@@ -1,0 +1,48 @@
+---
+# The workstation: relay the bench hosts' plug watchers to ntfy and the message command, every 30 s.
+- name: The plug relay's unit directory
+  ansible.builtin.file:
+    path: "{{ default_install_home }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: The plug relay's units
+  ansible.builtin.copy:
+    dest: "{{ default_install_home }}/.config/systemd/user/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: rxrbench-plug-relay.service
+      content: |
+        [Unit]
+        Description=rxrbench plug relay (bench hosts' USB changes -> survey -> bus)
+
+        [Service]
+        Type=oneshot
+        WorkingDirectory={{ bench_repo }}
+        ExecStart={{ bench_repo }}/venv/bin/python \
+          {{ bench_repo }}/tools/plug_relay.py
+    - name: rxrbench-plug-relay.timer
+      content: |
+        [Unit]
+        Description=rxrbench plug relay, every 30 s
+
+        [Timer]
+        OnBootSec=2min
+        OnActiveSec=20s
+        OnUnitActiveSec=30s
+        AccuracySec=1s
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  register: default_install_relay_units
+
+- name: Run the plug relay timer
+  ansible.builtin.systemd_service:
+    name: rxrbench-plug-relay.timer
+    scope: user
+    daemon_reload: "{{ default_install_relay_units is changed }}"
+    enabled: true
+    state: started

@@ -1,0 +1,101 @@
+---
+# Bring every device of a layout to its declared state. With --check --diff this is the plan.
+- name: Apply the layout
+  hosts: boards
+  gather_facts: false
+  # boards at a time (-e parallel=N); a busy broker is waited for, not a failure
+  serial: "{{ parallel | default(1) }}"
+  any_errors_fatal: true
+  tasks:
+    # An unplugged board is skipped; a layout must say bench_apply_allowed before it is written
+    # to (tasks/gate.yml; the plan, --check, is always allowed).
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    # A board whose declared family has a console is configured through its serial broker, and
+    # only `just hosts-setup` starts one. A layout that moved a board from a family with no
+    # console (a factory image) to one with a console has none until then: without this the
+    # image was written and the config step after it failed. Stop before anything is read or
+    # written, and say what to run. A simulated board's broker is the sim bench's.
+    - name: The board's broker
+      ansible.builtin.shell:
+        cmd: test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/rxrbench/{{ bench_board }}.sock"
+      register: apply_broker
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      # the boards hosts-setup gives a broker (playbooks/host.yml): those bench_broker_boards
+      # names (every board, unless it says), less those with no console and the simulated ones
+      when: inventory_hostname in (bench_broker_boards | default(groups['boards'] | default([])))
+            and inventory_hostname not in (groups['no_console'] | default([]))
+            and inventory_hostname not in (groups['kind_sim'] | default([]))
+
+    - name: A board with a console has a broker
+      ansible.builtin.fail:
+        msg: >-
+          {{ bench_board }} is declared a family with a console ({{ bench_family }}), and no
+          serial broker runs for it on its bench host: its config is written through one. Run
+          `just hosts-setup {{ bench_layout }}` (it starts a broker for each such board), then
+          this again. Nothing was read or written
+      when: apply_broker.rc | default(0) != 0
+
+    # What "its declared state" means is the family's to say (bench_update): an image written
+    # by one of this tool's flashers and then its config (the board role), or the whole of it
+    # by its plugin's own update step.
+    #
+    # A device that is not there to read (its first read says so: `unanswered`) is skipped,
+    # like one the plug watcher does not see; any other failure stops the bench
+    # (any_errors_fatal), so a write that went wrong is never followed by the next board's.
+    - name: Bring the device to its declared state
+      block:
+        - name: Bring the device to its declared state
+          ansible.builtin.include_role:
+            name: rxrbench.core.board
+          when: bench_update is none
+
+        # The core board role says it among its own steps; a plugin's update step does not.
+        - name: What the survey found on the chip
+          ansible.builtin.include_role:
+            name: rxrbench.core.board
+            tasks_from: chip_findings
+          when: bench_update is not none
+
+        - name: Bring the device to its declared state (its plugin's step)
+          ansible.builtin.include_role:
+            name: "{{ bench_plugin }}.board"
+            tasks_from: "update_{{ bench_update }}"
+          when: bench_update is not none
+      rescue:
+        - name: The device does not answer
+          ansible.builtin.debug:
+            msg: "{{ ansible_failed_result.msg }}: skipped"
+          when: ansible_failed_result.unanswered | default(false) | bool
+
+        - name: End this board
+          ansible.builtin.meta: end_host
+          when: ansible_failed_result.unanswered | default(false) | bool
+
+        - name: The step failed
+          ansible.builtin.fail:
+            msg: "{{ ansible_failed_result.msg }}"
+
+    # A board skipped above (not plugged in, not answering) ended its run before this.
+    - name: The device was reached
+      ansible.builtin.set_fact:
+        apply_reached: true
+
+# Skipping a board that does not answer suits a bench where some are unplugged; when none of
+# the boards the run named answered, nothing was planned or applied, and the run says so with
+# a failure instead of a clean recap (one board named with --limit, a bench all unplugged).
+- name: Some board answered
+  hosts: boards
+  gather_facts: false
+  tasks:
+    - name: No board answered
+      ansible.builtin.fail:
+        msg: >-
+          no board answered, so nothing was {{ 'planned' if ansible_check_mode else 'applied' }}:
+          {{ ansible_play_hosts_all | join(', ') }} skipped (not plugged in, or not answering)
+      when: ansible_play_hosts_all | map('extract', hostvars, 'apply_reached') | select('defined') | list | length == 0
+      run_once: true
+      check_mode: false

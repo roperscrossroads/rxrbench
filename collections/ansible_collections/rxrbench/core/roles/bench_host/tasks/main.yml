@@ -1,0 +1,171 @@
+---
+- name: Directories for the deployed tools
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: >-
+    {{ ['.devreg', 'rxrbench/firmware/backups']
+       + (bench_host_root_dirs | map('regex_replace', '^', 'rxrbench/') | list) }}
+  register: bench_host_dirs
+
+- name: The registry, devreg and the flashing tools, from their source repos
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ ansible_facts['user_dir'] }}/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ bench_host_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  when: item.src is exists
+
+# The board types a tool on the host reads (uf2_flash.py): the tool's table, each loaded
+# plugin's and the site's, later over earlier, as one file.
+- name: The board types
+  ansible.builtin.copy:
+    content: "{{ {'boards': lookup('rxrbench.core.bench_plugins', what='boards')} | to_nice_yaml }}"
+    dest: "{{ ansible_facts['user_dir'] }}/rxrbench/catalog/boards.yml"
+    mode: "0644"
+
+# What a loaded plugin runs on a bench host (a flasher's tool, a survey probe): its host/bin/.
+- name: The plugins' tools
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ansible_facts['user_dir'] }}/rxrbench/bin/{{ item | basename }}"
+    mode: "0755"
+  loop: "{{ bench_host_plugin_tools }}"
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: The site's file list for its bench hosts
+  ansible.builtin.include_vars:
+    file: "{{ bench_site_dir }}/host-files.yml"
+  when: (bench_site_dir ~ '/host-files.yml') is exists
+
+- name: Expand the site's globs
+  ansible.builtin.set_fact:
+    # each entry "src|dest|mode"; and every managed path as "dest/basename"
+    bench_host_site_expanded: >-
+      {{ bench_host_site_expanded | default([])
+         + query('ansible.builtin.fileglob', item.glob | expanduser)
+           | map('regex_replace', '$', '|' ~ (item.dest | regex_replace('/$', '')) ~ '|'
+                 ~ (item.mode | default('0755')))
+           | list }}
+    bench_host_site_paths: >-
+      {{ bench_host_site_paths | default([])
+         + query('ansible.builtin.fileglob', item.glob | expanduser) | map('basename')
+           | map('regex_replace', '^', (item.dest | regex_replace('/$', '')) ~ '/') | list }}
+  loop: "{{ bench_host_site_files }}"
+  loop_control:
+    label: "{{ item.glob }}"
+
+- name: Directories the site asks for
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: >-
+    {{ bench_host_dirs_extra + (bench_host_site_expanded | default([])
+       | map('split', '|') | map(attribute=1) | unique | list) }}
+
+- name: The site's files
+  ansible.builtin.copy:
+    src: "{{ item.split('|')[0] }}"
+    dest: "{{ ansible_facts['user_dir'] }}/{{ item.split('|')[1] }}/{{ item.split('|')[0] | basename }}"
+    mode: "{{ item.split('|')[2] }}"
+  loop: "{{ bench_host_site_expanded | default([]) }}"
+  loop_control:
+    label: "{{ item.split('|')[1] }}/{{ item.split('|')[0] | basename }}"
+
+- name: Links the site asks for
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/{{ item.path }}"
+    src: "{{ item.to | regex_replace('^~', ansible_facts['user_dir']) }}"
+    state: link
+    force: true
+  loop: "{{ bench_host_links }}"
+
+- name: Scripts on the host in a pruned directory
+  ansible.builtin.find:
+    paths: "{{ ansible_facts['user_dir'] }}/{{ item }}"
+    patterns: ["*.sh", "*.py"]
+    file_type: any
+    depth: 1
+  loop: "{{ bench_host_prune }}"
+  register: bench_host_found
+
+- name: Remove the ones nothing deploys any more
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ bench_host_found.results | map(attribute='files') | flatten | map(attribute='path')
+       | reject('in', bench_host_managed) | list }}
+  vars:
+    bench_host_managed: >-
+      {{ ((bench_host_files | map(attribute='dest') | list) + ['rxrbench/catalog/boards.yml']
+          + (bench_host_site_paths | default([]))
+          + (bench_host_plugin_tools | map('basename') | map('regex_replace', '^', 'rxrbench/bin/') | list))
+         | map('regex_replace', '^', ansible_facts['user_dir'] ~ '/') | list }}
+
+- name: The pinned downloads
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ ansible_facts['user_dir'] }}/{{ item.dest }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    mode: "0644"
+  loop: "{{ bench_host_downloads + bench_host_plugin_downloads }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  # In check mode on a fresh host the directory above is only planned, and get_url would
+  # fail on a destination that does not exist yet: the plan says the download comes after.
+  when: not (ansible_check_mode and bench_host_dirs is changed)
+
+- name: Check that devreg is deployed
+  ansible.builtin.stat:
+    path: "{{ bench_host_devreg }}"
+  register: bench_host_devreg_stat
+
+- name: Refuse a bench host without devreg
+  ansible.builtin.assert:
+    that: bench_host_devreg_stat.stat.exists
+    fail_msg: >-
+      {{ bench_host_devreg }} is missing: run `devreg deploy {{ inventory_hostname }}` from the
+      workstation. Nothing here writes to hardware without the registry's guard.
+
+- name: Check whether user services survive logout
+  ansible.builtin.stat:
+    path: "/var/lib/systemd/linger/{{ ansible_facts['user_id'] }}"
+  register: bench_host_linger_stat
+
+# The brokers are user services. Without lingering they stop when the last ssh session ends.
+- name: Let user services run without a login session
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ ansible_facts['user_id'] }}"]
+  become: true
+  when: bench_host_linger and not bench_host_linger_stat.stat.exists
+  changed_when: true
+
+- name: Look for loose key material
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+  loop: "{{ bench_host_loose_keys }}"
+  register: bench_host_loose
+
+- name: Report loose key material
+  ansible.builtin.debug:
+    msg: "Key material is lying at {{ item.item }}. It is not read here; move it into SOPS."
+  loop: "{{ bench_host_loose.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+
+- name: Remove loose key material
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: absent
+  loop: "{{ bench_host_loose.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: bench_host_purge_loose_keys and item.stat.exists

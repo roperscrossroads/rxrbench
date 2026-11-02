@@ -1,0 +1,16 @@
+# Managed by rxrbench (roles/serial_broker). One instance per board: %i is the board's name.
+[Unit]
+Description=rxrbench serial broker for %i
+Documentation=file://{{ serial_broker_home }}/broker.py
+
+[Service]
+# Where the board's modem lines rest (RXRBENCH_MODEM_REST), from its type: the role writes it.
+EnvironmentFile=-%h/.config/rxrbench/serial/%i.env
+ExecStart={{ serial_broker_home }}/venv/bin/python {{ serial_broker_home }}/broker.py \
+    --board %i --devreg {{ serial_broker_devreg }} \
+    --socket %t/rxrbench/%i.sock --log {{ serial_broker_log_dir }}/%i.log
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

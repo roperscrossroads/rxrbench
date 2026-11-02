@@ -1,0 +1,24 @@
+---
+# A host whose last dpkg run was interrupted (a power cut, an unattended upgrade stopped at
+# shutdown) refuses every install with "dpkg was interrupted" until that run is finished. apt
+# decides that by the updates journal (/var/lib/dpkg/updates), not by dpkg --audit, so both are
+# looked at. A healthy host sees nothing change. Included before the first apt task of a role.
+- name: Whether dpkg left an updates journal behind
+  ansible.builtin.find:
+    paths: /var/lib/dpkg/updates
+    patterns: "[0-9]*"
+  register: default_install_dpkg_journal
+
+- name: Whether dpkg has unfinished packages
+  ansible.builtin.command:
+    argv: [dpkg, --audit]
+  register: default_install_dpkg_audit
+  changed_when: false
+  failed_when: false
+
+- name: Finish the interrupted dpkg run
+  ansible.builtin.command:
+    argv: [dpkg, --configure, -a]
+  become: true
+  changed_when: true
+  when: default_install_dpkg_journal.matched > 0 or default_install_dpkg_audit.rc != 0

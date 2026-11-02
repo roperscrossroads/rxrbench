@@ -1,0 +1,13 @@
+---
+# The simulated bench on a bench host (docs/SIMULATED.md): the layout's simulated boards
+# (kind: sim) run there as processes under one user unit, each behind a broker, the way a
+# real board is behind its broker. Everything is under the login user's home.
+sim_bench_home: "{{ ansible_facts['user_dir'] }}/rxrbench/sim"
+sim_bench_store: "{{ sim_bench_home }}/store"      # the boards' factory images
+# The broker the serial_broker role installed, its console rules and its venv (pyyaml).
+sim_bench_python: "{{ ansible_facts['user_dir'] }}/rxrbench/lib/venv/bin/python"
+sim_bench_broker: "{{ ansible_facts['user_dir'] }}/rxrbench/lib/broker.py"
+sim_bench_dialects: "{{ ansible_facts['user_dir'] }}/rxrbench/lib/dialects.d"
+
+# The simulated boards of the layout on this host (the host play computes it).
+sim_bench_boards: []

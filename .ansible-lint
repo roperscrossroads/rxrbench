@@ -1,0 +1,11 @@
+---
+profile: production
+offline: true
+exclude_paths:
+  - venv/
+  - .build/
+  - runs/
+  - .collections/
+  - tests/fixtures/
+  # written by sops, not by hand
+  - "**/*.sops.yaml"

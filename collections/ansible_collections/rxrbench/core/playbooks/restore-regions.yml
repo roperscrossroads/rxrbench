@@ -1,0 +1,86 @@
+---
+# Write one board's config regions back from a backup made by playbooks/backup.yml (an ESP32's
+# through esptool, an RP2040's or RP2350's through its ROM bootloader, a chip's behind a debug
+# probe through the probe, a plugin flasher's through its family's task file; the regions are
+# the ones the running image's flash map names, or the ranges declared for the chip).
+# The board comes back as the node it was when the backup was taken (identity key, bonds,
+# channels, config); its application is not touched. One board at a time, by name: a
+# restore is never run across a layout. With --check every check is made and nothing written.
+- name: Restore the config regions
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: One board, named
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          a restore writes one board: name it with --limit (this run would reach
+          {{ ansible_play_hosts_all | join(', ') }})
+        quiet: true
+      run_once: true
+
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    - name: A board with a region level
+      ansible.builtin.assert:
+        that: "'regions' in bench_can"
+        fail_msg: >-
+          {{ bench_board }}: no region level for {{ firmware.family | default('?') }} firmware
+          on a board flashed by {{ bench_flasher | default('?') }}
+        quiet: true
+
+    - name: Stage the image whose flash map is used
+      ansible.builtin.copy:
+        src: "{{ bench_image }}/"
+        dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}/"
+        mode: preserve
+      check_mode: false
+
+    - name: Write the config regions back
+      rxrbench.core.region_restore:
+        families: "{{ bench_families }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        mac: "{{ bench_chip_mac | default(omit, true) }}"
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+        overwrite: "{{ bench_overwrite | default([]) }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        backup: "{{ restore_from | default('latest') }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        flash_regions: "{{ bench_flash_regions | default([]) }}"
+      register: restore
+      when: (bench_chip_tasks | default({})).region_restore is not defined
+
+    # Config regions a plugin's own flasher writes: the task file its family names
+    # (Family.chip_tasks), entered only past the gate; it registers restore as the module above
+    # returns it.
+    - name: Write the config regions back, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_chip_tasks.region_restore }}"
+      when: (bench_chip_tasks | default({})).region_restore is defined
+
+    - name: What was written
+      ansible.builtin.debug:
+        msg: >-
+          {{ bench_board }}: {{ restore.path }} (taken on {{ (restore.taken_by or {}).build
+          | default((restore.taken_by or {}).version, true)
+          | default(((restore.taken_by or {}).hash | default('', true))[:8], true)
+          | default(('an image with the partition table of ' ~ (restore.table_of.version
+                     | default(restore.table_of.image, true)))
+                    if restore.table_of | default(none) else none, true)
+          | default('?', true) }};
+          {{ restore.regions | map(attribute='name') | join(', ') }}{{
+          '; left as is: ' ~ (restore.left_alone | join(', ')) if restore.left_alone else '' }})

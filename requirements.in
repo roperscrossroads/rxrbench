@@ -1,0 +1,14 @@
+# The tool's venv on the workstation (`just setup`): what it needs, by name. requirements.txt is
+# compiled from this and is what is installed, every version exact:
+#   uv pip compile --universal --python-version 3.12 requirements.in -o requirements.txt
+# (`just pins install uv` when uv is not on PATH). A bump is a recompile, reviewed as a commit.
+# A plugin locks its own the same way (its requirements.in -> requirements.txt), constrained by
+# this lock so the packages they share agree; `just setup` installs this one, then each plugin's.
+ansible-core==2.20.1
+ansible-lint
+yamllint
+pytest
+pyyaml
+pyserial
+pyusb>=1.2
+imgtool==2.4.0   # signs a native_sim image for MCUmgr (tools/zephyr_sim.py --sign)

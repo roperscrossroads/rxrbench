@@ -1,0 +1,3 @@
+# SWD: identify / flash / recover STM32 and nRF52 through ST-Link, CMSIS-DAP, J-Link
+pyocd
+pyusb

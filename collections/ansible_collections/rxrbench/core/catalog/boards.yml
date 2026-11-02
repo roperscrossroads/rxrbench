@@ -1,0 +1,15 @@
+---
+# Board types, by the registry's `policy.board_tag`: what a board of that type is, for the code
+# that must know (the chip a flasher is told, the PSRAM a first flash checks the chip against,
+# the Zephyr board names a state line reports). Shared across firmware families: a type runs
+# any of them. The types here belong to no plugin; a plugin brings the boards its devices
+# are (its own catalog/boards.yml), and a site's own go in <site>/catalog/boards.yml. They
+# are read in that order, later over earlier. Core's own is the simulated board; a chip
+# behind a debug probe (an STM32, say) is a site's or a plugin's to name. A board with a debug
+# probe built in (a Nucleo's ST-Link) is known by the label of the probe's USB drive:
+# `probe_drive: NOD_F767ZI` names the type, and the survey reads the chip its `mcu` names.
+# `flash_base` with `flash` (its size: 2MB) says where the chip's flash is: an image staged from
+# a HEX or ELF file may then put pieces anywhere in it (a bootloader and an app in its slot),
+# and a piece outside it (option bytes, a UICR) is refused (tools/stage_raw.py).
+boards:
+  native-sim: {mcu: native-sim, zephyr_boards: [native_sim]}   # the simulated board, core's own

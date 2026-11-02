@@ -1,0 +1,83 @@
+---
+# An emulated MCU (registry sim_console: qemu) is a machine QEMU runs: the emulator is a
+# package of the host's, one per architecture; the boards here are Arm's.
+- name: Finish an interrupted dpkg run, before the emulator is installed
+  ansible.builtin.include_role:
+    name: rxrbench.core.default_install
+    tasks_from: dpkg
+  when: sim_bench_boards | map('extract', hostvars, 'bench_sim_console') | select('equalto', 'qemu') | list | length > 0
+
+- name: QEMU, for the emulated boards
+  ansible.builtin.apt:
+    name: qemu-system-arm
+    state: present
+    lock_timeout: 600
+    update_cache: true
+    cache_valid_time: 86400
+  become: true
+  when: sim_bench_boards | map('extract', hostvars, 'bench_sim_console') | select('equalto', 'qemu') | list | length > 0
+
+- name: The sim bench's directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ sim_bench_home }}"
+    - "{{ sim_bench_store }}"
+    - "{{ ansible_facts['user_dir'] }}/.config/systemd/user"
+
+- name: Install the sim bench
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../sim/{{ item }}"
+    dest: "{{ sim_bench_home }}/{{ item }}"
+    mode: "0755"
+  loop: [simboard.py, simbench.py]
+  notify: Restart the sim bench
+
+# Each board's factory image: the directory its registry entry's sim_exe is in, from the
+# controller's image store to the host's.
+- name: Stage each board's factory image
+  ansible.builtin.copy:
+    src: "{{ hostvars[item].bench_store }}/{{ hostvars[item].bench_sim_exe | dirname }}/"
+    dest: "{{ sim_bench_store }}/{{ hostvars[item].bench_sim_exe | dirname }}/"
+    mode: preserve
+  loop: "{{ sim_bench_boards }}"
+  notify: Restart the sim bench
+
+- name: The sim bench's registry
+  ansible.builtin.template:
+    src: registry.yaml.j2
+    dest: "{{ sim_bench_home }}/registry.yaml"
+    mode: "0644"
+  notify: Restart the sim bench
+
+- name: Install the sim bench's unit
+  ansible.builtin.template:
+    src: rxrbench-simbench.service.j2
+    dest: "{{ ansible_facts['user_dir'] }}/.config/systemd/user/rxrbench-simbench.service"
+    mode: "0644"
+  register: sim_bench_unit
+  notify: Restart the sim bench
+
+- name: Start the sim bench
+  ansible.builtin.systemd_service:
+    name: rxrbench-simbench.service
+    scope: user
+    state: started
+    enabled: true
+    daemon_reload: true
+  # In check mode a unit that is not installed yet cannot be looked up, let alone started.
+  when: not (ansible_check_mode and sim_bench_unit is changed)
+
+# The unit was (re)started: the plays that follow reach the boards through the sockets it
+# makes, and it makes them only once every board has booted (a NuttX board takes seconds).
+- name: Let the sim bench restart now, if it has to
+  ansible.builtin.meta: flush_handlers
+
+- name: Every simulated board's broker answers on its socket
+  ansible.builtin.wait_for:
+    path: "{{ hostvars[item].bench_sim_run }}/{{ item }}.sock"
+    timeout: 60
+  loop: "{{ sim_bench_boards }}"
+  when: not ansible_check_mode

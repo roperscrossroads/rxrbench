@@ -1,0 +1,21 @@
+---
+# Reboot one device through its console, or over ssh (`just reboot <layout> <board>`), and
+# wait until it answers again. Writes nothing to the board. The recipe names the board, so a layout is
+# never rebooted whole by a slip; `-e reboot_settle=<seconds>` waits longer.
+- name: Reboot a board
+  hosts: boards
+  gather_facts: false
+  tasks:
+    - name: Reboot
+      rxrbench.core.board_reboot:
+        families: "{{ bench_families }}"
+        board: "{{ bench_board }}"
+        family: "{{ bench_family }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        route: "{{ bench_routes.shell if bench_via == 'ssh' else omit }}"
+        settle: "{{ reboot_settle | default(60) | float }}"
+      register: rebooted
+
+    - name: What the board says about its reset
+      ansible.builtin.debug:
+        msg: "{{ [rebooted.msg] + (rebooted.resets | default([])) }}"

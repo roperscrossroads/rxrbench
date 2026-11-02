@@ -1,0 +1,13 @@
+---
+DOCUMENTATION:
+  name: chip_findings
+  short_description: What the survey found on a chip that the layout does not own
+  description:
+    - "C(facts | rxrbench.core.chip_findings(bench_overwrite)) lists, from a board's survey facts,
+      each region that holds other firmware, or data every app on a chip with an app manager
+      shares (docs/ARCHITECTURE.md#partitions-and-the-write-rule), with the date the survey read it."
+    - "Regions the layout names in C(bench_overwrite) are left out; C([all]) leaves out
+      everything. The plan prints the list (C(bench_foreign) C(info), the default, or C(warn)) or
+      refuses the board (C(refuse)); it never reads the chip for it."
+  author:
+    - Adam Roper (@roperscrossroads)

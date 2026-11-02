@@ -1,0 +1,193 @@
+---
+# The default install: apt packages, pinned binaries, pinned venvs, then a smoke test of each.
+# Idempotent: a second run changes nothing. Never writes over a tool the user installed.
+
+- name: Finish an interrupted dpkg run, before anything is installed
+  ansible.builtin.include_tasks: dpkg.yml
+  when: default_install_apt | length > 0
+
+- name: Packages
+  ansible.builtin.apt:
+    name: "{{ default_install_apt }}"
+    state: present
+    lock_timeout: 600
+    update_cache: true
+    cache_valid_time: 86400
+  become: true
+  when: default_install_apt | length > 0
+
+- name: Which optional packages this distribution carries
+  ansible.builtin.command:
+    argv: [apt-cache, policy, "{{ item }}"]
+  loop: "{{ default_install_apt_optional }}"
+  register: default_install_optional
+  changed_when: false
+  when: default_install_apt | length > 0
+
+- name: Optional packages, where available
+  ansible.builtin.apt:
+    name: >-
+      {{ default_install_optional.results | selectattr('stdout', 'defined')
+         | selectattr('stdout', 'search', 'Candidate: [0-9]') | map(attribute='item') | list }}
+    state: present
+    lock_timeout: 600
+  become: true
+  when: default_install_apt | length > 0
+
+- name: Optional packages this distribution does not carry
+  ansible.builtin.debug:
+    msg: "{{ item.item }}: not in this distribution's archive, not installed"
+  loop: "{{ default_install_optional.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item | default('') }}"
+  when:
+    - default_install_apt | length > 0
+    - "item.stdout is defined and item.stdout is not search('Candidate: [0-9]')"
+
+- name: Directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ default_install_root }}/bin"
+    - "{{ default_install_root }}/pkg"
+    - "{{ default_install_root }}/venvs"
+    - "{{ default_install_root }}/cache"
+
+# ---- pinned binaries: downloaded against their sha256, unpacked per version, linked --------
+# A binary is only installed against a checksum pinned for this host's architecture: a host
+# of another architecture stops here and says which, instead of failing on a missing key.
+- name: Every pinned binary has a checksum for this architecture
+  ansible.builtin.assert:
+    that: default_install_arch in item.value.sha256
+    fail_msg: >-
+      {{ item.key }} {{ item.value.version }} has no pinned sha256 for {{ default_install_arch }}
+      (pinned: {{ item.value.sha256 | list | join(', ') }}). Add one to core/host/binaries.yml
+      (docs/GETTING-STARTED.md#requirements), or leave the binary out for this host.
+    quiet: true
+  loop: "{{ default_install_binaries | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Download the pinned binaries
+  ansible.builtin.get_url:
+    url: >-
+      {{ item.value.url | replace('{version}', item.value.version)
+         | replace('{arch}', (item.value.arch | default({})).get(default_install_arch, default_install_arch)) }}
+    dest: >-
+      {{ default_install_root }}/cache/{{ item.key }}-{{ item.value.version }}-{{ default_install_arch
+      }}{{ default_install_ext }}
+    checksum: "sha256:{{ item.value.sha256[default_install_arch] }}"
+    mode: "0644"
+  loop: "{{ default_install_binaries | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} {{ item.value.version }}"
+  vars:
+    default_install_format: >-
+      {{ item.value.format | default('tar.xz' if item.value.url.endswith('.xz') else 'tar.gz') }}
+    default_install_ext: "{{ '' if default_install_format == 'raw' else '.' ~ default_install_format }}"
+
+- name: Version directories
+  ansible.builtin.file:
+    path: "{{ default_install_root }}/pkg/{{ item.key }}-{{ item.value.version }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ default_install_binaries | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} {{ item.value.version }}"
+
+- name: Unpack the pinned binaries
+  ansible.builtin.unarchive:
+    src: >-
+      {{ default_install_root }}/cache/{{ item.key }}-{{ item.value.version }}-{{ default_install_arch
+      }}.{{ default_install_format }}
+    dest: "{{ default_install_root }}/pkg/{{ item.key }}-{{ item.value.version }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: "{{ default_install_root }}/pkg/{{ item.key }}-{{ item.value.version }}/{{ item.value.files[0] }}"
+  loop: "{{ default_install_binaries | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} {{ item.value.version }}"
+  when: default_install_format != 'raw'
+  vars:
+    default_install_format: >-
+      {{ item.value.format | default('tar.xz' if item.value.url.endswith('.xz') else 'tar.gz') }}
+
+- name: Place the pinned bare executables
+  ansible.builtin.copy:
+    src: "{{ default_install_root }}/cache/{{ item.key }}-{{ item.value.version }}-{{ default_install_arch }}"
+    dest: "{{ default_install_root }}/pkg/{{ item.key }}-{{ item.value.version }}/{{ item.value.files[0] }}"
+    remote_src: true
+    mode: "0755"
+  loop: "{{ default_install_binaries | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} {{ item.value.version }}"
+  when: item.value.format | default('') == 'raw'
+
+- name: Link the pinned binaries into rxrbench's bin
+  ansible.builtin.file:
+    src: "{{ default_install_root }}/pkg/{{ item.0.key }}-{{ item.0.value.version }}/{{ item.1 }}"
+    dest: "{{ default_install_root }}/bin/{{ item.1 }}"
+    state: link
+    force: true
+  loop: "{{ default_install_binaries | dict2items | subelements('value.files') }}"
+  loop_control:
+    label: "{{ item.1 }}"
+
+# ---- venvs: one per tool family, synced exactly to its lockfile -----------------------------
+- name: The lockfiles
+  ansible.builtin.copy:
+    src: "{{ item.value.lock | default(role_path ~ '/../../host/venvs/' ~ item.key ~ '.txt') }}"
+    dest: "{{ default_install_root }}/venvs/{{ item.key }}.txt"
+    mode: "0644"
+  loop: "{{ default_install_venvs | combine(default_install_plugin_venvs) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: default_install_locks
+
+- name: Create the venvs
+  ansible.builtin.command:
+    argv: ["{{ default_install_root }}/bin/uv", venv, --python, "{{ default_install_python }}",
+           "{{ default_install_home }}/.venv-{{ item }}"]
+    creates: "{{ default_install_home }}/.venv-{{ item }}/pyvenv.cfg"
+  loop: "{{ (default_install_venvs | combine(default_install_plugin_venvs)).keys() | list }}"
+
+- name: Sync each venv to its lockfile
+  ansible.builtin.command:
+    argv: ["{{ default_install_root }}/bin/uv", pip, sync, --python,
+           "{{ default_install_home }}/.venv-{{ item }}/bin/python",
+           "{{ default_install_root }}/venvs/{{ item }}.txt"]
+  loop: "{{ (default_install_venvs | combine(default_install_plugin_venvs)).keys() | list }}"
+  register: default_install_sync
+  changed_when: >-
+    'Installed' in default_install_sync.stderr or 'Uninstalled' in default_install_sync.stderr
+
+- name: Every venv imports what it is for
+  ansible.builtin.command:
+    argv: ["{{ default_install_home }}/.venv-{{ item.key }}/bin/python", -c,
+           "import {{ item.value.imports | join(', ') }}"]
+  loop: "{{ default_install_venvs | combine(default_install_plugin_venvs) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: false
+
+- name: Every binary runs
+  ansible.builtin.command:
+    argv: "{{ item }}"
+  loop:
+    - ["{{ default_install_root }}/bin/uv", --version]
+    - ["{{ default_install_root }}/bin/probe-rs", --version]
+    - [openocd, --version]
+    - [st-info, --version]
+    - [dfu-util, --version]
+  changed_when: false
+  when: item[0] is search('rxrbench') or default_install_apt | length > 0
+
+- name: The plug watcher (bench hosts)
+  ansible.builtin.include_tasks: plugwatch.yml
+  when: inventory_hostname in groups['bench_hosts'] | default([])
+
+- name: The plug relay (the workstation)
+  ansible.builtin.include_tasks: relay.yml
+  when: inventory_hostname in groups['workstations'] | default([])

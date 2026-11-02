@@ -1,0 +1,11 @@
+---
+# Where a bench host keeps the images staged for its boards.
+board_host_store: "~/rxrbench/store"
+# The Python on a bench host that has smpclient (MCUmgr), for smp_flash only.
+# (the bench host's login user's; this machine's own when the host is this machine)
+board_smp_python: >-
+  {{ ('/home/' ~ ansible_user) if ansible_user is defined
+     else lookup('ansible.builtin.env', 'HOME') }}/.venv-mcumgr/bin/python
+
+# Where the site escrows the secrets a board made (playbooks/keys-export.yml).
+board_identity_file: "{{ bench_site_dir }}/identity/{{ bench_board }}.sops.yaml"

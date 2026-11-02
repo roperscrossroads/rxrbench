@@ -1,0 +1,5 @@
+# MCUmgr over serial and BLE (smp_flash), nRF52 serial DFU (adafruit-nrfutil)
+smpmgr==0.19.1  # 0.18.1 declares an older smpclient than smp_flash needs
+bleak
+adafruit-nrfutil==0.5.3.post16
+smpclient==7.3.0  # smp_flash is proven on 7.3.0

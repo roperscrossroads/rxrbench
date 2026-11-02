@@ -1,0 +1,62 @@
+---
+# Every USB device on the bench hosts: what it is, which registry entry, what it runs, and
+# what it can do. Facts are merged into <facts>/<name>.yaml (RXRBENCH_FACTS) (a new device gets a
+# `new-<vid><pid>-<id>` file and a suggested registry block). Read-only on every device
+# unless `survey_deep` is set: then ESP32 boards are reset through esptool/espefuse.
+- name: Survey the bench hosts
+  hosts: bench_hosts
+  gather_facts: false
+  vars_files:
+    - vars/site.yml
+  tasks:
+    - name: The host's USB devices
+      rxrbench.core.usb_survey:
+        deep: "{{ survey_deep | default(false) | bool }}"
+        only: "{{ survey_only | default([]) }}"
+        host: "{{ inventory_hostname }}"
+        # how each loaded family's firmware is recognised (its `survey`)
+        families: "{{ lookup('rxrbench.core.bench_plugins', what='families') }}"
+        # the USB ids of the boards the plugins' devices are
+        usb_kinds: "{{ lookup('rxrbench.core.bench_plugins', what='usb_kinds') }}"
+        # the board types: the tool's table, each plugin's and the site's layered over it
+        boards: "{{ lookup('rxrbench.core.bench_plugins', what='boards') }}"
+      register: survey
+
+    - name: Held by a flasher, left for the next survey
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: USB ports a flasher holds now, not surveyed: {{ survey.held | join(', ') }}"
+      when: survey.held | default([]) | length > 0
+
+    - name: Merge into the facts store
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/survey_store.py"
+          - --host
+          - "{{ inventory_hostname }}"
+          - --facts-dir
+          - "{{ survey_facts_dir | default(bench_facts_dir) }}"
+        stdin: "{{ survey.devices | to_json }}"
+      delegate_to: localhost
+      register: stored
+      changed_when: "'written' in stored.stdout"
+
+    - name: What was found
+      ansible.builtin.debug:
+        msg: "{{ stored.stdout_lines }}"
+
+    # A site that keeps its facts under git (RXRBENCH_FACTS_COMMIT=1 in .env) gets one commit per
+    # run instead of a dirty tree; without the opt-in, or outside a work tree, this says so.
+    - name: Commit the facts, when the site asked for that
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/facts_commit.py"
+          - --facts-dir
+          - "{{ survey_facts_dir | default(bench_facts_dir) }}"
+          - --message
+          - "survey on {{ inventory_hostname }}, {{ survey.devices | length }} devices"
+      delegate_to: localhost
+      register: facts_committed
+      changed_when: "facts_committed.stdout is search('^facts: committed ')"
+      check_mode: false

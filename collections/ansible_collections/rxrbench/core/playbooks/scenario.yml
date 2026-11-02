@@ -1,0 +1,90 @@
+---
+# Run a layout's scenarios: steps across devices, judged in order. The library tests the layout
+# binds (bench_test_bindings: <site>/tests/<name>.yml, each role a board) run as scenarios named
+# after the test, after the inline ones (docs/ARCHITECTURE.md#runs-tests-and-campaigns). bench_scenarios is a list of
+# {name, steps}, each step {board, cmd, expect, refuse, rc, timeout, within, name}: the command
+# runs on the board `board` names, through whatever carries a command to it (its broker, ssh,
+# or for a board with neither its family's own step tasks: a stock firmware's API),
+# and `within` gives the step that many seconds to come true (asked again every second). A
+# step that fails ends its scenario; the play fails when any scenario did. Results are kept:
+#   runs/<time>/scenario/<scenario>/<n>-<step>.txt   and   .../scenario.json
+- name: Scenarios
+  hosts: boards
+  gather_facts: false
+  tasks:
+    - name: One name for this run
+      ansible.builtin.set_fact:
+        bench_run: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+      run_once: true
+
+    # Every binding is resolved before the first step: a problem refuses the whole run.
+    - name: The library tests the layout binds
+      ansible.builtin.set_fact:
+        scenarios_bound: "{{ lookup('rxrbench.core.library_tests') }}"
+      run_once: true
+
+    - name: The layout's scenarios, inline and bound
+      ansible.builtin.set_fact:
+        scenarios_all: "{{ bench_scenarios | default([]) + scenarios_bound }}"
+      run_once: true
+
+    # A campaign state may run some of them (bench_scenario_only, names); one it names that the
+    # layout does not have is refused, not skipped.
+    - name: The scenarios asked for, when only some are
+      when: bench_scenario_only is defined
+      run_once: true
+      block:
+        - name: Every scenario asked for is one of the layout's
+          ansible.builtin.assert:
+            that: bench_scenario_only | difference(scenarios_all | map(attribute='name')) | length == 0
+            fail_msg: >-
+              asked for {{ bench_scenario_only | difference(scenarios_all | map(attribute='name')) | join(', ') }},
+              which this layout neither declares nor binds (it has:
+              {{ scenarios_all | map(attribute='name') | join(', ') }})
+            quiet: true
+
+        - name: Only those
+          ansible.builtin.set_fact:
+            scenarios_all: "{{ scenarios_all | selectattr('name', 'in', bench_scenario_only) | list }}"
+
+    - name: The layout declares scenarios
+      ansible.builtin.assert:
+        that: scenarios_all | length > 0
+        fail_msg: >-
+          this layout declares no bench_scenarios and binds no library test
+          (bench_test_bindings): nothing would run, and nothing would have passed
+        quiet: true
+      run_once: true
+
+    - name: Every step names a board of the layout that something carries a command to
+      ansible.builtin.assert:
+        that:
+          - item.board in groups['boards']
+          - >-
+            hostvars[item.board].bench_via is not none
+            or hostvars[item.board].bench_step_tasks is defined
+        fail_msg: >-
+          {{ item.board }}: not a board of this layout with a console, an ssh route or a
+          family that takes steps another way
+        quiet: true
+      loop: "{{ scenarios_all | map(attribute='steps') | flatten }}"
+      loop_control:
+        label: "{{ item.board }}: {{ item.cmd }}"
+      run_once: true
+
+    - name: Run each scenario
+      ansible.builtin.include_tasks: tasks/scenario_one.yml
+      loop: "{{ scenarios_all }}"
+      loop_control:
+        loop_var: scenario
+        label: "{{ scenario.name }}"
+      run_once: true
+
+    - name: Every scenario passed
+      ansible.builtin.assert:
+        that: scenario_failed | default([]) | length == 0
+        fail_msg: >-
+          failed: {{ scenario_failed | default([]) | join(', ') }}
+          (see {{ bench_runs_dir | default(bench_repo ~ '/runs') }}/{{ bench_run }}/scenario/)
+        quiet: true
+      run_once: true

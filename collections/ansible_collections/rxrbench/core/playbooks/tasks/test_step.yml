@@ -1,0 +1,23 @@
+---
+# One device test on a board with no console and no ssh, through its family's step tasks (the
+# scenario steps' contract: `step` and `step_name` in, `board_step_said` out, as device_run
+# returns it). A step task that says nothing is a failed test, never a passed one.
+- name: "Nothing said yet for test {{ test_item.name }}"
+  ansible.builtin.set_fact:
+    board_step_said: {}
+
+- name: "Through the family's step tasks, test {{ test_item.name }}"
+  ansible.builtin.include_role:
+    name: "{{ bench_plugin }}.board"
+    tasks_from: "{{ bench_step_tasks }}"
+  vars:
+    step: "{{ test_item | combine({'board': bench_board}) }}"
+    step_name: "{{ test_item.name }}"
+
+- name: "Keep what was said by test {{ test_item.name }}"
+  ansible.builtin.set_fact:
+    test_by_steps: >-
+      {{ test_by_steps + ((board_step_said.results | default([]))
+         if (board_step_said.results | default([])) | length > 0 else
+         [{'name': test_item.name, 'cmd': test_item.cmd, 'passed': false, 'output': '',
+           'why': [board_step_said.msg | default('its family step tasks said nothing')]}]) }}

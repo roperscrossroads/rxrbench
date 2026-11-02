@@ -1,0 +1,122 @@
+---
+- name: Create the broker's directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ serial_broker_home }}"
+    - "{{ serial_broker_log_dir }}"
+    # console rules a plugin deploys, one JSON file each (broker.py load_dialects)
+    - "{{ serial_broker_home }}/dialects.d"
+    - "{{ ansible_facts['user_dir'] }}/.config/systemd/user"
+    # one environment file per board: what of the board its unit must know
+    - "{{ ansible_facts['user_dir'] }}/.config/rxrbench/serial"
+
+- name: Create the broker's venv with its pinned packages
+  ansible.builtin.pip:
+    name: "{{ serial_broker_packages }}"
+    virtualenv: "{{ serial_broker_home }}/venv"
+    virtualenv_command: python3 -m venv
+
+- name: Install the broker
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../host/broker/broker.py"
+    dest: "{{ serial_broker_home }}/broker.py"
+    mode: "0755"
+  notify: Restart the brokers
+
+# A console that is not a Zephyr shell, and what the log must never keep, are a plugin's to
+# say: its host/dialects.d/*.json, copied beside the broker.
+- name: Install the plugins' console rules
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ serial_broker_home }}/dialects.d/"
+    mode: "0644"
+  loop: "{{ query('rxrbench.core.bench_plugins', 'host/dialects.d/*.json') }}"
+  notify: Restart the brokers
+
+- name: Install the broker's command-line client
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../host/broker/brokerctl.py"
+    dest: "{{ ansible_facts['user_dir'] }}/rxrbench/bin/brokerctl.py"
+    mode: "0755"
+
+# Where a board's DTR and RTS rest while its broker holds the port and after a reset
+# (broker.py MODEM_RESTS): its type's `modem_rest` (catalog/boards.yml), `asserted` when the
+# type says nothing. A bridge whose RTS holds EN is kept in reset by the default.
+- name: Tell each broker where its board's modem lines rest
+  ansible.builtin.copy:
+    dest: "{{ ansible_facts['user_dir'] }}/.config/rxrbench/serial/{{ item }}.env"
+    # a double-quoted scalar: YAML makes the \n a newline, whatever the templating does with
+    # escapes (a `{{ '\n' }}` came out as a backslash and an n, and the broker refused the value)
+    content: "RXRBENCH_MODEM_REST={{ (hostvars[item]['bench_board_type'] | default({})).modem_rest
+      | default('asserted') }}\n"
+    mode: "0644"
+  loop: "{{ serial_broker_boards }}"
+  register: serial_broker_env
+
+- name: Install the broker unit
+  ansible.builtin.template:
+    src: rxrbench-serial@.service.j2
+    dest: "{{ ansible_facts['user_dir'] }}/.config/systemd/user/rxrbench-serial@.service"
+    mode: "0644"
+  register: serial_broker_unit
+  notify: Restart the brokers
+
+- name: Start a broker for each board
+  ansible.builtin.systemd_service:
+    name: "rxrbench-serial@{{ item }}.service"
+    scope: user
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop: "{{ serial_broker_boards }}"
+  # In check mode a unit that is not installed yet cannot be looked up, let alone started.
+  when: not (ansible_check_mode and serial_broker_unit is changed)
+
+# A broker already running reads its environment at start: the ones whose file changed are
+# restarted now (the handler restarts them all when the broker or the unit changed).
+- name: Restart the brokers whose modem rest changed
+  ansible.builtin.systemd_service:
+    name: "rxrbench-serial@{{ item }}.service"
+    scope: user
+    state: restarted
+  loop: "{{ serial_broker_env.results | default([]) | selectattr('changed') | map(attribute='item') | list }}"
+  when: not ansible_check_mode and not (serial_broker_unit is changed)
+
+# A board that no longer takes a broker (it left the layout's list, or its family turned out
+# to have no console) must not keep one holding its port. Only this layout's boards are
+# retired: a unit for a board the layout does not know may be another layout's, and is named.
+- name: The brokers this host runs
+  ansible.builtin.command:
+    argv: [systemctl, --user, list-units, --all, --plain, --no-legend, "rxrbench-serial@*.service"]
+  register: serial_broker_units
+  changed_when: false
+  check_mode: false
+
+- name: Which of them this layout wants no more
+  ansible.builtin.set_fact:
+    serial_broker_retire: >-
+      {{ serial_broker_units.stdout_lines | map('trim') | map('split', ' ') | map('first')
+         | map('regex_replace', '^rxrbench-serial@(.*)[.]service$', '\1')
+         | select('in', serial_broker_known) | difference(serial_broker_boards) | sort }}
+    serial_broker_foreign: >-
+      {{ serial_broker_units.stdout_lines | map('trim') | map('split', ' ') | map('first')
+         | map('regex_replace', '^rxrbench-serial@(.*)[.]service$', '\1')
+         | reject('in', serial_broker_known) | sort }}
+
+- name: Retire the brokers of boards that take none
+  ansible.builtin.systemd_service:
+    name: "rxrbench-serial@{{ item }}.service"
+    scope: user
+    state: stopped
+    enabled: false
+  loop: "{{ serial_broker_retire }}"
+
+- name: Brokers of boards this layout does not know are left alone
+  ansible.builtin.debug:
+    msg: >-
+      brokers for boards not in this layout, left as they are:
+      {{ serial_broker_foreign | join(', ') }}
+  when: serial_broker_foreign | length > 0

@@ -1,0 +1,8 @@
+---
+# SOPS for a site's secrets: layouts' group_vars/host_vars *.sops.yaml (decrypted at run time
+# by the community.sops vars plugin) and the escrowed identities `just keys-export` writes to
+# identity/<board>.sops.yaml. Copy to <site>/.sops.yaml and put your own age recipient; the
+# matching private key is sops's default, ~/.config/sops/age/keys.txt (SOPS_AGE_KEY_FILE).
+creation_rules:
+  - path_regex: (group_vars|host_vars|identity)/.*\.sops\.ya?ml$
+    age: age1yourrecipientgoeshere

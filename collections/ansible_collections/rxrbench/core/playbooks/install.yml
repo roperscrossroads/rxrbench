@@ -1,0 +1,13 @@
+---
+# The default install (docs/GETTING-STARTED.md#the-default-install-on-a-bench-host) on bench
+# hosts and the workstation. Runs
+# under the system python: the play may move the venvs a rxrbench module would run in.
+- name: Default install
+  hosts: bench_hosts:workstations
+  gather_facts: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  vars_files:
+    - vars/site.yml
+  roles:
+    - role: rxrbench.core.default_install

@@ -1,0 +1,23 @@
+---
+# Escrow the secrets each device made (its identity key) into the site's encrypted store,
+# <site>/identity/<board>.sops.yaml, read the way its family's plugin says. `just keys-restore`
+# then gives an erased or reflashed board the one it had. Nothing is written to a board.
+#
+# An escrowed secret is never replaced by a different one in silence (tasks/secret_export.yml);
+# -e rekey=true accepts the board's new one.
+- name: Escrow the secrets devices made
+  hosts: boards
+  gather_facts: false
+  # boards at a time (-e parallel=N); a busy broker is waited for, not a failure
+  serial: "{{ parallel | default(4) }}"
+  vars:
+    secret_escrow_file: "{{ bench_site_dir }}/identity/{{ bench_board }}.sops.yaml"
+  tasks:
+    - name: Each secret the site escrows
+      ansible.builtin.include_tasks: tasks/secret_export.yml
+      loop: >-
+        {{ (bench_secret_kinds | default([]) | selectattr('escrow') | list)
+           if bench_plugin is defined else [] }}
+      loop_control:
+        loop_var: secret
+        label: "{{ secret.kind }}"

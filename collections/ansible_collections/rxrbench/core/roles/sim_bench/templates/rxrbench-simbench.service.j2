@@ -1,0 +1,16 @@
+# Managed by rxrbench (roles/sim_bench): the simulated boards of the layout on this host, each
+# behind a broker on %t/rxrbench/<board>.sock, where a real board's broker would be.
+[Unit]
+Description=rxrbench simulated bench ({{ sim_bench_boards | join(' ') }})
+Documentation=file://{{ sim_bench_home }}/simbench.py
+
+[Service]
+ExecStart={{ sim_bench_python }} {{ sim_bench_home }}/simbench.py \
+    --registry {{ sim_bench_home }}/registry.yaml --run-dir %t/rxrbench \
+    --store {{ sim_bench_store }} --broker {{ sim_bench_broker }} \
+    --dialects {{ sim_bench_dialects }} {{ sim_bench_boards | join(' ') }}
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,6 @@
+/* the board's one UART carries SMP (no console on it: smp-uart-mcu.conf) */
+/ {
+	chosen {
+		zephyr,uart-mcumgr = &uart0;
+	};
+};

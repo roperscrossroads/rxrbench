@@ -1,0 +1,27 @@
+---
+# The broker's code, its console rules and its unit are the host's, shared by every broker on
+# it, not this layout's: a change restarts every broker running there, those of other layouts
+# too (one left on the old code was seen on a host with two layouts' boards), and this layout's
+# boards whether running or not.
+- name: The brokers running on this host  # noqa: command-instead-of-module (the module cannot list units)
+  ansible.builtin.command: >-
+    systemctl --user list-units --plain --no-legend --state=active rxrbench-serial@*.service
+  register: serial_broker_running
+  changed_when: false
+  when: not ansible_check_mode
+  listen: Restart the brokers
+
+- name: Restart the brokers
+  ansible.builtin.systemd_service:
+    name: "rxrbench-serial@{{ item }}.service"
+    scope: user
+    state: restarted
+    daemon_reload: true
+  loop: >-
+    {{ (serial_broker_boards
+        + (serial_broker_running.stdout_lines | default([])
+           | map('split') | map('first')
+           | map('regex_replace', '^rxrbench-serial@(.*)[.]service$', '\1') | list))
+       | unique }}
+  when: not ansible_check_mode
+  listen: Restart the brokers

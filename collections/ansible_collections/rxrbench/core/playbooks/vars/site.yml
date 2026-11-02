@@ -1,0 +1,13 @@
+---
+# Where the repository and the site are, for a play on the plain `hosts` inventory (survey,
+# install), which has no devreg inventory plugin to publish bench_repo / bench_site_dir /
+# bench_registry / bench_facts_dir. The same settings and defaults as module_utils/site.py;
+# a relative site is relative to the repository.
+bench_repo: "{{ (playbook_dir ~ '/../../../../..') | realpath }}"
+bench_site_env: "{{ lookup('ansible.builtin.env', 'RXRBENCH_SITE', default='site') | expanduser }}"
+bench_site_dir: >-
+  {{ bench_site_env if bench_site_env.startswith('/') else bench_repo ~ '/' ~ bench_site_env }}
+bench_registry: >-
+  {{ (lookup('ansible.builtin.env', 'DEVREG_REGISTRY', default='') or bench_site_dir ~ '/registry.yaml') | expanduser }}
+bench_facts_dir: >-
+  {{ (lookup('ansible.builtin.env', 'RXRBENCH_FACTS', default='') or bench_site_dir ~ '/facts') | expanduser }}

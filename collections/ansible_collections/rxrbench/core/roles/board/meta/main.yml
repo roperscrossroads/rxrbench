@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Adam Roper
+  description: Bring one board to its declared state
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

@@ -1,0 +1,20 @@
+---
+extends: default
+rules:
+  line-length: {max: 120}
+  comments: {min-spaces-from-content: 1}
+  comments-indentation: disable
+  braces: {max-spaces-inside: 1}
+  octal-values: {forbid-implicit-octal: true, forbid-explicit-octal: true}
+  truthy: {check-keys: false}
+  indentation: {spaces: 2, indent-sequences: whatever}
+ignore: |
+  venv/
+  .build/
+  runs/
+  .collections/
+  tests/fixtures/
+  # data read from a board, not source
+  backups/
+  # written by sops, not by hand
+  *.sops.yaml

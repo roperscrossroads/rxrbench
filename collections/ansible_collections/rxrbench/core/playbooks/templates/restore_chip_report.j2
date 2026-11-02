@@ -1,0 +1,14 @@
+{#- What restore-chip wrote, or would write: the backup (or the snapshot it is), when it was
+    taken, what it recorded running, and how the board came back. Only what is known is said. -#}
+{%- set r = restore -%}
+{%- set dev = r.recorded | default(none) or {} -%}
+{%- set snap = r.snapshot | default(none) -%}
+{%- set ran = (dev.family ~ ' ' ~ (dev.version or dev.build or (dev.hash or '')[:8] or '')) | trim if dev else '' -%}
+{{ bench_board }}: {{ 'snapshot ' ~ snap if snap else 'backup' }} {{ r.path }}, taken {{ r.taken | default(none) or '?' }}
+{%- if ran %}, running {{ ran }}{% endif %}
+{%- if r.msg is defined and r.msg %}; {{ r.msg }}{% endif %}
+{%- if r.differing_blocks is defined %}; {{ r.differing_blocks }} of {{ r.blocks }} blocks to write
+{%- elif r.blocks is defined %}; {{ r.written_blocks }} of {{ r.blocks }} blocks written{% endif %}
+{%- if r.came_back_as is defined and r.came_back_as %}; came back as {{ r.came_back_as.family | default('?') }} {{ r.came_back_as.version | default(r.came_back_as.build, true) | default('', true) }}
+{%- elif r.written_blocks is defined and not dev %}; not read back: the backup recorded no identity
+{%- endif %}

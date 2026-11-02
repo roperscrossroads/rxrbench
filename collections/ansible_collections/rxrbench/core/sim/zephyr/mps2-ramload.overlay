@@ -1,0 +1,89 @@
+#include <mem.h>
+/* MCUboot in RAM-load mode on the MPS2 AN385 under QEMU (docs/SIMULATED.md. The
+ * board's code memory has no flash driver (QEMU backs it with RAM), so the flash the images
+ * live in is the flash simulator, made to stand at address 0 as flash0: MCUboot runs from
+ * the real memory there (QEMU loads it), the slots are the simulator's (writable, in RAM,
+ * kept across a CPU reset), and the image MCUboot chooses is copied to RAM and run. */
+/delete-node/ &flash0;
+/delete-node/ &flash_sim0;
+
+/* the top 1088 KB of the board's RAM is the simulated flash, the same memory for MCUboot
+ * and the application (both carry this overlay), kept across a CPU reset, filled by QEMU's
+ * loader with the factory image before the first boot; below it, 64 KB is MCUboot's own
+ * RAM (mps2-ramload-mcuboot.overlay, MCUboot's alone); the application is copied to and
+ * runs in the rest, from the bottom. The three must not overlap: MCUboot copies the chosen
+ * image to RAM before it validates it, and a copy over its own stack locks the CPU up. */
+&sram0 {
+	reg = <0x20000000 0x002E0000>;
+};
+
+/ {
+	chosen {
+		/* where MCUboot tells the application which slot it loaded (an image copied to
+		 * RAM cannot tell by its address): the image manager's upload goes to the other */
+		zephyr,bootloader-info = &boot_info0;
+	};
+
+	flash_region: memory@202f0000 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x202F0000 DT_SIZE_K(1088)>;
+		zephyr,memory-region = "FLASH_SIM";
+	};
+
+	/* the last 1 KB of MCUboot's 64 KB: retained across the CPU reset, written by MCUboot,
+	 * read by the application (Zephyr's retention subsystem, bootloader info) */
+	retained_region: memory@202efc00 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x202EFC00 DT_SIZE_K(1)>;
+		ranges = <0x0 0x202EFC00 DT_SIZE_K(1)>;
+		zephyr,memory-region = "RetainedMem";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		retainedmem {
+			compatible = "zephyr,retained-ram";
+			status = "okay";
+			ranges;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			boot_info0: boot_info@0 {
+				compatible = "zephyr,retention";
+				status = "okay";
+				reg = <0x0 0x100>;
+			};
+		};
+	};
+};
+
+&sim_flash_controller {
+	memory-region = <&flash_region>;
+	flash0: flash@0 {
+		compatible = "soc-nv-flash";
+		reg = <0x00000000 DT_SIZE_K(1088)>;
+		erase-block-size = <4096>;
+		write-block-size = <4>;
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			boot_partition: partition@0 {
+				label = "mcuboot";
+				reg = <0x00000000 DT_SIZE_K(128)>;
+			};
+			slot0_partition: partition@20000 {
+				label = "image-0";
+				reg = <0x00020000 DT_SIZE_K(448)>;
+			};
+			slot1_partition: partition@90000 {
+				label = "image-1";
+				reg = <0x00090000 DT_SIZE_K(448)>;
+			};
+			storage_partition: partition@100000 {
+				label = "storage";
+				reg = <0x00100000 DT_SIZE_K(64)>;
+			};
+		};
+	};
+};

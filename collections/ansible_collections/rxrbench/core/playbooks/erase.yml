@@ -1,0 +1,110 @@
+---
+# Erase one config region of one board (`just erase <layout> <board> <region>`): the flash-side
+# way back for a node its firmware cannot wipe (wedged, or running other firmware). Only the
+# region named is erased, where the declared image's own map (or the chip's declared ranges)
+# puts it, on every route that has a region level:
+#   esptool   from the image's flash map
+#   esp-image from the merged image's own partition table, on a chip whose table the loader
+#             hashes as the image's (a stock release's file system)
+#   picoboot  from the UF2 image's flash map, through the ROM bootloader
+#   swd       from the ranges declared for the chip, through the probe
+#   a plugin's flasher: its family's `region_erase` task file (Family.chip_tasks)
+# With no region named nothing is erased: the refusal lists the board's config regions. The
+# whole chip is `just erase-chip` (erase-chip.yml). A UF2 board (an nRF52840) has no USB path for
+# this, a board under an app manager (launcher) shares its data partitions with every app, SMP
+# boards erase nothing here.
+# Then `just apply` brings the node back as declared, its identity key from the escrow.
+# -e wedged=true for a board that does not answer; --check makes every check and erases nothing.
+- name: Erase one config region of a board
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    # the plugin's task file for one config region, if its family names one
+    plugin_erase: "{{ (bench_chip_tasks | default({})).region_erase | default('', true) }}"
+  tasks:
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+    - name: One board, named, on a layout that may be written to
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          an erase writes one board: name it
+          (just erase <layout> <board> <region>)
+        quiet: true
+      run_once: true
+
+    - name: It has config regions to erase
+      ansible.builtin.assert:
+        that:
+          - "'regions' in bench_can"
+        fail_msg: >-
+          {{ bench_board }}: no config regions to erase on a device flashed by
+          {{ bench_flasher | default('?') }} running {{ bench_family | default('?') }} (its
+          family names none in this image, or this flasher has no region level). Nothing was
+          erased.
+          {{ ('Its whole chip can be erased: just erase-chip ' ~ bench_layout ~ ' ' ~ bench_board)
+             if 'chip' in bench_can or (bench_chip_tasks | default({})).erase is defined else '' }}
+        quiet: true
+
+    # Core's module lists the regions itself when none is named; a plugin's task file is not
+    # entered without one.
+    - name: A region is named
+      ansible.builtin.assert:
+        that: erase_region | default('', true) | length > 0
+        fail_msg: >-
+          name the config region to erase (just erase {{ bench_layout }} {{ bench_board }}
+          <region>){{ (': declared ' ~ (bench_flash_regions | selectattr('role', 'defined')
+          | selectattr('role', 'equalto', 'config') | map(attribute='label') | join(', ')))
+          if bench_flash_regions | default([]) | length > 0 else '' }}. The whole chip is
+          just erase-chip. Nothing was erased
+        quiet: true
+      when: plugin_erase | length > 0
+
+    - name: Stage the image whose flash map is used
+      ansible.builtin.copy:
+        src: "{{ bench_image }}/"
+        dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}/"
+        mode: preserve
+      check_mode: false
+      when: bench_flasher | default('') != 'sim'
+
+    - name: Erase it
+      rxrbench.core.region_erase:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        mac: "{{ bench_chip_mac | default(omit, true) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+        overwrite: "{{ bench_overwrite | default([]) }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+        region: "{{ erase_region | default(omit, true) }}"
+        wedged: "{{ wedged | default(false) | bool }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        flash_regions: "{{ bench_flash_regions | default([]) }}"
+      register: erased
+      when: plugin_erase | length == 0
+
+    # A board a plugin's own flasher writes: its family's task file (Family.chip_tasks), entered
+    # only past the gate's go-ahead; it registers erased as the module above returns it.
+    - name: Erase it, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ plugin_erase }}"
+      when: plugin_erase | length > 0
+
+    - name: What was erased
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: {{ erased.msg | default(erased) }}"

@@ -1,0 +1,64 @@
+---
+# One scenario: its steps in order, each judged, the first failure ending it; then its record.
+- name: "Start the scenario {{ scenario.name }}"
+  ansible.builtin.set_fact:
+    scenario_results: []
+    scenario_dir: >-
+      {{ bench_runs_dir | default(bench_repo ~ '/runs') }}/{{ bench_run }}/scenario/{{ scenario.name }}
+
+- name: "Run the steps of {{ scenario.name }}"
+  ansible.builtin.include_tasks: scenario_step.yml
+  loop: "{{ scenario.steps }}"
+  loop_control:
+    loop_var: step
+    index_var: step_index
+    label: "{{ step.board }}: {{ step.cmd }}"
+
+- name: "Make the directory of {{ scenario.name }}"
+  ansible.builtin.file:
+    path: "{{ scenario_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+
+- name: "Write each step's output of {{ scenario.name }}"
+  ansible.builtin.copy:
+    content: "{{ item.output }}\n"
+    dest: "{{ scenario_dir }}/{{ item.name }}.txt"
+    mode: "0644"
+  loop: "{{ scenario_results }}"
+  loop_control:
+    label: "{{ item.name }}"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+  diff: false
+
+- name: "Write the record of {{ scenario.name }}"
+  ansible.builtin.copy:
+    content: >-
+      {{ {'scenario': scenario.name, 'layout': bench_layout, 'run': bench_run,
+          'passed': scenario_results | rejectattr('passed') | list | length == 0
+                    and scenario_results | length == scenario.steps | length,
+          'steps': scenario_results}
+         | combine({'test': scenario.test, 'bindings': scenario.bindings} if scenario.test is defined else {})
+         | to_nice_json }}
+    dest: "{{ scenario_dir }}/scenario.json"
+    mode: "0644"
+  delegate_to: localhost
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  check_mode: false
+  diff: false
+
+- name: "The verdict of {{ scenario.name }}"
+  ansible.builtin.set_fact:
+    scenario_failed: >-
+      {{ scenario_failed | default([])
+         + ([] if (scenario_results | rejectattr('passed') | list | length == 0
+                   and scenario_results | length == scenario.steps | length)
+            else [scenario.name]) }}

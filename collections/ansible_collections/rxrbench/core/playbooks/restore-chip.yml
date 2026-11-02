@@ -1,0 +1,70 @@
+---
+# Write one board's whole flash back from a chip backup made by playbooks/backup.yml:
+# bootloader, partitions, applications and config. The board comes back as the node it was
+# when the backup was taken, whatever ran on it since. One board at a time, by name; refused
+# unless the backup was read from this very chip. With --check every check is made (the
+# chip is identified, which resets the board) and nothing is written.
+- name: Restore the whole chip
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: One board, named
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: >-
+          a restore writes one board: name it with --limit (this run would reach
+          {{ ansible_play_hosts_all | join(', ') }})
+        quiet: true
+      run_once: true
+
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    - name: A chip that can be written back whole
+      ansible.builtin.assert:
+        that: "'chip' in bench_can"
+        fail_msg: >-
+          {{ bench_board }}: no way to write back the whole chip of a device flashed by
+          {{ bench_flasher | default('?') }}
+        quiet: true
+
+    - name: Write the chip back
+      rxrbench.core.chip_restore:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        backup: "{{ restore_from | default('latest') }}"
+        socket: "{{ bench_socket | default(omit) }}"
+      register: restore
+      when: (bench_chip_tasks | default({})).restore is not defined
+
+    # A chip a plugin's own flasher writes: its family's task file (Family.chip_tasks), entered
+    # only past the gate's go-ahead; it registers restore as the module above returns it.
+    - name: Write the chip back, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_chip_tasks.restore }}"
+      when: (bench_chip_tasks | default({})).restore is defined
+
+    - name: A bootloader read the write made stale is forgotten
+      ansible.builtin.include_role:
+        name: rxrbench.core.board
+        tasks_from: forget_bootloader
+      when: restore is changed and not ansible_check_mode
+
+    - name: What was written
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.template', 'restore_chip_report.j2') | trim }}"

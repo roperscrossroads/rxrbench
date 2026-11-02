@@ -1,0 +1,97 @@
+---
+# Run a layout's device tests: commands on each device whose output is judged
+# (bench_tests: a list of {name, cmd, expect, refuse, rc, timeout}). The commands are the
+# layout's own; this tool does not know whether they change a device. Results are kept:
+#   runs/<time>/<device>/test/<name>.txt   and   .../test.json
+- name: Device tests
+  hosts: boards
+  gather_facts: false
+  tasks:
+    - name: One name for this run
+      ansible.builtin.set_fact:
+        bench_run: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}"
+      run_once: true
+
+    # A layout that declares no tests would run nothing and report every board passed. An
+    # empty list declares none (a layout's tests may depend on the firmware a board runs).
+    - name: Whether this device has tests
+      ansible.builtin.set_fact:
+        bench_has_tests: "{{ (bench_tests | default([], true) | length) > 0 }}"
+
+    - name: The layout declares tests for some device
+      ansible.builtin.assert:
+        that: >-
+          ansible_play_hosts_all | map('extract', hostvars, 'bench_has_tests')
+          | select | list | length > 0
+        fail_msg: >-
+          no device in this run declares bench_tests (a layout's or a layer's group_vars, or a
+          board's host_vars): nothing would run, and nothing would have passed
+        quiet: true
+      run_once: true
+
+    - name: A device with no tests is named, not passed
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: declares no bench_tests, so nothing was tested on it"
+      when: not bench_has_tests
+
+    - name: Something carries a command to it
+      ansible.builtin.assert:
+        that: bench_via is not none or bench_step_tasks is defined
+        fail_msg: >-
+          {{ bench_board }}: tests are declared, but it has no console, no ssh route and no family
+          step tasks
+        quiet: true
+      when: bench_has_tests
+
+    # Through whatever carries a command to it (bench_via): its console, or ssh; a board with
+    # neither, through its family's step tasks (the scenario steps' contract), one test each.
+    - name: Run the device's tests
+      rxrbench.core.device_run:
+        board: "{{ bench_board if bench_via == 'console' else omit }}"
+        socket: "{{ (bench_socket | default(omit)) if bench_via == 'console' else omit }}"
+        dialect: >-
+          {{ (bench_families[bench_family].console | default(none, true))
+             if bench_via == 'console' else omit }}
+        route: "{{ bench_routes.shell if bench_via == 'ssh' else omit }}"
+        commands: "{{ bench_tests }}"
+        fail_on_failure: false
+      register: test_said
+      when: bench_has_tests and bench_via is not none
+
+    - name: Run the device's tests through its family's step tasks
+      when: bench_has_tests and bench_via is none
+      block:
+        - name: No results yet
+          ansible.builtin.set_fact:
+            test_by_steps: []
+
+        - name: Each test as a step on this board
+          ansible.builtin.include_tasks: tasks/test_step.yml
+          loop: "{{ bench_tests }}"
+          loop_control:
+            loop_var: test_item
+            label: "{{ test_item.name }}"
+
+        - name: What the tests said
+          ansible.builtin.set_fact:
+            test_said:
+              results: "{{ test_by_steps }}"
+              failed_tests: "{{ test_by_steps | rejectattr('passed') | map(attribute='name') | list }}"
+
+    - name: Keep the results
+      ansible.builtin.include_tasks: tasks/record.yml
+      vars:
+        record_kind: test
+        record_results: "{{ test_said.results }}"
+      when: bench_has_tests
+
+    - name: Every test passed
+      ansible.builtin.assert:
+        that: test_said.failed_tests | length == 0
+        fail_msg: >-
+          {{ bench_board }}: failed
+          {{ test_said.results
+             | rejectattr('passed') | map(attribute='name') | join(', ') }}
+          (see {{ bench_runs_dir | default(bench_repo ~ '/runs') }}/{{ bench_run }}/{{ bench_board }}/test/)
+        quiet: true
+      when: bench_has_tests

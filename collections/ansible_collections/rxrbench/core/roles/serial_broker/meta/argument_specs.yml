@@ -1,0 +1,37 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  main:
+    short_description: "One serial broker per board console on a bench host"
+    description:
+      - >-
+        Where the broker lives on a bench host. Everything is under the login user's home; nothing
+        here needs root except enabling lingering, which bench_host does.
+    options:
+      serial_broker_boards: &serial_broker_boards
+        type: list
+        description: >-
+          The boards on this bench host whose consoles the broker owns, one broker each.
+      serial_broker_devreg: &serial_broker_devreg
+        type: str
+        description: >-
+          The devreg the broker runs to resolve and guard a board's port.
+      serial_broker_home: &serial_broker_home
+        type: str
+        description: >-
+          Where the broker, its venv and its console rules live on the bench host.
+      serial_broker_known: &serial_broker_known
+        type: list
+        description: >-
+          Every board of the layout on this host: a broker of one of these that is not in
+          C(serial_broker_boards) is retired; one outside the layout is left alone.
+      serial_broker_log_dir: &serial_broker_log_dir
+        type: str
+        description: >-
+          Where the brokers write each board's console log.
+      serial_broker_packages: &serial_broker_packages
+        type: list
+        description: >-
+          The broker venv's pinned packages (devreg's one dependency is pinned beside the broker's).

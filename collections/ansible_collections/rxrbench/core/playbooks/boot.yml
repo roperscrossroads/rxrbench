@@ -1,0 +1,170 @@
+---
+# A layout's boards to their declared bootloader. Not part of apply: a bootloader is written
+# rarely, and even reading one resets an ESP32 board. With --check --diff this is the plan,
+# which resets nothing: it decides from the bootloader last read from each board (kept in the
+# board's facts by any run that read it). `-e boot_read=true` makes a plan read the boards.
+#
+# The bootloader is the one staged beside the board's declared image (same build), and the
+# layout's bench_bootloader_policy decides when it is written: `key` (default) when the board
+# has no MCUboot or one that verifies another key, `exact` also for another build.
+- name: Bootloaders
+  hosts: boards
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    boot_facts_file: "{{ bench_facts_dir }}/{{ bench_board }}.yaml"
+  tasks:
+    - name: The gate
+      ansible.builtin.include_tasks: tasks/gate.yml
+
+    - name: What is already known about the board (survey facts, registry)
+      ansible.builtin.set_fact:
+        boot_facts: >-
+          {{ lookup('ansible.builtin.file', boot_facts_file, errors='ignore') | default('', true)
+             | from_yaml | default({}, true) }}
+        boot_registry: >-
+          {{ (lookup('ansible.builtin.file', bench_registry) | from_yaml).devices[bench_devreg] }}
+
+    - name: The board's survey tags and known bootloader
+      ansible.builtin.set_fact:
+        boot_tags: "{{ boot_facts.get('tags', []) }}"
+        # A UF2 bootloader's version is only readable from inside the bootloader: use the
+        # survey's record, else the first word of the registry's hand-kept `bootloader`.
+        boot_known_version: >-
+          {{ ((boot_facts.get('probes', {}).get('bootloader', {}) or {}).get('version'))
+             or ((boot_registry.bootloader | default('', true)).split() | first | default(none)
+                 | regex_replace('^unknown$', '')) }}
+
+    - name: Stage the declared image (and its bootloader) on the bench host
+      ansible.builtin.copy:
+        src: "{{ bench_image }}/"
+        dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}/"
+        mode: preserve
+      check_mode: false
+      when: bench_flasher | default('') in ['esptool', 'smp', 'uf2']
+
+    - name: The bootloader, ESP32 (MCUboot over esptool)
+      rxrbench.core.bootloader_flash:
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+        board: "{{ bench_board }}"
+        family: "{{ bench_family }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+        flasher: esp_mcuboot
+        policy: "{{ bench_bootloader_policy | default('key') }}"
+        board_tag: "{{ bench_board_tag | default(omit) }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        tags: "{{ boot_tags }}"
+        known: "{{ boot_facts.get('probes', {}).get('bootloader') | default(omit, true) }}"
+        read: "{{ boot_read | default(false) | bool }}"
+      register: boot_esp
+      when: bench_flasher | default('') in ['esptool', 'smp'] and bench_mcu | default('') is match('esp32')
+
+    # A bootloader this tool has no flasher for is a plugin's: the task file its family names
+    # for the board's flasher (`bench_bootloader_tasks`), in its board role. It is handed what
+    # is known of the board (boot_known_version, boot_registry, boot_tags) and registers
+    # `board_bootloader` (before, after, changed, why).
+    - name: The bootloader, by the board's plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_bootloader_tasks }}"
+      when: bench_plugin is defined and (bench_bootloader_tasks | default('', true) | length) > 0
+
+    - name: Why
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: {{ (boot_esp if boot_esp is not skipped else board_bootloader).why }}"
+      when: >-
+        ((boot_esp is defined and boot_esp is not skipped) or
+         (board_bootloader is defined and board_bootloader is not skipped))
+        and (boot_esp if (boot_esp is defined and boot_esp is not skipped) else board_bootloader).why is defined
+
+    # Where a bootloader can only be read from inside it, keep what a run saw, so the next
+    # plan need not go in again.
+    - name: Record the bootloader the plugin's step saw
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/facts_note.py"
+          - --facts-dir
+          - "{{ bench_facts_dir }}"
+          - --key
+          - "{{ bench_board }}"
+          - --probe
+          - bootloader
+        stdin: "{{ board_bootloader.after | to_json }}"
+      delegate_to: localhost
+      changed_when: false
+      when:
+        - board_bootloader is defined
+        - board_bootloader is not skipped
+        - board_bootloader.after is defined
+        - not ansible_check_mode
+
+    # Reading an ESP32's bootloader resets the board: keep what a run read, so the next plan
+    # decides from it and resets nothing.
+    - name: Record the ESP32 bootloader the run read
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/facts_note.py"
+          - --facts-dir
+          - "{{ bench_facts_dir }}"
+          - --key
+          - "{{ bench_board }}"
+          - --probe
+          - bootloader
+        stdin: "{{ boot_esp.after | default(boot_esp.before) | to_json }}"
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      when:
+        - boot_esp is not skipped
+        - boot_esp.read | default(false)
+
+    # MCUboot written where the board had none, or one that verifies another key: the app the
+    # board ran does not boot under it (MCUboot finds no image it accepts and its console stays
+    # silent), so the next apply would take the board for an unknown chip. Running it says
+    # the board changes to the declared family: kept in its facts for that
+    # apply, which writes the image as a first flash and forgets it (roles/board).
+    - name: Record that the board now waits for its declared family's first image
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/facts_note.py"
+          - --facts-dir
+          - "{{ bench_facts_dir }}"
+          - --key
+          - "{{ bench_board }}"
+          - --probe
+          - boot_switch
+        stdin: >-
+          {{ {'family': bench_family, 'replaced': boot_esp.before.kind | default('unknown'),
+              'replaced_key': boot_esp.before.key | default(none)} | to_json }}
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      when:
+        - not ansible_check_mode
+        - boot_esp is not skipped
+        - boot_esp is changed
+        - >-
+          (boot_esp.before.kind | default('')) != 'mcuboot'
+          or (boot_esp.before.key | default(none)) != (boot_esp.after.key | default(none))
+
+    - name: Commit the facts, when the site asked for that
+      ansible.builtin.command:
+        argv:
+          - "{{ bench_repo }}/venv/bin/python"
+          - "{{ bench_repo }}/tools/facts_commit.py"
+          - --facts-dir
+          - "{{ bench_facts_dir }}"
+          - --message
+          - "boot of {{ bench_board }}"
+      delegate_to: localhost
+      register: facts_committed
+      changed_when: "facts_committed.stdout is search('^facts: committed ')"
+      check_mode: false
+      when: not ansible_check_mode

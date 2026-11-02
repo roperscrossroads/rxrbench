@@ -1,0 +1,68 @@
+---
+# One step of a scenario, on the board it names, through whatever carries a command to it.
+# `within` seconds (default 0: one try) are given for the step to come true.
+- name: "The name kept for step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    # a step's name is the layout's words; what is kept of it becomes a file name
+    step_name: >-
+      {{ '%02d' | format(step_index + 1) }}-{{ step.name | default(step.board)
+         | regex_replace('[^A-Za-z0-9._-]+', '-') | regex_replace('^-+|-+$', '') }}
+
+- name: "Run step {{ step_index + 1 }}"
+  rxrbench.core.device_run:
+    board: "{{ step.board if step_via == 'console' else omit }}"
+    socket: "{{ (hostvars[step.board].bench_socket | default(omit)) if step_via == 'console' else omit }}"
+    dialect: >-
+      {{ (hostvars[step.board].bench_families[hostvars[step.board].bench_family].console
+          | default(none, true)) if step_via == 'console' else omit }}
+    route: "{{ hostvars[step.board].bench_routes.shell if step_via == 'ssh' else omit }}"
+    commands:
+      - "{{ {'name': step_name, 'cmd': step.cmd}
+            | combine(step | dict2items | selectattr('key', 'in', ['expect', 'refuse', 'rc', 'timeout'])
+                      | items2dict) }}"
+    fail_on_failure: false
+  vars:
+    step_via: "{{ hostvars[step.board].bench_via }}"
+  delegate_to: "{{ step.board }}"
+  register: step_said
+  retries: "{{ step.within | default(0) | int }}"
+  delay: 1
+  # a module that could not run the step (no answer, a bad argument) is not asked again
+  until: step_said.results is not defined or step_said.failed_tests | length == 0
+  # a step that never came true is the scenario's verdict (scenario_one.yml), not the play's
+  ignore_errors: true
+  check_mode: false
+  # a failed step ends the scenario: the steps after it are not run (judged here, at each
+  # step, since the include's loop is expanded before any step has run)
+  when:
+    - scenario_results | rejectattr('passed') | list | length == 0
+    - hostvars[step.board].bench_via is not none
+
+# A board with no console and no ssh: its family's step tasks (bench_step_tasks), which
+# register board_step_said as device_run returns it and give the step its `within` themselves.
+- name: "Run through its family step {{ step_index + 1 }}"
+  ansible.builtin.include_role:
+    name: "{{ hostvars[step.board].bench_plugin }}.board"
+    tasks_from: "{{ hostvars[step.board].bench_step_tasks }}"
+  when:
+    - scenario_results | rejectattr('passed') | list | length == 0
+    - hostvars[step.board].bench_via is none
+
+- name: "What its family said for step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    step_said: "{{ board_step_said }}"
+  when:
+    # the same test as the include's: a step skipped after a failure keeps no earlier result
+    - scenario_results | rejectattr('passed') | list | length == 0
+    - hostvars[step.board].bench_via is none
+    - board_step_said is defined
+    - board_step_said is not skipped
+
+- name: "Keep what was said in step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    scenario_results: >-
+      {{ scenario_results + [(step_said.results[0] if step_said.results is defined
+                              else {'name': step_name, 'cmd': step.cmd, 'output': '',
+                                    'passed': false, 'why': [step_said.msg | default('the step did not run')]})
+                             | combine({'board': step.board})] }}
+  when: step_said is not skipped

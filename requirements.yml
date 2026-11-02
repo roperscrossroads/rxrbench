@@ -1,0 +1,6 @@
+---
+# Third-party collections, installed into ./.collections (not tracked). This tool's own live in
+# ./collections and is tracked.
+collections:
+  - name: community.sops
+    version: "2.5.0"

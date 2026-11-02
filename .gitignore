@@ -1,0 +1,28 @@
+/venv/
+/.collections/
+/.cache/
+/.build/
+/runs/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.retry
+# A site's own configuration and secrets: never in this repository (see site.example/, .env.example)
+/.env
+/.env.*
+!/.env.example
+/site
+# secrets and key material, wherever they land (a site keeps its own; see CONTRIBUTING.md#public-and-private)
+.sops.yaml
+*.sops.yaml
+*.sops.yml
+*.key
+*.pem
+*.p12
+id_rsa*
+id_ed25519*
+/CLAUDE.local.md
+# board backups copied from the bench hosts: they hold the nodes' private keys
+/backups
+# per-user tool settings of whoever works in this checkout
+/.claude/

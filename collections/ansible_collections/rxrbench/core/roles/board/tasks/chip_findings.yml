@@ -1,0 +1,32 @@
+---
+# What the survey recorded on the chip that this layout does not own
+# (docs/ARCHITECTURE.md#partitions-and-the-write-rule):
+# other firmware in an app slot, or data every app of a chip with an app manager shares. The plan
+# reports it from the facts and never reads the chip for it; a write is checked against the chip
+# itself. The board's family leaves out what its declaration owns there (a Launcher layout: the
+# manager, its declared apps) and says what the chip carries. `bench_foreign: refuse` stops the
+# board instead; what bench_overwrite names is left out. Every apply runs it, whichever route
+# brings the board to its declared state (the core board role, or its plugin's update step).
+- name: What the survey found on the chip that this layout does not own
+  ansible.builtin.set_fact:
+    board_chip_findings: >-
+      {{ lookup('ansible.builtin.file', bench_facts_dir ~ '/' ~ bench_board ~ '.yaml', errors='ignore')
+         | default('', true) | from_yaml | default({}, true)
+         | rxrbench.core.chip_findings(bench_overwrite | default([]), hostvars[inventory_hostname]) }}
+
+- name: Say what the survey found there
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ 'warning: ' if bench_foreign | default('info') == 'warn' else '' }}{{
+      board_chip_findings | join('; ') }}
+  when: board_chip_findings | length > 0 and bench_foreign | default('info') != 'refuse'
+
+- name: The layout wants nothing on the chip it does not own
+  ansible.builtin.assert:
+    that: board_chip_findings | length == 0
+    fail_msg: >-
+      {{ bench_board }}: bench_foreign is refuse, and the survey found: {{ board_chip_findings | join('; ') }}.
+      Name the regions in bench_overwrite if the layout means to take them, or survey the board
+      again if they are gone (`just survey`)
+    quiet: true
+  when: bench_foreign | default('info') == 'refuse'

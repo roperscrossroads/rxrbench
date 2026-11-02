@@ -1,0 +1,76 @@
+---
+# A named configuration of a layout's boards: each board's whole chip, filed under
+# `snapshot_name` (backups/<board>/snapshot/<name>, on its bench host and here). For setups a
+# layout cannot declare (stock firmware, a hand-made state); `just switch <layout> <name>`
+# puts the boards back to it, writing only the blocks that differ. Every board must have a
+# whole-chip path (`chip` in bench_can: ESP32, RP2040/RP2350, simulated); a layout with
+# others is refused and they are named, unless -e partial=true leaves them out. Nothing is
+# written to a board; each reboots once. Four boards at a time (-e parallel=N).
+- name: Snapshot the boards
+  hosts: boards
+  gather_facts: false
+  serial: "{{ parallel | default(4) }}"
+  vars:
+    backups_local: "{{ bench_repo }}/backups/{{ bench_board }}"
+  tasks:
+    - name: A snapshot has a name
+      ansible.builtin.assert:
+        that: snapshot_name is defined and snapshot_name is match('^[A-Za-z0-9._-]+$')
+        fail_msg: "name the snapshot: just snapshot <layout> <name> (letters, digits, . _ -)"
+        quiet: true
+      run_once: true
+
+    - name: Every board's whole chip can be read
+      ansible.builtin.include_tasks: tasks/coverage.yml
+      vars:
+        coverage_caps: [chip]
+        coverage_what: whole-chip path
+
+    - name: Read the whole chip, under the snapshot's name
+      rxrbench.core.chip_backup:
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
+        ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
+        flasher: "{{ bench_flasher | default(omit) }}"
+        run_dir: "{{ bench_sim_run | default(omit) }}"
+        families: "{{ bench_families }}"
+        board: "{{ bench_board }}"
+        chip: "{{ bench_mcu | default(omit) }}"
+        family: "{{ bench_family | default(omit) }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        snapshot: "{{ snapshot_name }}"
+      register: snap
+      when: "'chip' in bench_can"
+
+    - name: Copy it to the workstation
+      ansible.builtin.fetch:
+        src: "{{ snap.path }}/{{ item }}"
+        dest: "{{ backups_local }}/chip/{{ snap.path | basename }}/"
+        flat: true
+      loop: [meta.json, flash.bin.gz]
+      when: snap.path is defined
+
+    - name: The workstation's snapshot directory
+      ansible.builtin.file:
+        path: "{{ backups_local }}/snapshot"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      when: snap.path is defined
+
+    - name: File it under its name here too
+      ansible.builtin.file:
+        src: "../chip/{{ snap.path | basename }}"
+        dest: "{{ backups_local }}/snapshot/{{ snapshot_name }}"
+        state: link
+        force: true
+      delegate_to: localhost
+      when: snap.path is defined
+
+    - name: Left out (partial=true)
+      ansible.builtin.debug:
+        msg: "{{ bench_board }}: no whole-chip path for {{ bench_flasher | default('?') }} boards; left out"
+      when: snap is skipped

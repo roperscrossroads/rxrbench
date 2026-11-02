@@ -1,0 +1,19 @@
+---
+# Written by rxrbench (roles/sim_bench): the simulated boards of layout {{ bench_layout }} on
+# this host, for sim/simbench.py. Not a site's registry: no hardware in it.
+version: 1
+hosts: {}
+protected: []
+devices:
+{% for b in sim_bench_boards %}
+  {{ b }}:
+    kind: sim
+    sim_exe: {{ hostvars[b].bench_sim_exe }}
+    match: {sim_device_id: {{ hostvars[b].bench_sim_device_id }}}
+{% if hostvars[b].bench_sim_seed is not none %}
+    sim_seed: {{ hostvars[b].bench_sim_seed }}
+{% endif %}
+{% if hostvars[b].bench_sim_console | default('pty') != 'pty' %}
+    sim_console: {{ hostvars[b].bench_sim_console }}
+{% endif %}
+{% endfor %}

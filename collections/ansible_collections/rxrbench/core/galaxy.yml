@@ -1,0 +1,15 @@
+---
+namespace: rxrbench
+name: core
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: Declare a bench of embedded devices, plan it, apply it.
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues
