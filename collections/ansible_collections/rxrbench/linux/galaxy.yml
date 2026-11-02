@@ -1,0 +1,17 @@
+---
+namespace: rxrbench
+name: linux
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: Embedded Linux devices for rxrbench, reached over ssh (plain, RAUC A/B, RAUC with a health gate).
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+dependencies:
+  rxrbench.core: ">=0.1.0"
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues

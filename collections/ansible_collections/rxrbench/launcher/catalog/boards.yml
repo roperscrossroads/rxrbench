@@ -1,0 +1,15 @@
+---
+# The board types this plugin's devices are, layered over core's (`layout.load_catalog`): the
+# chip esptool is told, the PSRAM the survey must agree with, and whether an SD card reaches
+# the ESP32 (an install from the card needs one). The Launcher image for each is a catalog
+# image of kind `manager` with the type among its board_tags. Two more keys where a board
+# needs them: `modem_rest` (core: where the port's DTR and RTS rest; `deasserted` for a bridge
+# whose RTS holds EN while asserted) and `launcher_enter` (`settings`: the boot banner is
+# answered by turning bootToApp off instead of a key press, on a build that loses the press).
+boards:
+  cyd-2432s028r-2usb: {mcu: esp32, sd: true}
+  # CH340K with RTS on EN: both lines asserted hold the chip in reset; its input task clears
+  # a key press before the boot loop reads it (both read on the board; CHANGELOG).
+  thinknode-m9: {mcu: esp32s3, psram: 8MB, sd: true, modem_rest: deasserted, launcher_enter: settings}
+  t-embed: {mcu: esp32s3, psram: 8MB, sd: true}
+  sensecap-indicator: {mcu: esp32s3, psram: 8MB, sd: false}

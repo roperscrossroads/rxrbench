@@ -1,0 +1,8 @@
+---
+# The simulated Linux bench's images: what a simulated device runs is its container image.
+images:
+  sim-linux:
+    family: linux
+    summary: a container with an ssh server and a BusyBox userland (sim/container)
+    board_tags: [sim-container]
+    source: {type: path, path: collections/ansible_collections/rxrbench/linux/sim/container}

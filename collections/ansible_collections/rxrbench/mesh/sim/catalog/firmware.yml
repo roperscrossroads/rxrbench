@@ -1,0 +1,9 @@
+---
+# The simulated bench's listed images (families not built from a class recipe here).
+images:
+  zephcore-sim-repeater:
+    family: zephcore
+    summary: zephcore's repeater sample for native_sim (`just sim-build-zephcore repeater`)
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephcore/sim-repeater}

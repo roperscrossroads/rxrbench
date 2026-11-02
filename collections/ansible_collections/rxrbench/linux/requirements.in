@@ -1,0 +1,8 @@
+# What this plugin needs in the tool's venv on the workstation (`just setup`): the U-Boot
+# sandbox build (tools/uboot_sandbox.py) wants swig and setuptools for its pylibfdt, from here
+# rather than from the distribution, so nothing is installed as root for it.
+# requirements.txt is the lock compiled from this, constrained by the tool's own:
+#   uv pip compile --universal --python-version 3.12 -c ../../../../requirements.txt \
+#     requirements.in -o requirements.txt
+swig==4.5.1
+setuptools==84.0.0

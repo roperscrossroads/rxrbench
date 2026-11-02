@@ -1,0 +1,28 @@
+---
+# `just facts` on a Launcher board: what Launcher holds, read through its serial console. A
+# board in one of its apps is reset into Launcher for the read and its app booted again.
+- name: Read Launcher (version, slots, settings)
+  rxrbench.launcher.launcher_state:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    entry: "{{ (bench_board_type | default({})).launcher_enter | default(omit) }}"
+    wui_password: "{{ launcher_secrets[bench_board].wui_password | default(omit) }}"
+  register: board_launcher
+  check_mode: false
+  no_log: true
+
+- name: Show it
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ 'Launcher ' ~ board_launcher.launcher.version if board_launcher.launcher.running
+         else 'no Launcher console' }}
+      {%- if board_launcher.launcher.running %}
+      | settings saved by {{ board_launcher.launcher.settings_mac | default('?') }}
+      ({{ board_launcher.launcher.settings_board | default('?') }})
+      | apps {{ board_launcher.launcher.apps | map(attribute='label') | join(', ') or 'none' }}
+      | boot {{ board_launcher.launcher.boot or 'none' }}
+      | free {{ board_launcher.launcher.free_total }} B
+      | wifi {{ board_launcher.launcher.settings.wifi | join(', ') or 'none' }}
+      | WebUI password {{ {True: 'as declared', False: 'DIFFERS',
+                            None: 'not declared'}[board_launcher.launcher.wui_password_matches] }}
+      {%- endif %}

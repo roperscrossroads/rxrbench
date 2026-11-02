@@ -1,0 +1,21 @@
+---
+# `just facts`: a board of the MeshCore vocabulary, read and shown. Changes nothing.
+- name: Read the board (MeshCore vocabulary)
+  rxrbench.mesh.meshcore_facts:
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+  register: board_actual
+
+- name: Show it
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ board_actual.meshcore.version | default('?', true) }}
+      ({{ board_actual.meshcore.build | default('?', true) }})
+      role {{ board_actual.meshcore.role | default('?', true) }} |
+      {{ board_actual.meshcore.radio.freq_mhz }} MHz {{ board_actual.meshcore.radio.bw_khz }} kHz
+      sf{{ board_actual.meshcore.radio.sf }} cr{{ board_actual.meshcore.radio.cr }}
+      {{ board_actual.meshcore.radio.tx_dbm }} dBm
+      {{ 'tx always on (no switch)' if board_actual.meshcore.radio.tx_enabled is none
+         else ('tx on' if board_actual.meshcore.radio.tx_enabled else 'tx off') }}

@@ -1,0 +1,20 @@
+---
+# `just facts`: a board of the Meshtastic vocabulary, read and shown. Changes nothing.
+- name: Read the board (Meshtastic vocabulary)
+  rxrbench.mesh.meshtastic_facts:
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+  register: board_actual
+
+- name: Show it
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: image {{ board_actual.mesh.image }} ({{ board_actual.mesh.build }})
+      class {{ board_actual.mesh.class }} |
+      {{ board_actual.mesh.lora.modem_preset }}{{ '' if board_actual.mesh.lora.live_preset
+      == board_actual.mesh.lora.modem_preset else ' (live ' ~ board_actual.mesh.lora.live_preset ~ ')' }}
+      {{ board_actual.mesh.lora.tx_power }} dBm
+      tx {{ 'on' if board_actual.mesh.lora.tx_enabled else 'off' }} |
+      {{ board_actual.mesh.device.role }}/{{ board_actual.mesh.device.rebroadcast_mode }}

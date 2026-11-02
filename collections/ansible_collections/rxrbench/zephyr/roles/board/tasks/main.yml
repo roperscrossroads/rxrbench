@@ -1,0 +1,5 @@
+---
+# The core plays include this role's task files by name (settings.yml, facts_settings.yml,
+# secret_*.yml); nothing runs by default.
+- name: Nothing by default
+  ansible.builtin.meta: noop

@@ -1,0 +1,5 @@
+---
+# The board types this plugin's devices are, by the registry's `policy.board_tag`, layered
+# over core's (docs/PLUGINS.md).
+boards:
+  raspberrypi4-64: {mcu: bcm2711}

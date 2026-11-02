@@ -1,0 +1,21 @@
+---
+# The simulated stock Meshtastic bench's device registry: one node that is stock Meshtastic's own
+# Linux build (meshtasticd) with its simulated radio, in a container on this machine, reached
+# through its network API on a loopback port (sim/stock/simmt.py).
+version: 1
+hosts:
+  simhost: {hostname: this machine, local: true}
+protected: []
+devices:
+  mt1:
+    kind: container
+    firmware: meshtastic
+    policy: {board_tag: sim-container}
+    match: {}
+    reach:
+      wifi:
+        host: simhost
+        addr: 127.0.0.1
+        port: 4403
+        state: live
+        can: [config]

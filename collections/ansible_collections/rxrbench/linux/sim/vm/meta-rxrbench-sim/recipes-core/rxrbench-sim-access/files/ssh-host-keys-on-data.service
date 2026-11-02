@@ -1,0 +1,19 @@
+[Unit]
+Description=Keep the ssh host keys on the data partition
+# With a read-only root filesystem the ssh server's keys are made in /var/run/ssh, which is
+# memory: a new host key at every boot, and in each slot. /data/ssh is bound over it first,
+# so the keys are made once and the device stays the host its peers know, across reboots and
+# across both slots.
+DefaultDependencies=no
+RequiresMountsFor=/data
+Before=sshdgenkeys.service sshd.socket sshd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mkdir -p /data/ssh /var/run/ssh
+ExecStart=/bin/chmod 0755 /data/ssh
+ExecStart=/bin/sh -c 'mountpoint -q /var/run/ssh || mount --bind /data/ssh /var/run/ssh'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,5 @@
+# rxrbench modules' interpreter on a bench host; the phone API tunnel; stock-firmware probe
+meshtastic==2.7.11
+pyserial
+pyyaml
+pyudev  # the plug watcher

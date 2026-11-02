@@ -1,0 +1,63 @@
+---
+# The simulated A/B Linux device: a qemuarm image with RAUC slots and slotguard's health
+# gating, reachable over ssh. Built on a build host, never on a workstation:
+#
+#     kas build kas/rxrbench-sim-qemuarm.yml          (from this vm/ directory)
+#
+# It is the public meta-slotguard layer's own qemuarm harness (its disk layout, RAUC
+# configuration, boot script and VM agent) with this directory's layer on top, which adds an
+# ssh server, a key, the network, and a `compatible` of its own. The pins below are that
+# layer's. Before a build, `make-keys.sh` writes the two files the layer needs and does not
+# track: the certificate bundles are verified against, and the ssh key that opens the device.
+header:
+  version: 19
+
+build_system: openembedded
+machine: qemuarm
+distro: slotguard-demo
+target: rxrbench-sim-image
+
+repos:
+  bitbake:
+    url: https://git.openembedded.org/bitbake
+    branch: "2.18"
+    commit: fae9db3168dbff1b8c76fe9c6726a9687ff97514
+    layers:
+      .: disabled
+
+  openembedded-core:
+    url: https://git.openembedded.org/openembedded-core
+    commit: 5d1aa5c806c061a2994f4decb59016610f093213   # tag yocto-6.0.2
+    layers:
+      meta:
+
+  meta-yocto:
+    url: https://git.yoctoproject.org/meta-yocto
+    commit: 24c24cef5d1523fefe43a3e3d34667b37ae551f3   # tag yocto-6.0.2
+    layers:
+      meta-poky:
+
+  meta-rauc:
+    url: https://github.com/rauc/meta-rauc
+    branch: wrynose
+    commit: 38da0e5866a953e664001ba90b5edad68d68cd5d
+
+  meta-slotguard:
+    url: https://github.com/roperscrossroads/meta-slotguard
+    commit: 9521b44725d4f039b79f1edef67cd25b88a2f120
+
+  rxrbench-sim:
+    path: .
+    layers:
+      meta-rxrbench-sim:
+
+local_conf_header:
+  parallel: |
+    BB_NUMBER_THREADS ?= "8"
+    PARALLEL_MAKE ?= "-j 8"
+
+  housekeeping: |
+    PACKAGE_CLASSES ?= "package_ipk"
+    PATCHRESOLVE = "noop"
+    CONF_VERSION = "2"
+    INHERIT += "rm_work"

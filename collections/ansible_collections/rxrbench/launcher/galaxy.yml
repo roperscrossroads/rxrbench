@@ -1,0 +1,17 @@
+---
+namespace: rxrbench
+name: launcher
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: ESP32 devices that run several firmware images under bmorcelli's Launcher, through its WebUI.
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+dependencies:
+  rxrbench.core: ">=0.1.0"
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues

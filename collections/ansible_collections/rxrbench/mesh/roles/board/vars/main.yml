@@ -1,0 +1,3 @@
+---
+# The bootloader a layout declares for a UF2 board (name, version, sha256), under either name.
+board_bootloader_want: "{{ bench_bootloader | default({}) }}"

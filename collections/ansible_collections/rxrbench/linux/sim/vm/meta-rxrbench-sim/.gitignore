@@ -1,0 +1,3 @@
+# written by make-keys.sh: this checkout's throwaway certificate and ssh key
+recipes-core/rauc/files/rxrbench-sim.cert.pem
+recipes-core/rxrbench-sim-access/files/authorized_keys

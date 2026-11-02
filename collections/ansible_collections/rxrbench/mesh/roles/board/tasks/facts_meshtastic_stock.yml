@@ -1,0 +1,30 @@
+---
+# `just facts`: a board that runs stock Meshtastic, read over its own phone API and shown.
+# Changes nothing.
+- name: Read the board (stock Meshtastic)
+  rxrbench.mesh.meshtastic_stock_config:
+    board: "{{ bench_board }}"
+    registry_name: "{{ bench_devreg | default(omit) }}"
+    transport: "{{ 'tcp' if board_route.bearer | default('usb') in ['wifi', 'eth'] else 'serial' }}"
+    host: "{{ board_route.addr | default(board_route.ip) | default(omit) }}"
+    bearer: "{{ board_route.bearer | default(omit) }}"
+    devreg: "{{ (bench_tools | default({})).devreg | default(omit) }}"
+  # The route's address is checked against the registry the layout was resolved with when the
+  # module runs on this machine (a layout with its own registry, a sim); a remote bench host
+  # has its own deployed copy (just hosts-setup).
+  environment: "{{ {'DEVREG_REGISTRY': bench_registry} if (ansible_connection | default('ssh')) == 'local' else {} }}"
+  vars:
+    board_route: "{{ (bench_routes | default({})).config | default({}) }}"
+  register: board_actual
+  check_mode: false
+
+- name: Show it
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: stock {{ board_actual.facts.firmware | default('?', true) }}
+      {{ board_actual.facts.node_id | default('?', true) }} |
+      {{ board_actual.facts.radio.region }} {{ board_actual.facts.radio.modem_preset }}
+      {{ board_actual.facts.radio.tx_power }} dBm
+      tx {{ 'on' if board_actual.facts.radio.tx_enabled else 'off' }} |
+      {{ board_actual.facts.device.role }}/{{ board_actual.facts.device.rebroadcast_mode }} |
+      {{ board_actual.facts.owner.long_name | default('', true) }}

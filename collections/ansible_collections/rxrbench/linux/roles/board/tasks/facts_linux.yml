@@ -1,0 +1,31 @@
+---
+# What a Linux device says it is and runs, read over ssh. Changes nothing.
+- name: Read the device
+  rxrbench.linux.linux_facts:
+    route: "{{ bench_routes.shell }}"
+    declared: "{{ (linux | default({})).os | default({}) }}"
+  register: board_os
+  check_mode: false
+
+- name: Read its slots
+  rxrbench.linux.rauc_facts:
+    route: "{{ bench_routes.shell }}"
+    family: "{{ bench_family }}"
+    health_unit: "{{ bench_health_unit | default(omit, true) }}"
+  register: board_slots
+  check_mode: false
+  when: bench_update == 'rauc'
+
+- name: Show it
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ board_os.os.pretty_name | default(board_os.os.id | default('?')) }}
+      on {{ board_os.machine }}, kernel {{ board_os.kernel }}, up {{ board_os.uptime_s }} s
+
+- name: Show its slots
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ board_slots.device.target }} {{ board_slots.device.version }}
+      on slot {{ board_slots.slot.bootname }}
+      (boot status {{ board_slots.slot.boot_status }}, health {{ board_slots.slot.health }})
+  when: bench_update == 'rauc'

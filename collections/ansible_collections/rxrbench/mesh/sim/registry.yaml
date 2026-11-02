@@ -1,0 +1,35 @@
+---
+# The simulated bench's device registry: a site registry's shape, no hardware in it.
+version: 1
+hosts:
+  simhost: {hostname: this machine, local: true}
+protected: []
+devices:
+  sim1:
+    sim_exe: zephyrtastic/sim-0/zephyr.exe
+    kind: sim
+    firmware: port
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 1}
+  sim2:
+    sim_exe: zephyrtastic/sim-0/zephyr.exe
+    kind: sim
+    firmware: port
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 2}
+  # zephcore (MeshCore-compatible firmware on Zephyr): `just sim-build-zephcore`. Each has its
+  # own entropy seed, or both would make the same key.
+  zc1:
+    kind: sim
+    firmware: zephcore
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 3}
+    sim_exe: zephcore/sim-repeater/zephyr.exe
+    sim_seed: 31
+  zc2:
+    kind: sim
+    firmware: zephcore
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 4}
+    sim_exe: zephcore/sim-repeater/zephyr.exe
+    sim_seed: 32

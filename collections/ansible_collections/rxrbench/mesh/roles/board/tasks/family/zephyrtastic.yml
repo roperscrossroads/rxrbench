@@ -1,0 +1,53 @@
+---
+# A zephyrtastic board's own state, included by its vocabulary's task file after the radio and
+# the identity, before the config: the bench LED, the roles it remembers, a brain's heads, a
+# listener's presets.
+
+# The bench LED: in use, and what the board is for (bench_led_mode, bench_led_color: the
+# family's facts, from `zephyrtastic.led` or its groups). Firmware without the LED is reported
+# by the module, not failed.
+- name: The bench LED
+  rxrbench.mesh.zephyrtastic_led:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    mode: "{{ bench_led_mode }}"
+    color: "{{ bench_led_color }}"
+  # In a plan, a board about to get its first flash (or a family switch) does not speak the
+  # zephyrtastic shell yet: the LED is set once it is written, like the config below.
+  when:
+    - bench_led == 'shell'
+    - not (ansible_check_mode and (board_flashed.family_switch | default(false)
+           or board_flashed.first_flash | default(false)))
+
+# The roles a node remembers across reboots (the BLE peer it dials, its brain, its heads, the
+# ear's peer, the courier's arm, the relay, a pinned list, a cluster document): a plain node
+# declares it has none (`zephyrtastic.intents: none`), and what it remembers from an earlier
+# layout is forgotten, with the reboot that follows. Before the roles below, which set theirs.
+- name: The roles the node remembers
+  rxrbench.mesh.zephyrtastic_intents:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    intents: "{{ zephyrtastic.intents }}"
+  when: zephyrtastic.intents is defined
+
+# A brain stores the preset it wants of each head and puts a head back on it whenever the
+# head reports another. Each head's node id is read from the head itself, through its broker.
+- name: The preset the brain wants of each head
+  rxrbench.mesh.zephyrtastic_attach:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    heads: "{{ zephyrtastic.brain.heads }}"
+    head_sockets: >-
+      {{ dict(zephyrtastic.brain.heads | list | zip(zephyrtastic.brain.heads | list | map('extract', hostvars)
+              | map(attribute='bench_socket', default=''))) }}
+  when: zephyrtastic.brain.heads is defined
+
+- name: The presets the listener sweeps
+  rxrbench.mesh.zephyrtastic_scan:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    presets: "{{ zephyrtastic.listener.presets }}"
+  when: zephyrtastic.listener.presets is defined

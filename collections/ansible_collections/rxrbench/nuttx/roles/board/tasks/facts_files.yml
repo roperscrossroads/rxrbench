@@ -1,0 +1,16 @@
+---
+# `just facts` on a nuttx_nsh board: the files `nuttx.facts` names, read and said.
+- name: Read the files worth knowing
+  rxrbench.nuttx.nuttx_files:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    storage: "{{ nuttx.storage | default(omit) }}"
+    read: "{{ nuttx.facts | default([]) }}"
+  register: board_read
+  check_mode: false
+
+- name: Say
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ board_read.found | dict2items | map(attribute='key')
+         | zip(board_read.found.values()) | map('join', '=') | join(', ') }}

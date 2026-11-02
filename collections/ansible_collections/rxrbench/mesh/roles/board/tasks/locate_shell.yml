@@ -1,0 +1,8 @@
+---
+# Blink the board's LED through its shell: white on a board whose colour is set, fast.
+# Changes nothing; 0 seconds stops a blink.
+- name: Blink
+  rxrbench.mesh.zephyrtastic_led:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    locate: "{{ locate_seconds | default(60) | int }}"

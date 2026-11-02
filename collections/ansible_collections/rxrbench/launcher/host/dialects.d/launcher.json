@@ -1,0 +1,22 @@
+{
+ "reply": "(?s)(?:^|\\n)((?:OK|ERR|READY|WARN|Usage:)\\b[^\\r\\n]*|Launcher \\S+|\\{.*?\\}(?=\\r?\\n)|== Partition table ==.*?\\nFlash size: [^\\r\\n]*)\\r?\\n",
+ "echo": false,
+ "eol": "\n",
+ "secret_prefixes": [
+  "wifi connect ",
+  "wifi add ",
+  "settings set "
+ ],
+ "prompts": [
+  {
+   "pattern": "Press the button to enter the Launcher",
+   "send": "nav SelPress"
+  }
+ ],
+ "log_scrub": [
+  {
+   "pattern": "\"(?:wui_)?pwd\"\\s*:\\s*\"(?P<s>[^\"]+)\"",
+   "label": "password"
+  }
+ ]
+}

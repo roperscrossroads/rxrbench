@@ -1,0 +1,21 @@
+---
+# The files step of the nuttx_nsh family: the board's storage mounted, its `nuttx.files`
+# written through NSH, each only when it differs; the ones `nuttx.secrets` names are kept
+# out of the broker's log and of this task's output.
+- name: The declared files
+  rxrbench.nuttx.nuttx_files:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    storage: "{{ nuttx.storage | default(omit) }}"
+    files: "{{ nuttx.files | default({}) }}"
+    secrets: "{{ (nuttx.secrets | default({})).values() | list }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_files
+  no_log: true
+  when: nuttx.files is defined
+
+- name: What differs
+  ansible.builtin.debug:
+    msg: "{{ bench_board }}: {{ board_files.steps | join(', ') }}"
+  changed_when: board_files.changed
+  when: board_files is not skipped and board_files.steps | length > 0

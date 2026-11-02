@@ -1,0 +1,180 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  facts_linux:
+    short_description: "Read what a board runs and holds (linux)"
+    description:
+      - >-
+        What a Linux device says it is and runs, read over ssh. Changes nothing.
+    options:
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_family: &bench_family
+        type: str
+        description: >-
+          The firmware family the board declares (C(firmware.family)). (Documented with the other layout
+          variables in C(docs/LAYOUT.md).)
+      bench_health_unit: &bench_health_unit
+        type: str
+        description: >-
+          The unit that soaks a newly booted slot and marks it good; the family's. Without it a
+          slot's health is RAUC's own.
+      bench_routes: &bench_routes
+        type: dict
+        description: >-
+          One route per verb (C(shell), C(flash), C(config), C(diag)): bearer, host, address, what it can do.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_update: &bench_update
+        type: str
+        description: >-
+          How the family is updated: none for this tool's flashers, else its plugin's step
+          (C(update_<word>.yml)). (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      linux: &linux
+        type: dict
+        description: >-
+          The device's declared Linux state: the C(os-release) fields it must match
+          (C(rxrbench.linux)'s README).
+  locate_led:
+    short_description: "Show which board it is (led)"
+    description:
+      - >-
+        Blink one of the device's LEDs (bench_led_path, under /sys/class/leds) for a while, then give
+        it back the trigger it had. Changes nothing that persists. The blink ends by itself, so 0
+        seconds has nothing to stop.
+    options:
+      bench_led_path: &bench_led_path
+        type: str
+        description: >-
+          C(ACT), under C(/sys/class/leds).
+      locate_seconds:
+        type: int
+        description: >-
+          How long to blink, in seconds (C(just locate <layout> <board> <seconds>)); default 60.
+      bench_routes: *bench_routes
+  secret_host_key_ssh_read:
+    short_description: "Read a board's host key ssh secret"
+    description:
+      - >-
+        The device's ssh host key, read over ssh, as C(board_secret). An absent device is reported by
+        the play, not the end of the run.
+    options:
+      bench_host_key_paths: &bench_host_key_paths
+        type: list
+        description: >-
+          Where the device keeps its ssh host key pair, as its family says (a layout names one with
+          C(bench_host_key_path)).
+      bench_routes: *bench_routes
+  secret_host_key_ssh_write:
+    short_description: "Give back a board's host key ssh secret"
+    description:
+      - >-
+        The device's escrowed host key (C(board_escrowed): id, value), given back over ssh. A device
+        that already holds it is left alone.
+    options:
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_host_key_paths: *bench_host_key_paths
+      bench_routes: *bench_routes
+      board_escrowed: &board_escrowed
+        type: dict
+        description: >-
+          The escrowed secret a write step gives back (C(id), C(value), C(fingerprint),
+          C(exported)), set by the keys-restore play.
+  update_linux:
+    short_description: "Update a board the linux way"
+    description:
+      - >-
+        A Linux device with no update mechanism this tool drives: nothing is written. What it says it
+        runs is read and compared with what the layout declares for it (C(linux.os), fields of
+        /etc/os-release); a device that differs is named, because the way to change it is to re-image
+        it (C(just card)).
+    options:
+      bench_board: *bench_board
+      bench_family: *bench_family
+      bench_health_unit: *bench_health_unit
+      bench_routes: *bench_routes
+      bench_update: *bench_update
+      linux: *linux
+  update_rauc:
+    short_description: "Update a board the rauc way"
+    description:
+      - >-
+        One Linux device with RAUC A/B slots, from what it runs to the bundle its layout declares.
+        Everything runs on the host that can reach the device and drives ssh itself: the image may
+        have no Python. Where a bundle lands and which unit gates a slot are the family's
+        (bench_remote_bundle, bench_health_unit).
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_bundle: &bench_bundle
+        type: str
+        description: >-
+          The RAUC bundle the device is brought to, a path on the controller.
+      bench_compatible: &bench_compatible
+        type: str
+        description: >-
+          The registry's C(compatible) for the device: an update bundle must carry it. (Documented with the
+          other layout variables in C(docs/LAYOUT.md).)
+      bench_devreg_tool: &bench_devreg_tool
+        type: str
+        description: >-
+          The devreg script on the host that reaches a Linux device, when it is not the deployed
+          C(~/.devreg/devreg.py) (a layout whose modules run on the controller names the repository's own).
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_family: *bench_family
+      bench_flash_unknown: &bench_flash_unknown
+        type: bool
+        description: >-
+          C(false) refuses a board that answers as its family but reports neither a build nor a hash, instead
+          of writing it forward. Default C(true): firmware older than the build id could not be rolled
+          otherwise. Whatever it says, the read-back after a write must match the image, and an image with no
+          build or hash is always refused. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_check_depth: &bench_check_depth
+        type: str
+        description: >-
+          C(full) (the default) or C(spot), for a layout, a board or one run (C(-e bench_check_depth=spot)):
+          how much the checks before a write read (docs/ARCHITECTURE.md#checking-depth). C(spot) reads only
+          what a read's design says is enough for its decision, and only where a read has a spot form; a first
+          flash, a family switch and the other moments that read in full ignore it. In a plan, a flasher that
+          offers it (esp-image, smp) takes what the board runs from its last full read instead of asking it,
+          while the bench host's plug watcher has seen nothing on its port since; a write by hand or over the
+          air that makes no USB event is not seen (docs/ARCHITECTURE.md#checking-depth): keep C(full) on a
+          bench where hands or other tools write to boards. Each flasher's result says which depth it used and
+          why (C(checked), C(identity_checked)). (Documented with the other layout variables in
+          C(docs/LAYOUT.md).)
+      bench_health_unit: *bench_health_unit
+      bench_registry: &bench_registry
+        type: str
+        description: >-
+          The site's device registry file. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_remote_bundle: &bench_remote_bundle
+        type: str
+        description: >-
+          Where a bundle lands on the device, with room for it; the family's to say (there is no
+          standard place).
+      bench_routes: *bench_routes
+      bench_stage_bundle: &bench_stage_bundle
+        type: bool
+        description: >-
+          C(true) copies the bundle to the bench host's store first, for a device reached from
+          there.
+      bench_update: *bench_update
+      bench_wait_good: &bench_wait_good
+        type: int
+        description: >-
+          Seconds to wait for the health gate to mark the new slot good; refused when shorter than
+          the family's soak.
+      board_host_store: &board_host_store
+        type: str
+        description: >-
+          Where a bench host keeps the images staged for its boards.
+      linux: *linux

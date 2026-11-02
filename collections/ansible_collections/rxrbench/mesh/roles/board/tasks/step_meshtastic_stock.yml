@@ -1,0 +1,28 @@
+---
+# One scenario step on a stock Meshtastic node (core's tasks/scenario_step.yml includes it for a
+# board with no console): `text <node> <message>`, `nodes` or `info`, through the node's phone
+# API on the route its config takes (module meshtastic_stock_step). Registers board_step_said
+# as device_run returns it; the step's `within` is the module's to wait out.
+- name: "A step through a stock node's API: {{ step_name }}"
+  rxrbench.mesh.meshtastic_stock_step:
+    board: "{{ step.board }}"
+    registry_name: "{{ hostvars[step.board].bench_devreg | default(omit) }}"
+    transport: "{{ 'tcp' if step_route.bearer | default('usb') in ['wifi', 'eth'] else 'serial' }}"
+    host: "{{ step_route.addr | default(step_route.ip) | default(omit) }}"
+    bearer: "{{ step_route.bearer | default(omit) }}"
+    devreg: "{{ (hostvars[step.board].bench_tools | default({})).devreg | default(omit) }}"
+    commands:
+      - "{{ {'name': step_name, 'cmd': step.cmd}
+            | combine(step | dict2items | selectattr('key', 'in', ['expect', 'refuse', 'timeout'])
+                      | items2dict) }}"
+    within: "{{ step.within | default(0) | int }}"
+  environment: >-
+    {{ {'DEVREG_REGISTRY': hostvars[step.board].bench_registry}
+       if (hostvars[step.board].ansible_connection | default('ssh')) == 'local' else {} }}
+  vars:
+    step_route: "{{ (hostvars[step.board].bench_routes | default({})).config | default({}) }}"
+  delegate_to: "{{ step.board }}"
+  register: board_step_said
+  # a step that never came true is the scenario's verdict, not the play's
+  ignore_errors: true
+  check_mode: false

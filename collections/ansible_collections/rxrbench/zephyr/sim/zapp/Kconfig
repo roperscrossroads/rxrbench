@@ -1,0 +1,10 @@
+mainmenu "zapp"
+
+config ZAPP_VERSION
+	string "The application's version"
+	default "1.0"
+	help
+	  Written to the setting app/version at every boot, so a bench can read which build a
+	  board runs; the image's identity is its hash, this is for the device tests.
+
+source "Kconfig.zephyr"

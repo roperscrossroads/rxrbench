@@ -1,0 +1,20 @@
+---
+# Blink one of the device's LEDs (bench_led_path, under /sys/class/leds) for a while, then
+# give it back the trigger it had. Changes nothing that persists. The blink ends by itself,
+# so 0 seconds has nothing to stop.
+- name: Blink
+  rxrbench.core.device_run:
+    route: "{{ bench_routes.shell }}"
+    commands:
+      - name: locate
+        cmd: >-
+          p={{ bench_led_path | quote }};
+          test -w $p/trigger || { echo "no LED at $p"; exit 1; };
+          t=$(sed -n 's/.*\[\(.*\)\].*/\1/p' $p/trigger);
+          echo timer > $p/trigger;
+          sleep {{ locate_seconds | default(60) | int }};
+          echo ${t:-none} > $p/trigger
+        timeout: "{{ (locate_seconds | default(60) | int) + 15 }}"
+    read_only: false
+    fail_on_failure: true
+  when: (locate_seconds | default(60) | int) > 0

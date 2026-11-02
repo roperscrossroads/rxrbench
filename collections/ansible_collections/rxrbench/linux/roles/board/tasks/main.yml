@@ -1,0 +1,5 @@
+---
+# This role is a library of task files: rxrbench.core's plays include the one a device's family
+# names (include_role with tasks_from). Run whole, it does nothing.
+- name: Nothing by default
+  ansible.builtin.meta: noop

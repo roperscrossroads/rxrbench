@@ -1,0 +1,16 @@
+---
+# `just facts` on a zephyr_settings board: the settings the board's declaration names under
+# `zephyr.facts` (plain ones: a version, a name), read and said.
+- name: Read the settings worth knowing
+  rxrbench.zephyr.zephyr_settings:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    read: "{{ zephyr.facts | default(['app/version']) }}"
+  register: board_read
+  check_mode: false
+
+- name: Say
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ board_read.found | dict2items | map(attribute='key')
+         | zip(board_read.found.values()) | map('join', '=') | join(', ') }}

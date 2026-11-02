@@ -1,0 +1,19 @@
+---
+# The simulated A/B bench's images: one built image (vm/kas), declared as each of the two
+# families it can stand in for. As linux_slotguard its health gate is asked; as linux_rauc
+# only what the update system itself says of a slot.
+images:
+  sim-ab:
+    family: linux_slotguard
+    summary: the qemuarm A/B image with its health gate (vm/kas)
+    board_tags: [sim-qemuarm]
+    flasher: rauc
+    compatible: rxrbench-sim-qemuarm
+    source: {type: path, path: collections/ansible_collections/rxrbench/linux/sim/vm}
+  sim-ab-plain:
+    family: linux_rauc
+    summary: the same image, taken as A/B slots with no health gate
+    board_tags: [sim-qemuarm]
+    flasher: rauc
+    compatible: rxrbench-sim-qemuarm
+    source: {type: path, path: collections/ansible_collections/rxrbench/linux/sim/vm}

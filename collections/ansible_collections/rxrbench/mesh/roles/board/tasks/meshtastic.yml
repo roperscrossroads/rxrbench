@@ -1,0 +1,102 @@
+---
+# A board that speaks the Meshtastic vocabulary (families zephyrtastic and stock meshtastic):
+# radio, the zephyrtastic brain/listener config where declared, owner/device/channels and the
+# admin keys where its family writes config (config_via), and the read-back that proves it.
+# The order matters: a node that is made managed (security.is_managed) takes nothing local
+# afterwards, so that is the last write of the last step.
+
+- name: Radio config (preset, power, transmitter)
+  rxrbench.mesh.meshtastic_radio:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    # The family may keep some fields for itself (a head's preset is its brain's to set):
+    # bench_radio_skip. Whether what is read back must match what is stored: a listener's
+    # radio sweeps presets, so its family says bench_radio_check_live: false.
+    lora: >-
+      {{ meshtastic.config.lora | dict2items
+         | rejectattr('key', 'in', bench_radio_skip | default([]))
+         | items2dict }}
+    check_live: "{{ bench_radio_check_live | default(true) }}"
+    rf_rules: "{{ bench_rf_rules | default(omit) }}"
+  when: meshtastic.config.lora is defined
+
+# The node's identity key, from the site's escrow (just keys-export), right after the radio and
+# before anything is authored: a board flashed with another layout or family, or erased, has
+# a new key and is a new node until it gets its own back. A board with no escrow, a keyless
+# head, or a layout that leaves the identity alone (bench_secret_policy) is left with the key it has.
+- name: Is the node's identity key escrowed
+  ansible.builtin.stat:
+    path: "{{ board_identity_file }}"
+  register: board_identity_escrow_file
+  delegate_to: localhost
+  check_mode: false
+  when:
+    - bench_key_escrow == 'tunnel'
+
+- name: The node holds its escrowed identity key
+  rxrbench.mesh.meshtastic_identity:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    action: ensure
+    private_key: "{{ board_identity_escrowed.value }}"
+    node_id: "{{ board_identity_escrowed.id }}"
+  vars:
+    board_identity_escrowed: >-
+      {{ lookup('community.sops.sops', board_identity_file) | from_yaml
+         | rxrbench.core.escrow_get(bench_family, 'identity') }}
+  when:
+    - board_identity_escrow_file.stat.exists | default(false)
+    - board_identity_escrowed | length > 0
+
+# What the family's own block declares for this board (roles it remembers, a brain's heads,
+# a listener's presets, its LED): after the radio and the identity, before the config.
+- name: The family's own state
+  ansible.builtin.include_tasks: "family/{{ bench_family_tasks }}.yml"
+  when: bench_family_tasks | default("") | length > 0
+
+- name: Owner, device config, channels and admin keys
+  rxrbench.mesh.meshtastic_config:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    owner:
+      long_name: "{{ meshtastic.owner | default(omit) }}"
+      short_name: "{{ meshtastic.owner_short | default(omit) }}"
+    device: "{{ meshtastic.config.device | default(omit) }}"
+    # The LoRa fields the phone API carries and the shell does not (hop_limit).
+    lora: "{{ meshtastic.config.lora_api | default(omit) }}"
+    # Who may administer the node remotely, and whether only they may (written last).
+    security: "{{ meshtastic.config.security | default(omit) }}"
+    # Channels carry keys. A layout whose keys are not available yet says so
+    # (bench_manage_channels: false) and every channel is left as it is: not even the
+    # ones that happen to need no key are written.
+    channels: >-
+      {{ meshtastic.channels if (meshtastic.channels is defined and (bench_manage_channels | default(true) | bool))
+         else omit }}
+  when: bench_config_via == 'shell-tunnel'
+
+- name: Read the board back
+  rxrbench.mesh.meshtastic_facts:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+  register: board_actual
+  check_mode: false
+
+- name: The board is as declared
+  ansible.builtin.assert:
+    that:
+      - board_actual.mesh.lora[item.key] == item.value
+    fail_msg: "{{ bench_board }}: {{ item.key }} is {{ board_actual.mesh.lora[item.key] }}, declared {{ item.value }}"
+    quiet: true
+  loop: >-
+    {{ meshtastic.config.lora | dict2items | selectattr('key', 'in', board_radio_fields)
+       | rejectattr('key', 'in', bench_radio_skip | default([])) }}
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    board_radio_fields: [modem_preset, tx_power, tx_enabled]
+  when:
+    - meshtastic.config.lora is defined
+    - not ansible_check_mode

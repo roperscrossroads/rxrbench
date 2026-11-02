@@ -1,0 +1,11 @@
+/* The sim board's radio: the firmware's simulated LoRa driver, so the whole stack runs. */
+/ {
+	aliases {
+		lora0 = &lora_sim0;
+	};
+
+	lora_sim0: lora-sim {
+		compatible = "meshtastic,lora-sim";
+		status = "okay";
+	};
+};

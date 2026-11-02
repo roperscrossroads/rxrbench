@@ -1,0 +1,61 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  facts_files:
+    short_description: "Read what a board runs and holds (files)"
+    description:
+      - >-
+        C(just facts) on a nuttx_nsh board: the files C(nuttx.facts) names, read and said.
+    options:
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_socket: &bench_socket
+        type: str
+        description: >-
+          A board's broker socket path; the sim layer sets it, a real bench host's brokers are found by name.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      nuttx: &nuttx
+        type: dict
+        description: >-
+          The board's declared NuttX state: C(storage) to mount, C(files) to write, which are
+          C(secrets), what C(facts) reads (C(rxrbench.nuttx)'s README).
+  files:
+    short_description: "Write a NuttX board's declared files"
+    description:
+      - >-
+        The files step of the nuttx_nsh family: the board's storage mounted, its C(nuttx.files)
+        written through NSH, each only when it differs; the ones C(nuttx.secrets) names are kept out
+        of the broker's log and of this task's output.
+    options:
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      nuttx: *nuttx
+  secret_cert_read:
+    short_description: "Read a board's cert secret"
+    description:
+      - >-
+        The declared cert (the file C(nuttx.secrets.cert) names) against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      nuttx: *nuttx
+  secret_psk_read:
+    short_description: "Read a board's psk secret"
+    description:
+      - >-
+        The declared psk (the file C(nuttx.secrets.psk) names) against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      nuttx: *nuttx

@@ -1,0 +1,17 @@
+---
+namespace: rxrbench
+name: zephyr
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: Generic Zephyr applications for rxrbench, configured through Zephyr's settings shell, with their secrets.
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+dependencies:
+  rxrbench.core: ">=0.1.0"
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues

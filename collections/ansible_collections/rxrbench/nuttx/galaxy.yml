@@ -1,0 +1,17 @@
+---
+namespace: rxrbench
+name: nuttx
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: Apache NuttX devices for rxrbench, through NSH, keeping their configuration as files.
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+dependencies:
+  rxrbench.core: ">=0.1.0"
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues

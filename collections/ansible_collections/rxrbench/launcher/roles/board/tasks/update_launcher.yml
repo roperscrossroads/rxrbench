@@ -1,0 +1,175 @@
+---
+# One Launcher board, from what it holds to what its layout declares: Launcher itself (its
+# version), the apps in its slots, the slot that boots, its settings and saved networks. The
+# images are resolved and fetched on the controller and staged on the bench host; everything
+# on the board goes through Launcher's serial console (its broker). A board that has no
+# Launcher yet gets the merged release at 0x0 when the layout says `bench_first_flash: true`.
+
+- name: The declared images (Launcher's own, the apps')
+  rxrbench.launcher.launcher_images:
+    manager: "{{ firmware.image | default(omit) }}"
+    apps: "{{ launcher.apps | default({}) }}"
+    images: "{{ lookup('rxrbench.core.bench_plugins', what='images') }}"
+  delegate_to: localhost
+  check_mode: false
+  register: board_images
+
+- name: Where the bench host keeps them
+  ansible.builtin.file:
+    path: "{{ board_store }}"
+    state: directory
+    mode: "0755"
+  check_mode: false
+  changed_when: false
+
+- name: Stage them on the bench host
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ board_store }}/{{ item | basename }}"
+    mode: preserve
+  loop: "{{ board_images.files }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  check_mode: false
+  changed_when: false
+
+# What was installed into each slot (an app's bytes cannot be read back through Launcher), and
+# the survey's tags (a first install reads the chip's security state from them).
+- name: The board's facts
+  ansible.builtin.set_fact:
+    board_facts: >-
+      {{ lookup('ansible.builtin.file', bench_facts_dir ~ '/' ~ bench_board ~ '.yaml', errors='ignore')
+         | default('', true) | from_yaml | default({}, true) }}
+
+- name: Launcher as declared
+  rxrbench.launcher.launcher_apply:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    entry: "{{ (bench_board_type | default({})).launcher_enter | default(omit) }}"
+    modem_rest: "{{ (bench_board_type | default({})).modem_rest | default(omit) }}"
+    images: "{{ board_images }}"
+    store: "{{ board_store }}"
+    launcher: "{{ launcher | default({}) }}"
+    secrets: "{{ launcher_secrets[bench_board] | default({}) }}"
+    records: "{{ ((board_facts.probes | default({})).launcher | default({})).records | default({}) }}"
+    tools: >-
+      {{ bench_tools | default({})
+         | combine({'devreg': bench_devreg_tool} if bench_devreg_tool is defined else {}) }}
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_launcher
+  # The module's own failure stands (a board that does not answer is skipped by the play, a
+  # refusal stops it), but a chip without Launcher is the install step's to handle below.
+  failed_when: board_launcher.failed | default(false) and not (board_launcher.no_launcher | default(false))
+  no_log: true
+
+# No console of Launcher's answered, by reset or otherwise: the chip runs something else. The
+# layout's first-flash word lets Launcher's merged image go on at 0x0; then the apply again.
+- name: Launcher onto a chip that has none
+  rxrbench.launcher.launcher_install:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    entry: "{{ (bench_board_type | default({})).launcher_enter | default(omit) }}"
+    image: "{{ board_store }}/{{ board_images.manager.path | basename }}"
+    version: "{{ board_images.manager.version | default(omit, true) }}"
+    chip: "{{ bench_mcu }}"
+    tools: >-
+      {{ bench_tools | default({})
+         | combine({'devreg': bench_devreg_tool} if bench_devreg_tool is defined else {}) }}
+    facts_tags: "{{ board_facts.get('tags', []) }}"
+    first_flash: "{{ bench_first_flash | default(false) | bool }}"
+    app_manager_overwrite: "{{ bench_app_manager_overwrite | default(false) | bool }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  when:
+    - board_launcher.no_launcher | default(false)
+    - board_images.manager
+  register: board_installed
+
+- name: Launcher as declared, now that it is there
+  rxrbench.launcher.launcher_apply:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    entry: "{{ (bench_board_type | default({})).launcher_enter | default(omit) }}"
+    modem_rest: "{{ (bench_board_type | default({})).modem_rest | default(omit) }}"
+    images: "{{ board_images }}"
+    store: "{{ board_store }}"
+    launcher: "{{ launcher | default({}) }}"
+    secrets: "{{ launcher_secrets[bench_board] | default({}) }}"
+    records: {}
+    tools: >-
+      {{ bench_tools | default({})
+         | combine({'devreg': bench_devreg_tool} if bench_devreg_tool is defined else {}) }}
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_launcher_after
+  no_log: true
+  when:
+    - board_installed is not skipped
+    - not ansible_check_mode
+
+- name: The apply that counts is the one after the install, when there was one
+  ansible.builtin.set_fact:
+    board_launcher: "{{ board_launcher_after if board_launcher_after is not skipped else board_launcher }}"
+  no_log: true
+
+# A chip without Launcher and no manager image to put on it, or no first-flash word: said, and
+# the board fails (a plan of such a chip with the image declared is the plan's answer, not a fault).
+- name: Launcher is not on the chip and nothing here may put it there
+  ansible.builtin.fail:
+    msg: >-
+      {{ bench_board }}: {{ board_launcher.msg }}
+      {{ '(declare a manager image under firmware)' if not board_images.manager else
+         '(bench_first_flash: true lets the apply write it at 0x0)' }}
+  when:
+    - board_launcher.no_launcher | default(false)
+    - board_installed is skipped
+    - not (ansible_check_mode and board_images.manager)
+
+- name: What differs, or what was done
+  ansible.builtin.debug:
+    msg: >-
+      {{ bench_board }}: {{ 'Launcher is not on the chip; a first install writes its image at 0x0 (bench_first_flash)'
+         if board_launcher.no_launcher | default(false) else
+         board_launcher.deferred if board_launcher.deferred | default('') else
+         (board_launcher.steps | default([]) + (board_launcher.needs_webui | default([])
+          | map('regex_replace', '^', 'needs the WebUI route: ') | list)) | join('; ')
+         or 'as declared' }}
+  changed_when: board_launcher.changed | default(false)
+
+# What this run installed into which slot: the only record of what a slot holds.
+- name: Record the installs in the board's facts
+  ansible.builtin.command:
+    argv:
+      - "{{ bench_repo }}/venv/bin/python"
+      - "{{ bench_repo }}/tools/facts_note.py"
+      - --facts-dir
+      - "{{ bench_facts_dir }}"
+      - --key
+      - "{{ bench_board }}"
+      - --probe
+      - launcher
+    stdin: >-
+      {{ {'records': ((board_facts.probes | default({})).launcher | default({})).records | default({})
+                     | combine(board_launcher.installed),
+          'version': board_launcher.launcher.version | default(none),
+          'boot': board_launcher.launcher.boot | default(none)} | to_json }}
+  delegate_to: localhost
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - board_launcher.installed | default({}) | length > 0
+
+- name: Commit the facts, when the site asked for that
+  ansible.builtin.command:
+    argv:
+      - "{{ bench_repo }}/venv/bin/python"
+      - "{{ bench_repo }}/tools/facts_commit.py"
+      - --facts-dir
+      - "{{ bench_facts_dir }}"
+      - --message
+      - "apply of {{ bench_board }}, {{ board_launcher.installed | default({}) | length }} slot(s) installed"
+  delegate_to: localhost
+  register: board_facts_committed
+  changed_when: "board_facts_committed.stdout is search('^facts: committed ')"
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - board_launcher.installed | default({}) | length > 0

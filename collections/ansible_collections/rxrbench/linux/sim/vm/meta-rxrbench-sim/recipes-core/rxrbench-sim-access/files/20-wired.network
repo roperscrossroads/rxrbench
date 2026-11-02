@@ -1,0 +1,6 @@
+# The simulated device's one network card, by DHCP (QEMU's user network answers).
+[Match]
+Name=en* eth*
+
+[Network]
+DHCP=ipv4

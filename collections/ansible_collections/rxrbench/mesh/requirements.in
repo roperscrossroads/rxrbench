@@ -1,0 +1,5 @@
+# What this plugin's code needs in the tool's venv on the workstation (`just setup`),
+# by name. requirements.txt is the lock compiled from this, constrained by the tool's own:
+#   uv pip compile --universal --python-version 3.12 -c ../../../../requirements.txt \
+#     requirements.in -o requirements.txt
+meshtastic==2.7.10

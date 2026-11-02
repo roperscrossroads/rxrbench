@@ -1,0 +1,20 @@
+---
+# The one image a simulated board runs: the firmware's sample app for native_sim, built by
+# `just sim-build`. It reports fleet class 0.
+classes:
+  0:
+    name: sim
+    summary: the sample app on native_sim (sim/board)
+    board: native_sim/native/64
+    board_tag: native-sim
+    hw_model: 0
+    flasher: sim
+    overlays: []
+  90:
+    name: sim-b
+    summary: the same app as another fleet class, so a flash has something to change
+    board: native_sim/native/64
+    board_tag: native-sim
+    hw_model: 0
+    flasher: sim
+    overlays: []

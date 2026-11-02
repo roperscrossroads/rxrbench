@@ -1,0 +1,13 @@
+---
+# The simulated A/B device's two built pieces: what `simvm.py setup` puts in place
+# and verifies, the image by sha256 and the sandbox by the U-Boot version it carries
+# (`--unverified` takes another build, for an experiment). The image is built from
+# kas/rxrbench-sim-qemuarm.yml on a build host (hours cold); the sandbox binary is U-Boot's
+# sandbox build that runs the boot script between the machine's boots (meta-slotguard's
+# bench/build-sandbox.sh). A rebuild of either records its new hashes here.
+image:                       # kas/rxrbench-sim-qemuarm.yml, on the build host
+  disk.wic: 37a972164e07b235313c55dd64e0b15ac56c8c8b7490b6a624b99584f47c04d8
+  rootfs.ext4: 5aae7b9b6289bd13b49956773b39bf210055f4d6ee50f4308c27aedac7b86616
+  zImage: a740347685a628299af97b3a1e4eb7bb94e16f6fa38651dd96037f7166012353
+sandbox:                     # U-Boot's sandbox_defconfig, mainline at this tag (tools/uboot_sandbox.py)
+  u-boot: {version: "2026.01"}   # a from-source build is not byte-identical: the version it carries is checked

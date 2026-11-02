@@ -1,0 +1,5 @@
+{
+  "log_scrub": [
+    {"pattern": "(?P<s>\\b[0-9a-f]{64}\\b)", "label": "key"}
+  ]
+}

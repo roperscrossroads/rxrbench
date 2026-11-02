@@ -1,0 +1,39 @@
+---
+# The simulated Linux bench's device registry: a site registry's shape, no hardware in it.
+# Each device is a container (sim/simlinux.py) reached over ssh on a loopback port, with the
+# key and the pinned host keys that script keeps.
+version: 1
+hosts:
+  simhost: {hostname: this machine, local: true}
+protected: []
+devices:
+  lin1:
+    kind: sim
+    firmware: linux
+    policy: {board_tag: sim-container}
+    match: {}
+    reach:
+      ssh:
+        host: simhost
+        ip: 127.0.0.1
+        port: 22201
+        user: root
+        state: live
+        can: [shell, flash, diag]
+        identity: ~/.cache/rxrbench/simlinux/id_ed25519
+        known_hosts: ~/.cache/rxrbench/simlinux/known_hosts
+  lin2:
+    kind: sim
+    firmware: linux
+    policy: {board_tag: sim-container}
+    match: {}
+    reach:
+      ssh:
+        host: simhost
+        ip: 127.0.0.1
+        port: 22202
+        user: root
+        state: live
+        can: [shell, flash, diag]
+        identity: ~/.cache/rxrbench/simlinux/id_ed25519
+        known_hosts: ~/.cache/rxrbench/simlinux/known_hosts

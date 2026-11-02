@@ -1,0 +1,7 @@
+---
+images:
+  meshtasticd-sim:
+    family: meshtastic
+    summary: stock Meshtastic's Linux build (meshtasticd) with its simulated radio, in a container (sim/stock/simmt.py)
+    board_tags: [sim-container]
+    source: {type: path, path: collections/ansible_collections/rxrbench/mesh/sim/stock}

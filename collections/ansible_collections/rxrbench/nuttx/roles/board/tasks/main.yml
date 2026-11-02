@@ -1,0 +1,4 @@
+---
+# The core plays include this role's task files by name; nothing runs by default.
+- name: Nothing by default
+  ansible.builtin.meta: noop

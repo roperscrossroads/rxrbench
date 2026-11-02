@@ -1,0 +1,414 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  bootloader_uf2:
+    short_description: "Bring a XIAO nRF52840's UF2 bootloader to the declared one"
+    description:
+      - >-
+        A XIAO nRF52840's UF2 bootloader to the declared one (C(just boot)): the factory bootloader to
+        OTAFIX, or a rebuilt OTAFIX a layout names. Included by rxrbench.core's boot play, which has
+        read what is known of the board and staged its image.
+    options:
+      boot_known_version:
+        type: str
+        description: >-
+          The bootloader version known of the board before the write (its facts, else its registry
+          entry's C(bootloader)), set by the boot play; absent when nothing is known.
+      boot_registry:
+        type: dict
+        description: >-
+          The board's registry entry, as the boot play read it (C(match.usb_serial) is the chip id
+          the bootloader's drive must report).
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_uf2_enter_as: &bench_uf2_enter_as
+        type: str
+        description: >-
+          Per board, or C(-e) for one run: the family whose way of asking for UF2 mode the board's app takes,
+          when no family's read can say what it runs (a first flash). Needed only when the plan refuses
+          because two families' shells run on the app's USB vendor and ask differently (two Zephyr firmwares
+          on 2fe3). When the board says it runs another family, the flash refuses: what the board says wins
+          (docs/ARCHITECTURE.md#entering-uf2-mode). (Documented with the other layout variables in
+          C(docs/LAYOUT.md).)
+      bench_bootloader_carrier: &bench_bootloader_carrier
+        type: str
+        description: >-
+          A staged image directory (like C(bench_image)) small enough to carry a UF2 board through a
+          bootloader update; a board whose installed image reaches the bootloader's staging area is refused
+          without one. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_families: &bench_families
+        type: dict
+        description: >-
+          Every loaded family as data (C(module_utils/familyspec.py)): what a module on a bench host takes as
+          C(families). (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_family: &bench_family
+        type: str
+        description: >-
+          The firmware family the board declares (C(firmware.family)). (Documented with the other layout
+          variables in C(docs/LAYOUT.md).)
+      bench_image: &bench_image
+        type: str
+        description: >-
+          The directory of a board's staged image (C(manifest.json) beside the image); no image, no flash.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_site_dir: &bench_site_dir
+        type: str
+        description: >-
+          Where the site is (C(module_utils/site.py)). (Documented with the other layout variables in
+          C(docs/LAYOUT.md).)
+      bench_socket: &bench_socket
+        type: str
+        description: >-
+          A board's broker socket path; the sim layer sets it, a real bench host's brokers are found by name.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      board_host_store: &board_host_store
+        type: str
+        description: >-
+          Where a bench host keeps the images staged for its boards.
+  facts_meshcore:
+    short_description: "Read what a board runs and holds (meshcore)"
+    description:
+      - >-
+        C(just facts): a board of the MeshCore vocabulary, read and shown. Changes nothing.
+    options:
+      bench_board: *bench_board
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_socket: *bench_socket
+  facts_meshtastic:
+    short_description: "Read what a board runs and holds (meshtastic)"
+    description:
+      - >-
+        C(just facts): a board of the Meshtastic vocabulary, read and shown. Changes nothing.
+    options:
+      bench_board: *bench_board
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_socket: *bench_socket
+  facts_meshtastic_stock:
+    short_description: "Read what a board runs and holds (meshtastic stock)"
+    description:
+      - >-
+        C(just facts): a board that runs stock Meshtastic, read over its own phone API and shown.
+        Changes nothing.
+    options:
+      bench_board: *bench_board
+      bench_devreg: &bench_devreg
+        type: str
+        description: >-
+          The board's name in the device registry. (Documented with the other layout variables in
+          C(docs/LAYOUT.md).)
+      bench_registry: &bench_registry
+        type: str
+        description: >-
+          The site's device registry file. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_routes: &bench_routes
+        type: dict
+        description: >-
+          One route per verb (C(shell), C(flash), C(config), C(diag)): bearer, host, address, what it can do.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_tools: &bench_tools
+        type: dict
+        description: >-
+          Where the bench host keeps a flasher's tools, when not where the default install puts them: a dict
+          with any of C(esptool), C(imginfo), C(uf2_tool), C(devreg). UF2 boards are flashed through
+          C(~/rxrbench/bin/uf2_flash.py). (Documented with the other layout variables in C(docs/LAYOUT.md).)
+  locate_shell:
+    short_description: "Show which board it is (shell)"
+    description:
+      - >-
+        Blink the board's LED through its shell: white on a board whose colour is set, fast. Changes
+        nothing; 0 seconds stops a blink.
+    options:
+      locate_seconds:
+        type: int
+        description: >-
+          How long to blink, in seconds (C(just locate <layout> <board> <seconds>)); default 60.
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+  meshcore:
+    short_description: "Bring a MeshCore board to its declared radio, config, storage and identity"
+    description:
+      - >-
+        A board that speaks the MeshCore vocabulary (families zephcore and stock MeshCore), through
+        its broker in the MeshCore console dialect: radio (the transmitter last, and only when
+        declared: a zephcore node boots receive-only), then name, adverts and the admin password, then
+        the read-back that proves it.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_config_via: &bench_config_via
+        type: str
+        description: >-
+          How the family's configuration is written (a console, a phone API tunnel, the network). (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_family_tasks: &bench_family_tasks
+        type: str
+        description: >-
+          The family's own task file within its plugin's vocabulary. (Documented with the other layout
+          variables in C(docs/LAYOUT.md).)
+      bench_key_escrow: &bench_key_escrow
+        type: str
+        description: >-
+          How the board's identity key is escrowed, for a family's own tasks. (Documented with the other
+          layout variables in C(docs/LAYOUT.md).)
+      bench_led: &bench_led
+        type: str
+        description: >-
+          The family's word for the indicator C(just locate) uses (C(bench_locate) is the layout's
+          choice over it).
+      bench_led_color: &bench_led_color
+        type: str
+        description: >-
+          The bench LED's colour, what the board is for (an RGB board shows it); from the family's
+          facts.
+      bench_led_mode: &bench_led_mode
+        type: str
+        description: >-
+          Whether the bench LED shows the board in use; from the family's facts.
+      bench_rf_rules: &bench_rf_rules
+        type: dict
+        description: >-
+          The RF rules this board was checked against: the site's ceiling, tightened by the layout's
+          C(rf_rules); handed to the modules that write a radio, which check again what they are about to
+          write. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_socket: *bench_socket
+      board_esp_image: &board_esp_image
+        type: dict
+        description: >-
+          What a whole-image write (C(rxrbench.core.esp_image_flash)) returned, registered by
+          C(rxrbench.core.board).
+      board_flashed: &board_flashed
+        type: dict
+        description: >-
+          What this play's image write returned (C(rxrbench.core.board_flash) and the other
+          flashers), registered by C(rxrbench.core.board): whether the board was written.
+      board_identity_file: &board_identity_file
+        type: str
+        description: >-
+          Where the site escrows the secrets a board made (playbooks/keys-export.yml).
+      board_picoboot: &board_picoboot
+        type: dict
+        description: >-
+          What a PICOBOOT write (C(rxrbench.core.picoboot_flash)) returned, registered by
+          C(rxrbench.core.board).
+      meshcore: &meshcore
+        type: dict
+        description: >-
+          The board's declared MeshCore state (name, radio, advert intervals, prefs, storage)
+          (C(rxrbench.mesh)'s README).
+      storage: &storage
+        type: dict
+        description: >-
+          A zephcore node's declared storage epoch, by family: C({<family>: {epoch,
+          keep_identity}}).
+      zephyrtastic: &zephyrtastic
+        type: dict
+        description: >-
+          Radio, identity key, owner, device, channels, its own roles.
+  meshtastic:
+    short_description: "Bring a Meshtastic-vocabulary board to its declared radio, config and secrets"
+    description:
+      - >-
+        A board that speaks the Meshtastic vocabulary (families zephyrtastic and stock meshtastic):
+        radio, the zephyrtastic brain/listener config where declared, owner/device/channels and the
+        admin keys where its family writes config (config_via), and the read-back that proves it. The
+        order matters: a node that is made managed (security.is_managed) takes nothing local
+        afterwards, so that is the last write of the last step.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_config_via: *bench_config_via
+      bench_family: *bench_family
+      bench_family_tasks: *bench_family_tasks
+      bench_key_escrow: *bench_key_escrow
+      bench_led: *bench_led
+      bench_led_color: *bench_led_color
+      bench_led_mode: *bench_led_mode
+      bench_manage_channels: &bench_manage_channels
+        type: bool
+        description: >-
+          C(false) leaves every channel alone (a layout whose keys are not available yet).
+      bench_radio_check_live: &bench_radio_check_live
+        type: bool
+        description: >-
+          Whether the radio read back must match what is stored. A listener sweeps presets, so its
+          family says C(false).
+      bench_radio_skip: &bench_radio_skip
+        type: list
+        description: >-
+          LoRa fields the radio step leaves to another board (a head's preset is its brain's).
+      bench_rf_rules: *bench_rf_rules
+      bench_socket: *bench_socket
+      board_flashed: *board_flashed
+      board_identity_file: *board_identity_file
+      meshtastic: &meshtastic
+        type: dict
+        description: >-
+          The board's declared Meshtastic state (owner, device, LoRa, channels, security), in the
+          stock vocabulary (C(rxrbench.mesh)'s README).
+      zephyrtastic: *zephyrtastic
+  meshtastic_stock:
+    short_description: "Bring a stock Meshtastic node to its declared state through its own API"
+    description:
+      - >-
+        A board that runs stock Meshtastic (vocabulary meshtastic_stock): radio, owner, device, hop
+        limit, display, channels and admin keys, from the same C(meshtastic:) host_vars a zephyrtastic
+        board takes, written through the node's own phone API by the stock library. The route the
+        layout chose for config says how: its USB port (resolved by name, guarded, locked) or its
+        network API (the address the registry records). The module reads every step back, the radio
+        first and the security section last.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_devreg: *bench_devreg
+      bench_manage_channels: *bench_manage_channels
+      bench_registry: *bench_registry
+      bench_rf_rules: *bench_rf_rules
+      bench_routes: *bench_routes
+      bench_tools: *bench_tools
+      meshtastic: *meshtastic
+  secret_admin_keys_read:
+    short_description: "Read a board's admin keys secret"
+    description:
+      - >-
+        The admin keys a layout declares (C(meshtastic.config.security.admin_key)), against what the
+        node holds: the configuration module in check mode compares the two sets and writes nothing.
+        They are public keys; what is guarded is that the node obeys exactly the declared admins.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      meshtastic: *meshtastic
+  secret_admin_password_read:
+    short_description: "Read a board's admin password secret"
+    description:
+      - >-
+        The admin password a layout declares, against the fingerprint the node reports: the
+        configuration module in check mode compares them and writes nothing.
+    options:
+      bench_board: *bench_board
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_socket: *bench_socket
+      meshcore: *meshcore
+  secret_channel_keys_read:
+    short_description: "Read a board's channel keys secret"
+    description:
+      - >-
+        The channel keys a layout declares, against what the node holds: the configuration module in
+        check mode compares them by fingerprint and writes nothing. C(board_secret.matches) says
+        whether every declared channel is as declared.
+    options:
+      bench_board: *bench_board
+      bench_manage_channels: *bench_manage_channels
+      bench_socket: *bench_socket
+      meshtastic: *meshtastic
+  secret_identity_console_read:
+    short_description: "Read a board's identity console secret"
+    description:
+      - >-
+        The node's identity key, read from its console (C(zephcore key export confirm)), as
+        C(board_secret). An absent board is reported by the play, not the end of the run.
+    options:
+      bench_board: *bench_board
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_socket: *bench_socket
+  secret_identity_console_write:
+    short_description: "Give back a board's identity console secret"
+    description:
+      - >-
+        The node's escrowed key (C(board_escrowed): id, value), given back through its console.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_families: *bench_families
+      bench_family: *bench_family
+      bench_socket: *bench_socket
+      board_escrowed: &board_escrowed
+        type: dict
+        description: >-
+          The escrowed secret a write step gives back (C(id), C(value), C(fingerprint),
+          C(exported)), set by the keys-restore play.
+  secret_identity_serial_read:
+    short_description: "Read a board's identity serial secret"
+    description:
+      - >-
+        The identity key of a board that runs stock Meshtastic, read over its own phone API on its
+        serial port (resolved by name, guarded, locked) or its network API, as the layout's config
+        route says, as C(board_secret). An absent board is reported by the play, not the end of the
+        run.
+    options:
+      bench_board: *bench_board
+      bench_devreg: *bench_devreg
+      bench_registry: *bench_registry
+      bench_routes: *bench_routes
+      bench_tools: *bench_tools
+  secret_identity_serial_write:
+    short_description: "Give back a board's identity serial secret"
+    description:
+      - >-
+        A stock Meshtastic node's escrowed key (C(board_escrowed): id, value), given back through its
+        own phone API: on its USB port (resolved by name, guarded, locked) or its network API, as the
+        layout's config route says. The node must be the escrow's (a stock id is the device's own),
+        and must report the key afterwards.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_devreg: *bench_devreg
+      bench_registry: *bench_registry
+      bench_routes: *bench_routes
+      bench_tools: *bench_tools
+      board_escrowed: *board_escrowed
+  step_meshtastic_stock:
+    short_description: "One scenario step on a stock Meshtastic node, through its phone API"
+    description:
+      - >-
+        Core's scenario step includes it for a board with no console (C(bench_step_tasks)), with
+        C(step) (C(board), C(cmd), C(expect), C(refuse), C(timeout), C(within)) and C(step_name)
+        set: the command (C(text), C(nodes), C(info), C(announce)) runs through the node's phone API
+        on its config route, judged as C(device_run) judges a console's output, and registers
+        C(board_step_said). The step's board is read from hostvars, not this host's variables.
+    options:
+      step:
+        type: dict
+        description: >-
+          The scenario step: C(board), C(cmd), and optionally C(expect), C(refuse), C(timeout),
+          C(within) (seconds for the step to come true).
+      step_name:
+        type: str
+        description: >-
+          The step's name as kept in the scenario's results (a file name), set by core's step tasks.
+  secret_identity_tunnel_read:
+    short_description: "Read a board's identity tunnel secret"
+    description:
+      - >-
+        The node's identity key, read through the phone API tunnel, as C(board_secret). An absent
+        board is reported by the play, not the end of the run.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+  secret_identity_tunnel_write:
+    short_description: "Give back a board's identity tunnel secret"
+    description:
+      - >-
+        The node's escrowed key (C(board_escrowed): id, value), given back through the phone API
+        tunnel.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      board_escrowed: *board_escrowed

@@ -1,0 +1,138 @@
+---
+# A board that speaks the MeshCore vocabulary (families zephcore and stock MeshCore), through
+# its broker in the MeshCore console dialect: radio (the transmitter last, and only when
+# declared: a zephcore node boots receive-only), then name, adverts and the admin password,
+# then the read-back that proves it.
+
+# A board whose image was written in this run may be silent for a while: stock MeshCore on an
+# ESP32 formats its file system at its first boot over another firmware's data (~95 s on a
+# Heltec V4), and every step below would fail on its first command.
+- name: The console answers after the image was written
+  rxrbench.mesh.meshcore_facts:
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+  register: board_mc_up
+  until: board_mc_up is succeeded
+  retries: 30
+  delay: 6
+  check_mode: false
+  when:
+    - not ansible_check_mode
+    - >-
+      (board_flashed | default({})) is changed or (board_esp_image | default({})) is changed
+      or (board_picoboot | default({})) is changed
+
+# Storage first: a wipe resets the node to receive-only defaults, which the tasks below then
+# bring back to their declared state. The layout keys storage by family (personality), so a
+# board carrying two firmwares later declares each its own epoch.
+- name: Storage epoch (a mismatch wipes the node once)
+  rxrbench.mesh.meshcore_storage:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    epoch: "{{ storage[bench_family].epoch }}"
+    keep_identity: "{{ storage[bench_family].keep_identity | default(true) }}"
+  register: board_mc_storage
+  when: storage is defined and bench_family in storage
+
+# The node's identity key from the site's escrow (just keys-export), right after the storage
+# step and before the radio: a key takes effect at a reboot, and every step that may reboot the
+# node comes first, so nothing set after it is lost to it (zephcore did not keep its TX power
+# across a reboot). A board flashed or wiped into a new key gets its own back. A layout that asks for a new
+# identity on a wipe (keep_identity: false) means it, and the escrow stands aside.
+- name: Is the node's identity key escrowed
+  ansible.builtin.stat:
+    path: "{{ board_identity_file }}"
+  register: board_identity_escrow_file
+  delegate_to: localhost
+  check_mode: false
+  when:
+    - bench_key_escrow == 'console'
+    - >-
+      storage is not defined or bench_family not in storage
+      or storage[bench_family].keep_identity | default(true) | bool
+
+- name: The node holds its escrowed identity key
+  rxrbench.mesh.meshcore_identity:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    action: ensure
+    private_key: "{{ board_identity_escrowed.value }}"
+    node_id: "{{ board_identity_escrowed.id }}"
+  register: board_mc_identity
+  vars:
+    board_identity_escrowed: >-
+      {{ lookup('community.sops.sops', board_identity_file) | from_yaml
+         | rxrbench.core.escrow_get(bench_family, 'identity') }}
+  when:
+    - board_identity_escrow_file.stat.exists | default(false)
+    - board_identity_escrowed | length > 0
+
+- name: Radio config (frequency, bandwidth, SF, CR, power, transmitter)
+  rxrbench.mesh.meshcore_radio:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    radio: "{{ meshcore.radio }}"
+    rf_rules: "{{ bench_rf_rules | default(omit) }}"
+  register: board_mc_radio
+  when: meshcore.radio is defined
+
+# What the family's own block declares for this board, when it has a task file of its own.
+- name: The family's own state
+  ansible.builtin.include_tasks: "family/{{ bench_family_tasks }}.yml"
+  when: bench_family_tasks | default("") | length > 0
+
+- name: Name, adverts, prefs and admin password
+  rxrbench.mesh.meshcore_config:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    name: "{{ meshcore.name | default(omit) }}"
+    advert: "{{ meshcore.advert | default(omit) }}"
+    prefs: "{{ meshcore.prefs | default(omit) }}"
+    admin_password: "{{ meshcore.admin_password | default(omit) }}"
+    # a node just brought back (an erase): a password the node cannot show is written again
+    restored: >-
+      {{ (board_mc_storage is changed) or (board_mc_identity is changed)
+         or (board_mc_radio is changed) }}
+  when: bench_config_via == 'cli' and meshcore is defined
+
+- name: Read the board back
+  rxrbench.mesh.meshcore_facts:
+    families: "{{ bench_families }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    socket: "{{ bench_socket | default(omit) }}"
+  register: board_actual
+  check_mode: false
+
+- name: The board is as declared
+  ansible.builtin.assert:
+    that:
+      # a node with no transmitter switch (stock MeshCore) cannot say tx_enabled: it transmits
+      # whenever it is powered, and the declaration is for the RF rules only
+      - >-
+        board_actual.meshcore.radio[item] == board_declared_radio[item]
+        or (item == 'tx_enabled' and board_actual.meshcore.radio[item] is none)
+    fail_msg: >-
+      {{ bench_board }}: {{ item }} is {{ board_actual.meshcore.radio[item] }},
+      declared {{ board_declared_radio[item] }}
+    quiet: true
+  loop: "{{ ['tx_dbm', 'tx_enabled', 'sf', 'cr'] | select('in', board_declared_radio) | list }}"
+  vars:
+    board_declared_radio: "{{ meshcore.radio | default({}) }}"
+  when:
+    - meshcore.radio is defined
+    - not ansible_check_mode

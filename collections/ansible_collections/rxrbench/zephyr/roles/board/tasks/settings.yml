@@ -1,0 +1,21 @@
+---
+# The settings step of the zephyr_settings family: the board's `zephyr.settings` written
+# through its settings shell, each only when it differs; the ones `zephyr.secrets` names are
+# kept out of the broker's log and of this task's output.
+- name: The declared settings
+  rxrbench.zephyr.zephyr_settings:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    digest_command: "{{ (zephyr | default({})).digest_command | default(omit) }}"
+    settings: "{{ zephyr.settings | default({}) }}"
+    secrets: "{{ (zephyr.secrets | default({})).values() | list }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_settings
+  no_log: true
+  when: zephyr.settings is defined
+
+- name: What differs
+  ansible.builtin.debug:
+    msg: "{{ bench_board }}: {{ board_settings.steps | join(', ') }}"
+  changed_when: board_settings.changed
+  when: board_settings is not skipped and board_settings.steps | length > 0

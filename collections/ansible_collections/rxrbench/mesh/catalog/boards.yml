@@ -1,0 +1,38 @@
+---
+# The board types this plugin's devices are, by the registry's `policy.board_tag`, layered
+# over core's (docs/PLUGINS.md).
+boards:
+  heltec-v4: {mcu: esp32s3, psram: 2MB, zephyr_boards: [heltec_wifi_lora32_v4]}
+  heltec-v4r8: {mcu: esp32s3, psram: 8MB, zephyr_boards: [heltec_wifi_lora32_v4_r8]}
+  heltec-v3: {mcu: esp32s3, zephyr_boards: [heltec_wifi_lora32_v3]}
+  heltec-vme290: {mcu: esp32s3, psram: 8MB, zephyr_boards: [heltec_vision_master_e290]}
+  # A type with a UF2 bootloader says so in `uf2:` (core's host/bin/uf2_flash.py reads it on
+  # the bench host): the bootloader's USB VID:PID (how a bootloader is told from an app, and
+  # what a drive must be before it is written), the addresses an application UF2 may write
+  # (from the end of the SoftDevice the bootloader ships with, or of what the image keeps
+  # there, to the bootloader), and the UF2 family id of an application image. The Adafruit
+  # nRF52 bootloader also takes its own update (family 0xD663823C) and, in Meshtastic's OTAFIX
+  # fork, a factory erase ("MESH", 0x4D455348) by drive: never an app's, so refused. The
+  # XIAOs run that fork's zt branch (dev/xiao-bootloader), which names its chip in
+  # NODEINFO.TXT on the drive.
+  xiao:
+    mcu: nrf52840
+    zephyr_boards: [xiao_ble]
+    uf2:
+      bootloader_usb: ["2886:0045"]
+      app: [0x27000, 0xF4000]
+      family: 0xADA52840
+      touch: dfu
+      dfu: adafruit-nrfutil
+      refuse_families: &adafruit_refused
+        0xD663823C: a bootloader update
+        0x4D455348: an OTAFIX factory erase
+      drive_identity: {file: NODEINFO.TXT, pattern: '^Chip-ID:\s*([0-9A-Fa-f]{16})\s*$'}
+  # Heltec Mesh Node T114 (HT-n5262). Its stock apps link for SoftDevice S140 v6 (0x26000).
+  # The bootloader's VID:PID is from the bootloader's source; no drive of one has been seen
+  # on a bench yet.
+  heltec-t114:
+    mcu: nrf52840
+    zephyr_boards: [heltec_t114_v2]
+    uf2: {bootloader_usb: ["239a:0071"], app: [0x26000, 0xF4000], family: 0xADA52840,
+          touch: dfu, dfu: adafruit-nrfutil, refuse_families: *adafruit_refused}

@@ -1,0 +1,67 @@
+---
+# A XIAO nRF52840's UF2 bootloader to the declared one (`just boot`): the factory bootloader to
+# OTAFIX, or a rebuilt OTAFIX a layout names. Included by rxrbench.core's boot play, which has
+# read what is known of the board (boot_known_version, boot_registry) and staged its image.
+
+# The small image a board running the layout's app takes first, so its installed image cannot
+# reach the bootloader's staging area during the update: a layout names it
+# (bench_bootloader_carrier, a staged image directory like bench_image); without one, a board
+# whose image reaches the staging area is refused, not written.
+- name: The carrier image is staged
+  ansible.builtin.assert:
+    that: bench_bootloader_carrier is directory
+    fail_msg: >-
+      bench_bootloader_carrier names {{ bench_bootloader_carrier }}, which is not staged on this
+      machine: stage that image (just stage-image) or declare another
+    quiet: true
+  when: bench_bootloader_carrier is defined
+
+- name: Stage the carrier image
+  ansible.builtin.copy:
+    src: "{{ bench_bootloader_carrier }}/"
+    dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_bootloader_carrier | basename }}/"
+    mode: preserve
+  check_mode: false
+  when: bench_bootloader_carrier is defined
+
+# A layout may declare the bootloader it wants (`bench_bootloader`: name, version, sha256): a
+# rebuilt OTAFIX, the file in the site's
+# bootloaders/<name>.uf2. It goes to the host beside the images; xiao_otafix.py checks its
+# sha256 again before it writes anything.
+- name: The declared bootloader, on the bench host
+  when: board_bootloader_want | length > 0
+  block:
+    - name: Its directory
+      ansible.builtin.file:
+        path: "{{ board_host_store | default('~/rxrbench/store') }}/bootloaders"
+        state: directory
+        mode: "0755"
+      check_mode: false
+    - name: The update file
+      ansible.builtin.copy:
+        src: "{{ bench_site_dir }}/bootloaders/{{ board_bootloader_want.name }}.uf2"
+        dest: >-
+          {{ board_host_store | default('~/rxrbench/store') }}/bootloaders/{{ board_bootloader_want.name }}.uf2
+        mode: "0644"
+      check_mode: false
+
+- name: The bootloader (factory UF2 bootloader to OTAFIX)
+  rxrbench.mesh.uf2_bootloader:
+    families: "{{ bench_families }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    enter_as: "{{ bench_uf2_enter_as | default(omit) }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    app: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}/app.uf2"
+    known_version: "{{ boot_known_version | default(omit, true) }}"
+    chip_id: "{{ boot_registry.match.usb_serial | default(omit) }}"
+    stage_app: >-
+      {{ (board_host_store | default('~/rxrbench/store')) ~ '/' ~ (bench_bootloader_carrier | basename) ~ '/app.uf2'
+         if bench_bootloader_carrier is defined else omit }}
+    update: >-
+      {{ (board_host_store | default('~/rxrbench/store')) ~ '/bootloaders/' ~ board_bootloader_want.name ~ '.uf2'
+         if board_bootloader_want | length > 0 else omit }}
+    update_sha256: "{{ board_bootloader_want.sha256 if board_bootloader_want | length > 0 else omit }}"
+    update_version: "{{ board_bootloader_want.version if board_bootloader_want | length > 0 else omit }}"
+  register: board_bootloader

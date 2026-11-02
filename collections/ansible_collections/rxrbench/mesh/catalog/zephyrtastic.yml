@@ -1,0 +1,407 @@
+---
+# What each fleet class is built from. Data, not a shell string: recipe.py renders the argv.
+#
+#   board            the Zephyr board target
+#   board_tag        must equal the registry's policy.board_tag for the board being flashed
+#   hw_model         meshtastic HardwareModel the image reports
+#   flasher          esptool (ESP32 boards) | uf2 (XIAO, OTAFIX bootloader)
+#   shield           -DSHIELD, XIAO only
+#   overlays         EXTRA_CONF_FILE, in order (later overlays win)
+#   dtc_overlays     EXTRA_DTC_OVERLAY_FILE
+#   sysbuild         SB_CONFIG_* settings
+#   class_in_recipe  true when no overlay states the class: it and the signed TLV go in as defines
+#   build_dir        the conventional build directory (relative to the workspace) for this class
+#   notes            the longer description, with how the image is operated
+#
+# A board's `features` (layout host_vars) append overlays; see recipe.FEATURES.
+
+classes:
+  1:
+    name: xiao-member
+    summary: XIAO cluster member; verifies and requires cluster signatures
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-f7
+    notes: "ble (XIAO nRF52840 + Wio-SX1262)"
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    overlays: &xiao_member
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-health.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-cluster-sig-required.conf
+      - overlay-ble-peer.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+
+  2:
+    name: r8-courier
+    summary: V4-R8 courier; SMP central and firmware depot
+    board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
+    board_tag: heltec-v4r8
+    hw_model: 132
+    build_dir: build-heltec-v4r8-f7
+    notes: "ble + smp-central + depot (courier)"
+    flasher: esptool
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-gnss.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-cluster.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-ota-shell.conf
+      - overlay-smp-central.conf
+      - overlay-depot.conf
+      - overlay-health.conf
+      - overlay-coredump-flash.conf
+      - overlay-battery.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-cluster-sign.conf
+      - overlay-xeddsa-sign.conf
+      - overlay-cluster-sig-required.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+    dtc_overlays: [depot.overlay]
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  4:
+    name: v4-member
+    summary: Heltec V4 cluster member
+    board: heltec_wifi_lora32_v4/esp32s3/procpu
+    board_tag: heltec-v4
+    hw_model: 110
+    build_dir: build-heltec-v4-f7
+    notes: "ble + cluster (healthy V4 member)"
+    flasher: esptool
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-gnss.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-cluster.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-v4-member.conf
+      - overlay-health.conf
+      - overlay-coredump-flash.conf
+      - overlay-battery.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-cluster-sign.conf
+      - overlay-xeddsa-sign.conf
+      - overlay-cluster-sig-required.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+    dtc_overlays: [coredump-big.overlay]
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  5:
+    name: v4-listener
+    summary: Heltec V4 RF listener; scanner autostart, no cluster
+    board: heltec_wifi_lora32_v4/esp32s3/procpu
+    board_tag: heltec-v4
+    hw_model: 110
+    build_dir: build-heltec-v4-listener
+    notes: "ble + scanner autostart, no cluster, no beacons (listener)"
+    flasher: esptool
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-gnss.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-scanner.conf
+      - overlay-v4-member.conf
+      - overlay-v4-listener.conf
+      - overlay-health.conf
+      - overlay-coredump-flash.conf
+      - overlay-battery.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+    dtc_overlays: [coredump-big.overlay]
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  6:
+    name: r8-member
+    summary: Heltec V4-R8 cluster member
+    board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
+    board_tag: heltec-v4r8
+    hw_model: 132
+    build_dir: build-heltec-v4r8-member
+    notes: "ble + cluster (healthy V4-R8 member)"
+    flasher: esptool
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-gnss.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-cluster.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-v4r8-member.conf
+      - overlay-health.conf
+      - overlay-coredump-flash.conf
+      - overlay-battery.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-cluster-sign.conf
+      - overlay-xeddsa-sign.conf
+      - overlay-cluster-sig-required.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+    dtc_overlays: [coredump-big.overlay]
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  7:
+    name: xiao-member-unsigned-cluster
+    summary: XIAO member that verifies but does not require cluster signatures
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-c2
+    notes: "ble (XIAO, a cluster that verifies but does not REQUIRE signatures)"
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    class_in_recipe: true
+    overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-health.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-ble-peer.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+
+  8:
+    name: r8-listener
+    summary: V4-R8 RF listener; 100000-record PSRAM ring, GNSS clock, no cluster
+    board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
+    board_tag: heltec-v4r8
+    hw_model: 132
+    build_dir: build-heltec-v4r8-listener8
+    notes: "R8 listener: scanner autostart, 100000-record PSRAM ring, GNSS clock, no cluster"
+    flasher: esptool
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-gnss.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-coredump-flash.conf
+      - overlay-battery.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-scanner.conf
+      - overlay-listener.conf
+      - overlay-v4r8-listener.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+    dtc_overlays: [coredump-big.overlay]
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  9:
+    name: xiao-listener
+    summary: XIAO RF listener; 1024-record RAM ring, no peer link, no cluster
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-listener9
+    notes: "XIAO listener: scanner autostart, 1024-record RAM ring, no peer link, no cluster"
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-scanner.conf
+      - overlay-listener.conf
+      - overlay-xiao-listener.conf
+      - overlay-led-status.conf
+
+  10:
+    name: xiao-relay
+    summary: XIAO cross-preset relay, receiving half
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-relay10
+    notes: "XIAO relay RECEIVING half: class 7 + overlay-relay; relay off at boot, `meshtastic relay dir in`"
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    class_in_recipe: true
+    overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-health.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-ble-peer.conf
+      - overlay-led-status.conf
+      - overlay-relay.conf
+
+  11:
+    name: xiao-ear
+    summary: XIAO cross-preset relay ear; transmit compiled out
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-ear11
+    notes: >-
+      XIAO relay EAR: forwards heard broadcast text over the peer link, transmit compiled out; `meshtastic ear
+      peer <id>`
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    class_in_recipe: true
+    overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-health.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-xeddsa.conf
+      - overlay-ble-peer.conf
+      - overlay-led-status.conf
+      - overlay-relay-ear.conf
+
+  12:
+    name: xiao-head
+    summary: XIAO keyless radio head
+    board: xiao_ble/nrf52840
+    board_tag: xiao
+    hw_model: 88
+    build_dir: build-xiao-head12
+    notes: >-
+      XIAO keyless radio HEAD: forwards every heard frame undecoded to its brain over
+      the peer link, retunes on request; no keys, no NodeDB, no identity on the air; `meshtastic attach brain
+      <id>`
+    flasher: uf2
+    shield: wio_sx1262_xiao
+    class_in_recipe: true
+    overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
+      - overlay-health.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-ble-peer.conf
+      - overlay-led-status.conf
+      - overlay-attachment-head.conf
+
+  13:
+    name: v3-head
+    summary: Heltec V3 keyless radio head
+    board: heltec_wifi_lora32_v3/esp32s3/procpu
+    board_tag: heltec-v3
+    hw_model: 43
+    build_dir: build-heltec-v3-head13
+    notes: >-
+      Heltec V3 keyless radio HEAD: class 12's role on the V3 --
+      forwards every heard frame undecoded to its brain, transmits what its brain hands it; no keys, no
+      NodeDB; dram0 ~76 %
+    flasher: esptool
+    class_in_recipe: true
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-ble-peer.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-led-status.conf
+      - overlay-attachment-head.conf
+      - overlay-quiet-first-boot.conf
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  14:
+    name: e290-node
+    summary: Heltec Vision Master E290 standalone node (bring-up image)
+    board: heltec_vision_master_e290/esp32s3/procpu
+    board_tag: heltec-vme290
+    hw_model: 68
+    build_dir: build-heltec-vme290-node14
+    notes: >-
+      Heltec Vision Master E290 (ESP32-S3R8, bare SX1262, 2.9" e-ink, no GNSS) as a plain LoRa+BLE node
+      with the screen UI over the e-ink driver: the bring-up image, no cluster. Built from the board's own
+      branch until it is merged (the catalog's `sources:` names the tree). Mirrors the firmware's fleet
+      scenario sample.meshtastic.fleet.e290_ble; change one, change both.
+    flasher: esptool
+    class_in_recipe: true
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nonet.conf
+      - overlay-pm-off.conf
+      - overlay-nomqtt.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-led-status.conf
+      - overlay-quiet-first-boot.conf
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
+
+  15:
+    name: r8-gateway
+    summary: Heltec V4-R8 WiFi gateway, a Sparkplug B Edge Node over verified TLS
+    board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
+    board_tag: heltec-v4r8
+    hw_model: 132
+    build_dir: build-heltec-v4r8-gateway15
+    notes: >-
+      The mesh gateway: the V4-R8 on WiFi (no BLE), publishing the nodes it hears as a Sparkplug B
+      Edge Node over MQTT with TLS, the broker's certificate and name verified (MESHTASTIC_SPARKPLUG_TLS,
+      trust anchor ISRG Root X2). Built from the firmware's sparkplug branch until it is merged (the
+      board's `builds` entry names that tree). WiFi credentials and the broker login are
+      set on the board's shell (`wifi cred add`, `sparkplug set ...`), never in the image or a layout.
+      Observed 2026-11-08: the build's dram0 is 97 % full.
+    flasher: esptool
+    class_in_recipe: true
+    overlays:
+      - overlay-v4-unified.conf
+      - overlay-nobt.conf
+      - overlay-pm-off.conf
+      - overlay-mqtt.conf
+      - overlay-sparkplug.conf
+      - overlay-sparkplug-tls.conf
+      - overlay-rf.conf
+      - overlay-bench.conf
+      - overlay-node-id-from-key.conf
+      - overlay-led-status.conf
+    sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}

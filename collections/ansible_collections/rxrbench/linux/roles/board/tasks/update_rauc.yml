@@ -1,0 +1,40 @@
+---
+# One Linux device with RAUC A/B slots, from what it runs to the bundle its layout declares.
+# Everything runs on the host that can reach the device and drives ssh itself: the image may
+# have no Python. Where a bundle lands and which unit gates a slot are the family's
+# (bench_remote_bundle, bench_health_unit).
+
+- name: Stage the bundle
+  ansible.builtin.copy:
+    src: "{{ bench_bundle }}"
+    dest: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_bundle | basename }}"
+    mode: preserve
+  check_mode: false
+  when:
+    - bench_bundle is defined
+    - bench_stage_bundle | default(false) | bool
+
+- name: The declared bundle
+  rxrbench.linux.rauc_install:
+    check_depth: "{{ bench_check_depth | default('full') }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    flash_unknown: "{{ bench_flash_unknown | default(true) | bool }}"
+    board: "{{ bench_board }}"
+    family: "{{ bench_family }}"
+    devreg: "{{ bench_devreg_tool | default(omit) }}"
+    route: "{{ bench_routes.flash }}"
+    bundle: >-
+      {{ (board_host_store | default('~/rxrbench/store') ~ '/' ~ (bench_bundle | basename))
+         if (bench_stage_bundle | default(false) | bool) else bench_bundle }}
+    compatible: "{{ bench_compatible | default(omit) }}"
+    wait_good: "{{ bench_wait_good | default(0) }}"
+    remote_bundle: "{{ bench_remote_bundle }}"
+    health_unit: "{{ bench_health_unit | default(omit, true) }}"
+  # the registry the route's address is checked against is the one the layout was resolved with
+  environment:
+    DEVREG_REGISTRY: "{{ bench_registry }}"
+  when: bench_bundle is defined
+  register: board_install
+
+- name: Read the device back
+  ansible.builtin.include_tasks: facts_linux.yml

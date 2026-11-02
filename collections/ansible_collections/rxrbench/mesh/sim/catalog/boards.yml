@@ -1,0 +1,4 @@
+---
+# The simulated bench's board types (a layout with its own catalog_dir reads only it).
+boards:
+  native-sim: {mcu: native-sim, zephyr_boards: [native_sim]}

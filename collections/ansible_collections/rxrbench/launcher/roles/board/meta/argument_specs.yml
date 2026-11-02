@@ -1,0 +1,139 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  facts_launcher:
+    short_description: "Read what a board runs and holds (launcher)"
+    description:
+      - >-
+        C(just facts) on a Launcher board: what Launcher holds, read through its serial console. A
+        board in one of its apps is reset into Launcher for the read and its app booted again.
+    options:
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board_type: &bench_board_type
+        type: dict
+        description: >-
+          The board type's entry in the board catalog (C(catalog/boards.yml): core's, each plugin's
+          and a site's, later over earlier), as a dict: its chip, PSRAM, UF2 and Launcher entry
+          ways, a bridge's modem-line rest.
+      bench_socket: &bench_socket
+        type: str
+        description: >-
+          A board's broker socket path; the sim layer sets it, a real bench host's brokers are found by name.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      launcher_secrets: &launcher_secrets
+        type: dict
+        description: >-
+          The site's Launcher secrets by board (WiFi passwords, the WebUI password), from its
+          encrypted secrets; never in a layout file.
+  main:
+    short_description: "The role's defaults (its task files are entered by name)"
+    description:
+      - >-
+        The core plays include this role's task files by name (update_launcher.yml,
+        facts_launcher.yml, secret_*.yml); nothing runs by default.
+    options:
+      board_store: &board_store
+        type: str
+        description: >-
+          Where a bench host keeps the Launcher images staged for its boards.
+  secret_wifi_psk_read:
+    short_description: "Read a board's wifi psk secret"
+    description:
+      - >-
+        The saved networks' passwords a layout declares, against what Launcher holds, each compared on
+        the device's side of the console and only the verdict said.
+    options:
+      bench_board: *bench_board
+      bench_board_type: *bench_board_type
+      bench_socket: *bench_socket
+      launcher_secrets: *launcher_secrets
+  secret_wui_password_read:
+    short_description: "Read a board's wui password secret"
+    description:
+      - >-
+        The WebUI password a layout declares, against what Launcher holds: the state module compares
+        them and says only whether they match.
+    options:
+      bench_board: *bench_board
+      bench_board_type: *bench_board_type
+      bench_socket: *bench_socket
+      launcher_secrets: *launcher_secrets
+  update_launcher:
+    short_description: "Update a board the launcher way"
+    description:
+      - >-
+        One Launcher board, from what it holds to what its layout declares: Launcher itself (its
+        version), the apps in its slots, the slot that boots, its settings and saved networks. The
+        images are resolved and fetched on the controller and staged on the bench host; everything on
+        the board goes through Launcher's serial console (its broker). A board that has no Launcher
+        yet gets the merged release at 0x0 when the layout says C(bench_first_flash: true).
+    options:
+      bench_app_manager_overwrite: &bench_app_manager_overwrite
+        type: bool
+        description: >-
+          Per board: C(true) lets an ESP32 whose partition table shows an app manager (a firmware in its own
+          partition that installs other images in slots beside it) be written at 0x0 or into those slots,
+          which orphans every installed app: C(bench_overwrite: [all]) for this board. Without it (or
+          C(bench_overwrite) naming each region the write takes) every ESP32 writer refuses such a chip: a
+          plan by the write rule over the survey's record of the chip, the apply over the table and images it
+          reads before writing. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board: *bench_board
+      bench_board_type: *bench_board_type
+      bench_devreg_tool: &bench_devreg_tool
+        type: str
+        description: >-
+          The devreg script on the host that reaches a Linux device, when it is not the deployed
+          C(~/.devreg/devreg.py) (a layout whose modules run on the controller names the repository's own).
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_facts_dir: &bench_facts_dir
+        type: str
+        description: >-
+          Where the site keeps the boards' facts (what the survey and C(just boot) record). (Documented with
+          the other layout variables in C(docs/LAYOUT.md).)
+      bench_first_flash: &bench_first_flash
+        type: bool
+        description: >-
+          Per board: C(true) lets a board that does not answer as the image's family be written (an ESP32 is
+          erased whole first). (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_mcu: &bench_mcu
+        type: str
+        description: >-
+          The board type's chip (C(catalog/boards.yml): core's, each plugin's and a site's, later over
+          earlier): what esptool is told. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_repo: &bench_repo
+        type: str
+        description: >-
+          The tool's repository (its C(venv/), C(tools/), C(runs/), C(backups/), C(.build/)): a layout names a
+          path under it with this, never with C(playbook_dir). (Documented with the other layout variables in
+          C(docs/LAYOUT.md).)
+      bench_socket: *bench_socket
+      bench_tools: &bench_tools
+        type: dict
+        description: >-
+          Where the bench host keeps a flasher's tools, when not where the default install puts them: a dict
+          with any of C(esptool), C(imginfo), C(uf2_tool), C(devreg). UF2 boards are flashed through
+          C(~/rxrbench/bin/uf2_flash.py). (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      board_store: *board_store
+      firmware: &firmware
+        type: dict
+        description: >-
+          The board's declared firmware: C(family) and C(image) (a catalog name), and what its
+          plugin reads beside them.
+      launcher: &launcher
+        type: dict
+        description: >-
+          The board's declared Launcher state: its apps by slot label, settings, networks
+          (C(rxrbench.launcher)'s README).
+      launcher_secrets: *launcher_secrets

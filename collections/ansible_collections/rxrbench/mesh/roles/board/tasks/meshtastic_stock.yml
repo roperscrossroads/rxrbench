@@ -1,0 +1,36 @@
+---
+# A board that runs stock Meshtastic (vocabulary meshtastic_stock): radio, owner, device,
+# hop limit, display, channels and admin keys, from the same `meshtastic:` host_vars a
+# zephyrtastic board takes, written through the node's own phone API by the stock library.
+# The route the layout chose for config says how: its USB port (resolved by name, guarded,
+# locked) or its network API (the address the registry records). The module reads every step
+# back, the radio first and the security section last.
+- name: The node's config (stock Meshtastic)
+  rxrbench.mesh.meshtastic_stock_config:
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+    board: "{{ bench_board }}"
+    registry_name: "{{ bench_devreg | default(omit) }}"
+    transport: "{{ 'tcp' if board_route.bearer | default('usb') in ['wifi', 'eth'] else 'serial' }}"
+    host: "{{ board_route.addr | default(board_route.ip) | default(omit) }}"
+    bearer: "{{ board_route.bearer | default(omit) }}"
+    devreg: "{{ (bench_tools | default({})).devreg | default(omit) }}"
+    radio: "{{ meshtastic.config.lora | default(omit) }}"
+    rf_rules: "{{ bench_rf_rules | default(omit) }}"
+    owner:
+      long_name: "{{ meshtastic.owner | default(omit) }}"
+      short_name: "{{ meshtastic.owner_short | default(omit) }}"
+    device: "{{ meshtastic.config.device | default(omit) }}"
+    lora: "{{ meshtastic.config.lora_api | default(omit) }}"
+    display: "{{ meshtastic.config.display | default(omit) }}"
+    security: "{{ meshtastic.config.security | default(omit) }}"
+    # A layout whose keys are not available yet says so (bench_manage_channels: false).
+    channels: >-
+      {{ meshtastic.channels if (meshtastic.channels is defined and (bench_manage_channels | default(true) | bool))
+         else omit }}
+  # The route's address is checked against the registry the layout was resolved with when the
+  # module runs on this machine (a layout with its own registry, a sim); a remote bench host
+  # has its own deployed copy (just hosts-setup).
+  environment: "{{ {'DEVREG_REGISTRY': bench_registry} if (ansible_connection | default('ssh')) == 'local' else {} }}"
+  vars:
+    board_route: "{{ (bench_routes | default({})).config | default({}) }}"
+  register: board_actual

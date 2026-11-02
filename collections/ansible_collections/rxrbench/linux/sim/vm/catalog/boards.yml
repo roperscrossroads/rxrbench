@@ -1,0 +1,4 @@
+---
+# The simulated A/B bench's board types (a layout with its own catalog_dir reads only it).
+boards:
+  sim-qemuarm: {mcu: cortex-a15}

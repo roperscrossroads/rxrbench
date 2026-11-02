@@ -1,0 +1,87 @@
+---
+# What each entry point of this role reads (a play enters it by tasks_from). Ansible checks
+# the types when the role is entered; antsibull-docs documents them. tests/unit/
+# test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
+argument_specs:
+  facts_settings:
+    short_description: "Read what a board runs and holds (settings)"
+    description:
+      - >-
+        C(just facts) on a zephyr_settings board: the settings the board's declaration names under
+        C(zephyr.facts) (plain ones: a version, a name), read and said.
+    options:
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout. (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      bench_socket: &bench_socket
+        type: str
+        description: >-
+          A board's broker socket path; the sim layer sets it, a real bench host's brokers are found by name.
+          (Documented with the other layout variables in C(docs/LAYOUT.md).)
+      zephyr: &zephyr
+        type: dict
+        description: >-
+          The board's declared Zephyr state: C(settings) to write, C(device_key), C(secrets),
+          C(digest_command), what C(facts) reads (C(rxrbench.zephyr)'s README).
+  secret_cert_read:
+    short_description: "Read a board's cert secret"
+    description:
+      - >-
+        The declared cert (the setting C(zephyr.secrets.cert) names) against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
+  secret_device_key_console_read:
+    short_description: "Read a board's device key console secret"
+    description:
+      - >-
+        The key the device made (the setting C(zephyr.device_key) names), as a secret.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
+  secret_device_key_console_write:
+    short_description: "Give back a board's device key console secret"
+    description:
+      - >-
+        The escrowed key given back to the device (after an erase, or on a new chip): written as the
+        setting the device reads at boot, so it does not make another.
+    options:
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      board_escrowed: &board_escrowed
+        type: dict
+        description: >-
+          The escrowed secret a write step gives back (C(id), C(value), C(fingerprint),
+          C(exported)), set by the keys-restore play.
+      zephyr: *zephyr
+  secret_psk_read:
+    short_description: "Read a board's psk secret"
+    description:
+      - >-
+        The declared psk (the setting C(zephyr.secrets.psk) names) against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
+  settings:
+    short_description: "Write a Zephyr board's declared settings"
+    description:
+      - >-
+        The settings step of the zephyr_settings family: the board's C(zephyr.settings) written
+        through its settings shell, each only when it differs; the ones C(zephyr.secrets) names are
+        kept out of the broker's log and of this task's output.
+    options:
+      bench_apply_allowed: *bench_apply_allowed
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
