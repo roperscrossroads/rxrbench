@@ -1,0 +1,14 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--sim1
+  |--@family_zephcore:
+  |  |--sim1
+  |--@role_repeater:
+  |  |--sim1
+  |--@host_simhost:
+  |  |--sim1
+  |--@kind_sim:
+  |  |--sim1

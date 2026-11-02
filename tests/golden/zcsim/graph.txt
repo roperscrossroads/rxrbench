@@ -1,0 +1,19 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--zc1
+  |  |--zc2
+  |--@family_zephcore:
+  |  |--zc1
+  |  |--zc2
+  |--@role_repeater:
+  |  |--zc1
+  |  |--zc2
+  |--@host_simhost:
+  |  |--zc1
+  |  |--zc2
+  |--@kind_sim:
+  |  |--zc1
+  |  |--zc2

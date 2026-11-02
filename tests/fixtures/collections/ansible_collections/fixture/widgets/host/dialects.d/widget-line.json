@@ -1,0 +1,15 @@
+{
+ "reply": "(?:^|\\n)(?:= ([^\\r]*)\\r\\n|(~S\\{[^\\r\\n]*\\}\\*[0-9a-f]{4})\\r?\\n)",
+ "secret_prefixes": [
+  "passwd "
+ ],
+ "log_scrub": [
+  {
+   "pattern": "~W(?P<s>[A-Za-z0-9+/]{8,}={0,2})",
+   "label": "frame"
+  },
+  {
+   "pattern": "widget tunnel (?:\\+ )?(?P<s>[A-Za-z0-9+/]{8,}={0,2})"
+  }
+ ]
+}

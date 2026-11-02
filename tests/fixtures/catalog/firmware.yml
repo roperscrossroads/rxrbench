@@ -1,0 +1,56 @@
+---
+# Images that are not built from a zephyrtastic class: other firmware families, and published
+# binaries. A board declares one with `firmware: {family: <family>, image: <name>}`.
+#
+#   family       bitpirate | meshcore | meshtastic (stock) | ...
+#   board_tags   the board types this image may be flashed to (the registry's policy.board_tag)
+#   flasher      esptool | uf2 | rauc (a signed bundle, installed over ssh)
+#   source       where the bytes are: see module_utils/artifact.py (path, url, github, forgejo).
+#                Anything remote must carry a sha256.
+#   parts        esptool only, when the source is a directory: [{offset, file}]
+#   rf           managed: the tool can set this firmware's power and frequency after a flash
+#                unmanaged: it cannot (yet). The board runs at that firmware's own defaults.
+#                none: the device has no radio the RF rules are about
+#
+# A site's own images go in <site>/catalog/firmware.yml (layered over this one).
+
+images:
+  loudboot-heltec-v3:
+    family: bitpirate
+    summary: an image that boots transmitting on its build's radio, outside the US band (made up)
+    board_tags: [heltec-v3]
+    flasher: esptool
+    boot_radio: {freq_mhz: 869.618, bw_khz: 62.5, tx_dbm: 22}
+    source:
+      type: path
+      path: ~/firmware/loudboot
+  bitpirate-heltec-v3:
+    family: bitpirate
+    summary: ESP32 Bit Pirate built for a Heltec V3 (an example; point source at your build)
+    board_tags: [heltec-v3]
+    flasher: esptool
+    source:
+      type: path
+      path: ~/firmware/ESP32-Bit-Pirate/.pio/build/heltec_wifi_lora_32_V3
+    parts:
+      - {offset: 0x0, file: bootloader.bin}
+      - {offset: 0x8000, file: partitions.bin}
+      - {offset: 0x10000, file: firmware.bin}
+    rf: unmanaged
+  beacon-heltec-v4r8:
+    family: beacon
+    summary: the fixture plugin's beacon firmware, built for a Heltec V4-R8 only (fixture.widgets)
+    board_tags: [heltec-v4r8]
+    flasher: esptool
+    source:
+      type: path
+      path: ~/firmware/beacon
+  widget-heltec-v4:
+    family: widget
+    summary: the fixture plugin's widget firmware for a Heltec V4 (tests/fixtures, fixture.widgets)
+    board_tags: [heltec-v4, heltec-v4r8]
+    flasher: esptool
+    source:
+      type: path
+      path: ~/firmware/widget
+    rf: none

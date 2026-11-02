@@ -1,0 +1,32 @@
+{
+ "xiao1": {
+  "meshtastic lora": "modem preset: MediumFast\nregion:       1\nprimary chan: name=\"MediumFast\" hash=0x00\ntx power:     2 dBm at the antenna (radio drive 2 dBm)\ntx enabled:   yes\nfem lna:      not present on this hardware",
+  "meshtastic preset": "preset      MediumFast (generation 1)\na hop now   would be REFUSED (no-clock)\nsettle      0 ms remaining of 20\nhops        0 completed\nheld off    0 no-clock, 0 scanning, 0 reliable-in-flight,\n            0 tx-queued (drain bound 500 ms), 0 switch-in-progress\ntx settled  0 frames waited out a settle window\ntx stale    0 frames DROPPED for outliving their preset",
+  "meshtastic status": "node: 0x0a1a2a3a\ninitialized: yes\nble connected: no\ntx: 76 ok, 0 failed\nrx: 0 decoded, 0 duplicates, 0 decode failures\nrx dropped: 0, rx re-arm failures: 0\nrelayed: 0\nlast rx: from=0x00000000 rssi=0 snr=0\nprimary channel: 0 \"MediumFast\" hash=0x00\ndevice role: client\nrebroadcast mode: all\nrebroadcasting: yes",
+  "meshtastic version": "build:  9a4d0d25 (built 1002-1039 UTC)\nboard:  xiao_ble\nzephyr: 4.4.99\nimage:  0.4.36+0 (MCUboot header, slot0)\nclass:  12"
+ },
+ "board2": {
+  "meshtastic lora": "modem preset: ShortTurbo\nregion:       1\nprimary chan: name=\"ShortTurbo\" hash=0x0e\ntx power:     2 dBm at the antenna (radio drive -9 dBm; GC1109 makes up the rest)\ntx enabled:   yes\nfem lna:      not present on this hardware",
+  "meshtastic preset": "preset      ShortTurbo (generation 1)\na hop now   would go\nsettle      0 ms remaining of 20\nhops        0 completed\nheld off    0 no-clock, 0 scanning, 0 reliable-in-flight,\n            0 tx-queued (drain bound 500 ms), 0 switch-in-progress\ntx settled  0 frames waited out a settle window\ntx stale    0 frames DROPPED for outliving their preset",
+  "meshtastic status": "node: 0x0a0b0c0d\ninitialized: yes\nble connected: no\nbattery: 4243 mV (100%) charging\ntx: 351 ok, 0 failed\nrx: 423 decoded, 225 duplicates, 0 decode failures\nrx dropped: 0, rx re-arm failures: 0\nrelayed: 423\nlast rx: from=0x1a2a3a4a rssi=-40 snr=13\nprimary channel: 0 \"ShortTurbo\" hash=0x0e\ndevice role: client\nrebroadcast mode: all\nrebroadcasting: yes",
+  "meshtastic version": "build:  9a4d0d25 (built 1002-1037 UTC)\nboard:  heltec_wifi_lora32_v4\nzephyr: 4.4.99\nimage:  0.4.36+0 (MCUboot header, slot0)\nclass:  4"
+ },
+ "board3": {
+  "meshtastic lora": "modem preset: ShortTurbo\nregion:       1\nprimary chan: name=\"ShortTurbo\" hash=0x0e\ntx power:     2 dBm at the antenna (radio drive -9 dBm; KCT8103L makes up the rest)\ntx enabled:   yes\nfem lna:      enabled",
+  "meshtastic preset": "preset      ShortTurbo (generation 1)\na hop now   would go\nsettle      0 ms remaining of 20\nhops        0 completed\nheld off    0 no-clock, 0 scanning, 0 reliable-in-flight,\n            0 tx-queued (drain bound 500 ms), 0 switch-in-progress\ntx settled  0 frames waited out a settle window\ntx stale    0 frames DROPPED for outliving their preset",
+  "meshtastic status": "node: 0x0c1c2c3c\ninitialized: yes\nble connected: no\nbattery: 4227 mV (100%) charging\ntx: 202 ok, 0 failed\nrx: 358 decoded, 193 duplicates, 91 decode failures\nrx dropped: 0, rx re-arm failures: 0\nrelayed: 357\nlast rx: from=0x1a2a3a4a rssi=-27 snr=12\nprimary channel: 0 \"ShortTurbo\" hash=0x0e\ndevice role: client\nrebroadcast mode: all\nrebroadcasting: yes",
+  "meshtastic version": "build:  4de59099 (built 1002-1135 UTC)\nboard:  heltec_wifi_lora32_v4_r8\nzephyr: 4.4.99\nimage:  0.4.37+0 (MCUboot header, slot0)\nclass:  6"
+ },
+ "board6": {
+  "meshtastic lora": "modem preset: LongFast\nregion:       1\nprimary chan: name=\"LongFast\" hash=0x08\ntx power:     14 dBm at the antenna (radio drive 14 dBm)\ntx enabled:   yes\nfem lna:      not present on this hardware",
+  "meshtastic preset": "preset      LongFast (generation 1)\na hop now   would be REFUSED (no-clock)\nsettle      0 ms remaining of 20\nhops        0 completed\nheld off    0 no-clock, 0 scanning, 0 reliable-in-flight,\n            0 tx-queued (drain bound 500 ms), 0 switch-in-progress\ntx settled  0 frames waited out a settle window\ntx stale    0 frames DROPPED for outliving their preset",
+  "meshtastic status": "node: 0x0d1d2d3d\ninitialized: yes\nble connected: no\ntx: 0 ok, 0 failed\nrx: 0 decoded, 0 duplicates, 0 decode failures\nrx dropped: 0, rx re-arm failures: 0\nrelayed: 0\nlast rx: from=0x00000000 rssi=0 snr=0\nprimary channel: 0 \"LongFast\" hash=0x08\ndevice role: client\nrebroadcast mode: none\nrebroadcasting: no",
+  "meshtastic version": "build:  9a4d0d25 (built 1002-1039 UTC)\nboard:  xiao_ble\nzephyr: 4.4.99\nimage:  0.4.36+0 (MCUboot header, slot0)\nclass:  9"
+ },
+ "board7": {
+  "meshtastic lora": "modem preset: ShortTurbo\nregion:       1\nprimary chan: name=\"ShortTurbo\" hash=0x0e\ntx power:     2 dBm at the antenna (radio drive 2 dBm)\ntx enabled:   yes\nfem lna:      not present on this hardware",
+  "meshtastic preset": "preset      ShortTurbo (generation 1)\na hop now   would be REFUSED (no-clock)\nsettle      0 ms remaining of 20\nhops        0 completed\nheld off    0 no-clock, 0 scanning, 0 reliable-in-flight,\n            0 tx-queued (drain bound 500 ms), 0 switch-in-progress\ntx settled  0 frames waited out a settle window\ntx stale    0 frames DROPPED for outliving their preset",
+  "meshtastic status": "node: 0x0e1e2e3e\ninitialized: yes\nble connected: no\ntx: 135 ok, 0 failed\nrx: 403 decoded, 420 duplicates, 0 decode failures\nrx dropped: 0, rx re-arm failures: 0\nrelayed: 0\nlast rx: from=0x1a2a3a4a rssi=-54 snr=13\nprimary channel: 0 \"ShortTurbo\" hash=0x0e\ndevice role: client\nrebroadcast mode: none\nrebroadcasting: no",
+  "meshtastic version": "build:  9a4d0d25 (built 1002-1038 UTC)\nboard:  xiao_ble\nzephyr: 4.4.99\nimage:  0.4.36+0 (MCUboot header, slot0)\nclass:  1"
+ }
+}

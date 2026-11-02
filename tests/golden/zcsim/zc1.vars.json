@@ -1,0 +1,130 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "zc1",
+ "bench_board_tag": "native-sim",
+ "bench_board_type": {
+  "mcu": "native-sim",
+  "zephyr_boards": [
+   "native_sim"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "cli",
+ "bench_devreg": "zc1",
+ "bench_diag_defaults": [],
+ "bench_family": "zephcore",
+ "bench_family_facts": {},
+ "bench_flasher": "sim",
+ "bench_fw_kind": "zephcore",
+ "bench_identity_key": "role",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.role }}",
+ "bench_key_escrow": "console",
+ "bench_kind": "sim",
+ "bench_layers": [
+  "sim"
+ ],
+ "bench_layout": "zcsim",
+ "bench_led": null,
+ "bench_locate": null,
+ "bench_may_transmit": true,
+ "bench_mcu": "native-sim",
+ "bench_plugin": "rxrbench.mesh",
+ "bench_present": true,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "diag": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "flash": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "shell": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "identity",
+   "origin": "device",
+   "tasks": "identity_console",
+   "via": "console"
+  },
+  {
+   "escrow": false,
+   "kind": "admin_password",
+   "origin": "declared",
+   "tasks": "admin_password"
+  }
+ ],
+ "bench_sim_console": "pty",
+ "bench_sim_device_id": 3,
+ "bench_sim_exe": "zephcore/sim-repeater/zephyr.exe",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_sim_seed": 31,
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "zephcore state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": "console",
+ "bench_vocabulary": "meshcore"
+}

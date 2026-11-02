@@ -1,0 +1,170 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "lin2",
+ "bench_board_tag": "sim-container",
+ "bench_board_type": {
+  "mcu": "none"
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": null,
+ "bench_devreg": "lin2",
+ "bench_diag_defaults": [
+  {
+   "cmd": "cat /etc/os-release",
+   "name": "os-release"
+  },
+  {
+   "cmd": "uname -a",
+   "name": "kernel"
+  },
+  {
+   "cmd": "uptime",
+   "name": "uptime"
+  },
+  {
+   "cmd": "df -k",
+   "name": "disk"
+  },
+  {
+   "cmd": "dmesg | tail -n 200",
+   "name": "kernel-log"
+  }
+ ],
+ "bench_family": "linux",
+ "bench_family_facts": {
+  "health_soak": 0,
+  "health_unit": null,
+  "host_key_paths": [
+   "/etc/ssh/ssh_host_ed25519_key",
+   "/etc/ssh/ssh_host_ecdsa_key"
+  ],
+  "led_path": "/run/leds/act",
+  "remote_bundle": null
+ },
+ "bench_fw_kind": "linux",
+ "bench_health_soak": 0,
+ "bench_health_unit": null,
+ "bench_host_key_paths": [
+  "/etc/ssh/ssh_host_ed25519_key",
+  "/etc/ssh/ssh_host_ecdsa_key"
+ ],
+ "bench_identity_key": null,
+ "bench_key_escrow": null,
+ "bench_kind": "sim",
+ "bench_layers": [
+  "simlinux"
+ ],
+ "bench_layout": "simlinux",
+ "bench_led": "led",
+ "bench_led_path": "/run/leds/act",
+ "bench_locate": "led",
+ "bench_may_transmit": true,
+ "bench_mcu": "none",
+ "bench_plugin": "rxrbench.linux",
+ "bench_present": true,
+ "bench_remote_bundle": null,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "diag": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simlinux/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simlinux/known_hosts",
+   "port": 22202,
+   "state": "live",
+   "user": "root"
+  },
+  "flash": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simlinux/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simlinux/known_hosts",
+   "port": 22202,
+   "state": "live",
+   "user": "root"
+  },
+  "shell": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simlinux/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simlinux/known_hosts",
+   "port": 22202,
+   "state": "live",
+   "user": "root"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "host_key",
+   "origin": "device",
+   "tasks": "host_key_ssh",
+   "via": "ssh"
+  }
+ ],
+ "bench_sim_console": "pty",
+ "bench_sim_device_id": null,
+ "bench_sim_exe": null,
+ "bench_sim_seed": null,
+ "bench_tests": [
+  {
+   "cmd": "cat /etc/os-release",
+   "expect": "^ID=rxrbench-sim$",
+   "name": "os-release"
+  },
+  {
+   "cmd": "command -v setsid sed cut cat",
+   "expect": "setsid",
+   "name": "tools"
+  },
+  {
+   "cmd": "command -v python3 python || echo none",
+   "expect": "^none$",
+   "name": "no-python"
+  }
+ ],
+ "bench_update": "linux",
+ "bench_usb_serial": null,
+ "bench_via": "ssh",
+ "bench_vocabulary": "linux"
+}

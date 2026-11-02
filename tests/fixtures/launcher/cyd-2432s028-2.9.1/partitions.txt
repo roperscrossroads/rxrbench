@@ -1,0 +1,7 @@
+== Partition table ==
+nvs              type=data subtype=0x02      offset=0x009000 size=0x005000 (20KB)
+otadata          type=data subtype=0x00      offset=0x00E000 size=0x002000 (8KB)
+test             type=app  subtype=0x20      offset=0x010000 size=0x150000 (1344KB)
+camstr           type=app  subtype=ota_0     offset=0x160000 size=0x100000 (1MB)  <-- BOOT
+<free>           offset=0x260000 size=0x1A0000 (1664KB)
+Flash size: 4MB, free total: 1664KB

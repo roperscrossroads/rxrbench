@@ -1,0 +1,19 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--lin1
+  |  |--lin2
+  |--@family_linux:
+  |  |--lin1
+  |  |--lin2
+  |--@host_simhost:
+  |  |--lin1
+  |  |--lin2
+  |--@kind_sim:
+  |  |--lin1
+  |  |--lin2
+  |--@no_console:
+  |  |--lin1
+  |  |--lin2

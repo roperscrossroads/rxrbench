@@ -1,0 +1,14 @@
+---
+# Board types, by the registry's `policy.board_tag`: what a board of that type is, for the code
+# that must know (esptool's --chip, the PSRAM a first flash checks the chip against, the Zephyr
+# board names a state line reports). Shared across firmware families: a type runs any of them.
+# A site's own types go in <site>/catalog/boards.yml, layered over this file.
+boards:
+  heltec-v4: {mcu: esp32s3, psram: 2MB, zephyr_boards: [heltec_wifi_lora32_v4]}
+  heltec-v4r8: {mcu: esp32s3, psram: 8MB, zephyr_boards: [heltec_wifi_lora32_v4]}
+  heltec-v3: {mcu: esp32s3, zephyr_boards: [heltec_wifi_lora32_v3]}
+  heltec-vme290: {mcu: esp32s3, psram: 8MB, zephyr_boards: [heltec_vision_master_e290]}
+  xiao: {mcu: nrf52840, zephyr_boards: [xiao_ble]}
+  native-sim: {mcu: native-sim, zephyr_boards: [native_sim]}
+  bluepill-f103: {mcu: stm32f103}
+  raspberrypi4-64: {mcu: bcm2711}

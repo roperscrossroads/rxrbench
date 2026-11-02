@@ -1,0 +1,18 @@
+---
+# The probe chip's config regions written back (Family.chip_tasks, region_restore): core has
+# checked the go-ahead before this; core's region flow checks the backup and the chip.
+- name: Write the config regions back through the probe
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: region_restore
+    image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+    dest: "{{ bench_runs_dir }}/probe-region-backups"
+    backup: "{{ restore_from | default('latest') }}"
+    flash_regions: "{{ bench_flash_regions | default([]) }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_region_result
+
+- name: What core's play reads
+  ansible.builtin.set_fact:
+    restore: "{{ board_region_result }}"

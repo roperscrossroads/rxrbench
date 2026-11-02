@@ -1,0 +1,179 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "nb1",
+ "bench_board_tag": "nuttx-sim",
+ "bench_board_type": {
+  "mcu": "nuttx-sim",
+  "nuttx_boards": [
+   "sim"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "console",
+ "bench_devreg": "nb1",
+ "bench_diag_defaults": [],
+ "bench_family": "nuttx_nsh",
+ "bench_family_facts": {},
+ "bench_flasher": "sim",
+ "bench_fw_kind": "nsh",
+ "bench_identity_key": null,
+ "bench_image": "{{ bench_store }}/nuttx/{{ firmware.image }}",
+ "bench_key_escrow": null,
+ "bench_kind": "sim",
+ "bench_layers": [
+  "sim"
+ ],
+ "bench_layout": "zsim",
+ "bench_led": null,
+ "bench_locate": null,
+ "bench_may_transmit": true,
+ "bench_mcu": "nuttx-sim",
+ "bench_plugin": "rxrbench.nuttx",
+ "bench_present": true,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "diag": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "flash": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "shell": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  }
+ },
+ "bench_scenarios": [
+  {
+   "name": "both-answer",
+   "steps": [
+    {
+     "board": "zb1",
+     "cmd": "kernel version",
+     "expect": "^Zephyr version",
+     "name": "version"
+    },
+    {
+     "board": "zb2",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up",
+     "within": 5
+    },
+    {
+     "board": "zb1",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up"
+    },
+    {
+     "board": "zb3",
+     "cmd": "settings read string app/version",
+     "expect": "^[0-9]+[.][0-9]+$",
+     "name": "version"
+    },
+    {
+     "board": "zb4",
+     "cmd": "settings read string net/name",
+     "expect": "^zb4$",
+     "name": "name",
+     "within": 5
+    }
+   ]
+  }
+ ],
+ "bench_secret_kinds": [
+  {
+   "escrow": false,
+   "kind": "psk",
+   "origin": "declared",
+   "tasks": "psk"
+  },
+  {
+   "escrow": false,
+   "kind": "cert",
+   "origin": "declared",
+   "tasks": "cert"
+  }
+ ],
+ "bench_sim_console": "stdio",
+ "bench_sim_device_id": 21,
+ "bench_sim_exe": "nuttx/nsh/nuttx",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_sim_seed": null,
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_test_bindings": {
+  "zephyr-shells-answer": {
+   "a": "zb1",
+   "b": "zb3"
+  }
+ },
+ "bench_tests": [
+  {
+   "cmd": "uname -a",
+   "expect": "^NuttX ",
+   "name": "uname"
+  },
+  {
+   "cmd": "cat /data/name",
+   "expect": "^{{ bench_board }}$",
+   "name": "name"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": "console",
+ "bench_vocabulary": "files"
+}

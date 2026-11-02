@@ -1,0 +1,72 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_flasher": "sim",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.class }}",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "meshtastic version",
+   "expect": "^class:\\s+{{ firmware.class }}\\b",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  },
+  {
+   "cmd": "meshtastic resets",
+   "name": "resets",
+   "refuse": "WATCHDOG"
+  }
+ ],
+ "builds": {
+  "zephyrtastic": {
+   "ref": "main",
+   "tree": "{{ bench_sources.zephyrtastic.workspace ~ '/main' }}",
+   "version": "0.0.0"
+  }
+ },
+ "firmware": {
+  "class": 0,
+  "family": "zephyrtastic"
+ },
+ "meshtastic": {
+  "channels": [
+   {
+    "index": 0,
+    "name": "ShortFast",
+    "psk": "default",
+    "role": "PRIMARY"
+   },
+   {
+    "index": 1,
+    "name": "side",
+    "psk": "hex:000102030405060708090a0b0c0d0e0f",
+    "role": "SECONDARY"
+   }
+  ],
+  "config": {
+   "device": {
+    "rebroadcast_mode": "ALL",
+    "role": "CLIENT"
+   },
+   "lora": {
+    "modem_preset": "SHORT_FAST",
+    "region": "US",
+    "tx_enabled": true,
+    "tx_power": 2
+   },
+   "security": {
+    "admin_key": [
+     "hex:8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"
+    ]
+   }
+  },
+  "owner": "sim1",
+  "owner_short": "sim1"
+ }
+}

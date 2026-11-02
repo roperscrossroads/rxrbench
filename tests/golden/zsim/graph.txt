@@ -1,0 +1,44 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--nb1
+  |  |--zb1
+  |  |--zb2
+  |  |--zb3
+  |  |--zb4
+  |  |--zb5
+  |  |--zq1
+  |--@family_nuttx_nsh:
+  |  |--nb1
+  |--@host_simhost:
+  |  |--nb1
+  |  |--zb1
+  |  |--zb2
+  |  |--zb3
+  |  |--zb4
+  |  |--zb5
+  |  |--zq1
+  |--@kind_sim:
+  |  |--nb1
+  |  |--zb1
+  |  |--zb2
+  |  |--zb3
+  |  |--zb4
+  |  |--zb5
+  |  |--zq1
+  |--@family_bare:
+  |  |--zb1
+  |  |--zb2
+  |--@no_console:
+  |  |--zb1
+  |  |--zb2
+  |  |--zb5
+  |  |--zq1
+  |--@family_zephyr_settings:
+  |  |--zb3
+  |  |--zb4
+  |--@family_zephyr_mcumgr:
+  |  |--zb5
+  |  |--zq1

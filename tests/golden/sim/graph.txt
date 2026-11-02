@@ -1,0 +1,19 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--sim1
+  |  |--sim2
+  |--@family_zephyrtastic:
+  |  |--sim1
+  |  |--sim2
+  |--@class_0:
+  |  |--sim1
+  |  |--sim2
+  |--@host_simhost:
+  |  |--sim1
+  |  |--sim2
+  |--@kind_sim:
+  |  |--sim1
+  |  |--sim2

@@ -1,0 +1,9 @@
+== Partition table ==
+nvs              type=data subtype=0x02      offset=0x009000 size=0x005000 (20KB)
+otadata          type=data subtype=0x00      offset=0x00E000 size=0x002000 (8KB)
+app0             type=app  subtype=0x20      offset=0x010000 size=0x180000 (1536KB)
+coredump         type=data subtype=0x03      offset=0x190000 size=0x010000 (64KB)
+spiffs           type=data subtype=spiffs    offset=0x1A0000 size=0x300000 (3MB)
+buddy0           type=app  subtype=ota_0     offset=0x4A0000 size=0x120000 (1152KB)  <-- BOOT
+<free>           offset=0x5C0000 size=0xA40000 (10496KB)
+Flash size: 16MB, free total: 10496KB

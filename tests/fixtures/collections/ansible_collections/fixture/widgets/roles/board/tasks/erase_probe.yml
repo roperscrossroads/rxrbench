@@ -1,0 +1,13 @@
+---
+# The probe chip's erase (Family.chip_tasks): core has checked the go-ahead before this.
+- name: Erase the chip through the probe
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: erase
+  register: probe_erase
+
+- name: What core's erase play reads
+  ansible.builtin.set_fact:
+    erased:
+      msg: "{{ probe_erase.msg }}"

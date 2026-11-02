@@ -1,0 +1,14 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--mt1
+  |--@family_meshtastic:
+  |  |--mt1
+  |--@host_simhost:
+  |  |--mt1
+  |--@kind_container:
+  |  |--mt1
+  |--@no_console:
+  |  |--mt1

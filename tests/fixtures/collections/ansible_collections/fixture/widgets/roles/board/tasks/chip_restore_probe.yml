@@ -1,0 +1,16 @@
+---
+# The probe chip's restore (Family.chip_tasks): core has checked the go-ahead before this.
+- name: Write the chip back through the probe
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: restore
+    path: "{{ bench_runs_dir }}/probe-backups/{{ bench_board }}"
+  register: probe_restore
+
+- name: What core's restore play reads
+  ansible.builtin.set_fact:
+    restore:
+      path: "{{ bench_runs_dir }}/probe-backups/{{ bench_board }}"
+      changed: "{{ probe_restore.changed }}"
+      msg: "{{ probe_restore.msg }}"

@@ -1,0 +1,13 @@
+---
+# The probe chip's update step (its family row's `update: probe`): the whole of bringing the
+# device to its declared state, since none of core's flashers writes it. `probechip_flash` is
+# the file that stands in for the chip's flash. Returns `device` and `image`, so a plan's
+# state record names what it runs.
+- name: The probe chip runs its declared image
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: flash
+    image: "{{ bench_image }}"
+    flash_regions: "{{ bench_flash_regions | default([]) }}"
+    overwrite: "{{ bench_overwrite | default([]) }}"

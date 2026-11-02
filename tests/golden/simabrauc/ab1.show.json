@@ -1,0 +1,29 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_bundle": "~/.cache/rxrbench/simvm/bundles/update-1.1-sim.raucb",
+ "bench_devreg_tool": "{{ bench_repo }}/devreg/devreg.py",
+ "bench_led_path": "/run/leds/act",
+ "bench_rauc_remote_bundle": "/data/update.raucb",
+ "bench_tests": [
+  {
+   "cmd": "rauc status",
+   "expect": "boot status: .*good",
+   "name": "slot-good"
+  },
+  {
+   "cmd": "grep ' / ' /proc/mounts",
+   "expect": "\\bro\\b",
+   "name": "rootfs-read-only"
+  },
+  {
+   "cmd": "grep ' /data ' /proc/mounts",
+   "expect": "/data",
+   "name": "data-mounted"
+  }
+ ],
+ "firmware": {
+  "family": "linux_rauc",
+  "image": "sim-ab-plain"
+ }
+}

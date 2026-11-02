@@ -1,0 +1,196 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "ab1",
+ "bench_board_tag": "sim-qemuarm",
+ "bench_board_type": {
+  "mcu": "cortex-a15"
+ },
+ "bench_boot_radio_problems": [],
+ "bench_bundle": "~/.cache/rxrbench/simvm/bundles/update-1.1-sim.raucb",
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": "rxrbench-sim-qemuarm",
+ "bench_config_via": null,
+ "bench_devreg": "ab1",
+ "bench_devreg_tool": "{{ bench_repo }}/devreg/devreg.py",
+ "bench_diag_defaults": [
+  {
+   "cmd": "cat /etc/os-release",
+   "name": "os-release"
+  },
+  {
+   "cmd": "uname -a",
+   "name": "kernel"
+  },
+  {
+   "cmd": "uptime",
+   "name": "uptime"
+  },
+  {
+   "cmd": "df -k",
+   "name": "disk"
+  },
+  {
+   "cmd": "dmesg | tail -n 200",
+   "name": "kernel-log"
+  },
+  {
+   "cmd": "rauc status --detailed",
+   "name": "rauc-status"
+  },
+  {
+   "cmd": "boot-request status",
+   "name": "boot-request"
+  },
+  {
+   "cmd": "systemctl --failed --no-pager",
+   "name": "failed-units"
+  },
+  {
+   "cmd": "journalctl -b -u boot-health-check -u boot-slot-health --no-pager -n 200",
+   "name": "health",
+   "timeout": 40
+  },
+  {
+   "cmd": "journalctl -b -n 300 --no-pager",
+   "name": "journal",
+   "timeout": 40
+  }
+ ],
+ "bench_family": "linux_slotguard",
+ "bench_family_facts": {
+  "health_soak": 10,
+  "health_unit": "boot-health-check.service",
+  "host_key_paths": [
+   "/data/ssh/ssh_host_ed25519_key",
+   "/data/ssh/ssh_host_ecdsa_key"
+  ],
+  "led_path": "/run/leds/act",
+  "remote_bundle": "/data/update.raucb"
+ },
+ "bench_flasher": "rauc",
+ "bench_fw_kind": "linux",
+ "bench_health_soak": 10,
+ "bench_health_unit": "boot-health-check.service",
+ "bench_host_key_paths": [
+  "/data/ssh/ssh_host_ed25519_key",
+  "/data/ssh/ssh_host_ecdsa_key"
+ ],
+ "bench_identity_key": null,
+ "bench_key_escrow": null,
+ "bench_kind": "sim",
+ "bench_layers": [
+  "simlinux"
+ ],
+ "bench_layout": "simab",
+ "bench_led": "led",
+ "bench_led_path": "/run/leds/act",
+ "bench_locate": "led",
+ "bench_may_transmit": true,
+ "bench_mcu": "cortex-a15",
+ "bench_plugin": "rxrbench.linux",
+ "bench_present": true,
+ "bench_remote_bundle": "/data/update.raucb",
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "diag": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simvm/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simvm/known_hosts",
+   "port": 22211,
+   "state": "live",
+   "user": "root"
+  },
+  "flash": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simvm/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simvm/known_hosts",
+   "port": 22211,
+   "state": "live",
+   "user": "root"
+  },
+  "shell": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simvm/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simvm/known_hosts",
+   "port": 22211,
+   "state": "live",
+   "user": "root"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "host_key",
+   "origin": "device",
+   "tasks": "host_key_ssh",
+   "via": "ssh"
+  }
+ ],
+ "bench_sim_console": "pty",
+ "bench_sim_device_id": null,
+ "bench_sim_exe": null,
+ "bench_sim_seed": null,
+ "bench_tests": [
+  {
+   "cmd": "rauc status",
+   "expect": "boot status: .*good",
+   "name": "slot-good"
+  },
+  {
+   "cmd": "grep ' / ' /proc/mounts",
+   "expect": "\\bro\\b",
+   "name": "rootfs-read-only"
+  },
+  {
+   "cmd": "grep ' /data ' /proc/mounts",
+   "expect": "/data",
+   "name": "data-mounted"
+  }
+ ],
+ "bench_update": "rauc",
+ "bench_usb_serial": null,
+ "bench_via": "ssh",
+ "bench_vocabulary": "linux",
+ "bench_wait_good": 180
+}

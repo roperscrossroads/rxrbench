@@ -1,0 +1,15 @@
+---
+# The fixture's step tasks (core's step contract): a widget with no console answers from a
+# fixed table, as a family's own route (an API, a probe) would; `step` and `step_name` in,
+# board_step_said out, as device_run returns it.
+- name: "A widget step: {{ step_name }}"
+  ansible.builtin.set_fact:
+    board_step_said:
+      results:
+        - name: "{{ step_name }}"
+          cmd: "{{ step.cmd }}"
+          output: "{{ widget_answers[step.cmd] | default('') }}"
+          passed: "{{ (widget_answers[step.cmd] | default('')) is search(step.expect | default('.')) }}"
+          why: []
+  vars:
+    widget_answers: {"widget version": "widget 1.2", "widget state": "~S{}*0000"}

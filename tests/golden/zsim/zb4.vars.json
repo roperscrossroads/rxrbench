@@ -1,0 +1,191 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "zb4",
+ "bench_board_tag": "native-sim",
+ "bench_board_type": {
+  "mcu": "native-sim",
+  "zephyr_boards": [
+   "native_sim"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "console",
+ "bench_devreg": "zb4",
+ "bench_diag_defaults": [],
+ "bench_family": "zephyr_settings",
+ "bench_family_facts": {},
+ "bench_flasher": "sim",
+ "bench_fw_kind": "zapp",
+ "bench_identity_key": null,
+ "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
+ "bench_key_escrow": null,
+ "bench_kind": "sim",
+ "bench_layers": [
+  "sim"
+ ],
+ "bench_layout": "zsim",
+ "bench_led": null,
+ "bench_locate": null,
+ "bench_may_transmit": true,
+ "bench_mcu": "native-sim",
+ "bench_plugin": "rxrbench.zephyr",
+ "bench_present": true,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "diag": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "flash": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  },
+  "shell": {
+   "bearer": "usb",
+   "can": [
+    "shell",
+    "flash",
+    "config",
+    "diag"
+   ],
+   "host": "simhost",
+   "state": "live",
+   "synthetic": true
+  }
+ },
+ "bench_scenarios": [
+  {
+   "name": "both-answer",
+   "steps": [
+    {
+     "board": "zb1",
+     "cmd": "kernel version",
+     "expect": "^Zephyr version",
+     "name": "version"
+    },
+    {
+     "board": "zb2",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up",
+     "within": 5
+    },
+    {
+     "board": "zb1",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up"
+    },
+    {
+     "board": "zb3",
+     "cmd": "settings read string app/version",
+     "expect": "^[0-9]+[.][0-9]+$",
+     "name": "version"
+    },
+    {
+     "board": "zb4",
+     "cmd": "settings read string net/name",
+     "expect": "^zb4$",
+     "name": "name",
+     "within": 5
+    }
+   ]
+  }
+ ],
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "device_key",
+   "origin": "device",
+   "tasks": "device_key_console",
+   "via": "console"
+  },
+  {
+   "escrow": false,
+   "kind": "psk",
+   "origin": "declared",
+   "tasks": "psk"
+  },
+  {
+   "escrow": false,
+   "kind": "cert",
+   "origin": "declared",
+   "tasks": "cert"
+  }
+ ],
+ "bench_sim_console": "pty",
+ "bench_sim_device_id": 14,
+ "bench_sim_exe": "zephyr/zapp-1.0/zephyr.exe",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_sim_seed": null,
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_test_bindings": {
+  "zephyr-shells-answer": {
+   "a": "zb1",
+   "b": "zb3"
+  }
+ },
+ "bench_tests": [
+  {
+   "cmd": "settings read string app/version",
+   "expect": "^{{ firmware.image | regex_replace('^zapp-', '') }}$",
+   "name": "version"
+  },
+  {
+   "cmd": "settings read string net/name",
+   "expect": "^{{ bench_board }}$",
+   "name": "name"
+  },
+  {
+   "cmd": "kernel uptime",
+   "expect": "^Uptime: [0-9]+ ms",
+   "name": "uptime"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": "console",
+ "bench_vocabulary": "settings"
+}

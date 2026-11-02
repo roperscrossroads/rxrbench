@@ -1,0 +1,70 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "mt1",
+ "bench_board_tag": "sim-container",
+ "bench_board_type": {
+  "mcu": "none"
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "phone-api",
+ "bench_devreg": "mt1",
+ "bench_diag_defaults": [],
+ "bench_family": "meshtastic",
+ "bench_family_facts": {},
+ "bench_fw_kind": "meshtastic",
+ "bench_identity_key": null,
+ "bench_key_escrow": "serial",
+ "bench_kind": "container",
+ "bench_layers": [],
+ "bench_layout": "simmt",
+ "bench_led": null,
+ "bench_locate": null,
+ "bench_may_transmit": true,
+ "bench_mcu": "none",
+ "bench_plugin": "rxrbench.mesh",
+ "bench_present": true,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "addr": "127.0.0.1",
+   "bearer": "wifi",
+   "can": [
+    "config"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "port": 4403,
+   "state": "live"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "identity",
+   "origin": "device",
+   "tasks": "identity_serial",
+   "via": "serial"
+  }
+ ],
+ "bench_step_tasks": "step_meshtastic_stock",
+ "bench_tools": {
+  "devreg": "{{ bench_repo }}/devreg/devreg.py"
+ },
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": null,
+ "bench_vocabulary": "meshtastic_stock"
+}

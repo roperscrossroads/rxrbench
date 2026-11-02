@@ -1,0 +1,52 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_tools": {
+  "devreg": "{{ bench_repo }}/devreg/devreg.py"
+ },
+ "firmware": {
+  "family": "meshtastic",
+  "image": "meshtasticd-sim"
+ },
+ "meshtastic": {
+  "channels": [
+   {
+    "index": 0,
+    "name": "ShortFast",
+    "psk": "default",
+    "role": "PRIMARY"
+   },
+   {
+    "index": 1,
+    "name": "side",
+    "psk": "hex:000102030405060708090a0b0c0d0e0f",
+    "role": "SECONDARY"
+   }
+  ],
+  "config": {
+   "device": {
+    "rebroadcast_mode": "ALL",
+    "role": "CLIENT"
+   },
+   "lora": {
+    "modem_preset": "SHORT_FAST",
+    "region": "US",
+    "tx_enabled": true,
+    "tx_power": 2
+   },
+   "lora_api": {
+    "hop_limit": 4
+   },
+   "security": {
+    "admin_key": [
+     "hex:8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"
+    ]
+   }
+  },
+  "owner": "bench mt1",
+  "owner_short": "mt1"
+ },
+ "routes": {
+  "config": "wifi"
+ }
+}

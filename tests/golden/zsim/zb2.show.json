@@ -1,0 +1,70 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_flasher": "sim",
+ "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
+ "bench_scenarios": [
+  {
+   "name": "both-answer",
+   "steps": [
+    {
+     "board": "zb1",
+     "cmd": "kernel version",
+     "expect": "^Zephyr version",
+     "name": "version"
+    },
+    {
+     "board": "zb2",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up",
+     "within": 5
+    },
+    {
+     "board": "zb1",
+     "cmd": "kernel uptime",
+     "expect": "^Uptime: [0-9]+ ms",
+     "name": "up"
+    },
+    {
+     "board": "zb3",
+     "cmd": "settings read string app/version",
+     "expect": "^[0-9]+[.][0-9]+$",
+     "name": "version"
+    },
+    {
+     "board": "zb4",
+     "cmd": "settings read string net/name",
+     "expect": "^zb4$",
+     "name": "name",
+     "within": 5
+    }
+   ]
+  }
+ ],
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_test_bindings": {
+  "zephyr-shells-answer": {
+   "a": "zb1",
+   "b": "zb3"
+  }
+ },
+ "bench_tests": [
+  {
+   "cmd": "kernel version",
+   "expect": "^Zephyr version",
+   "name": "version"
+  },
+  {
+   "cmd": "kernel uptime",
+   "expect": "^Uptime: [0-9]+ ms",
+   "name": "uptime"
+  }
+ ],
+ "firmware": {
+  "family": "bare",
+  "image": "zephyr-shell"
+ }
+}

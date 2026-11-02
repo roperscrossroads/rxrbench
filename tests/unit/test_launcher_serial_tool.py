@@ -1,0 +1,205 @@
+"""The host tool that streams an app into Launcher over the serial console, against a scripted
+port: the protocol's edges (a lost ACK, an ERR mid-stream, no READY, no Launcher, the boot
+window) and how the port is opened."""
+import importlib.util
+import json
+
+import pytest
+
+from tests.support.launcher_rig import TOOL
+
+BANNER = "Press the button to enter the Launcher!"
+
+
+class Device:
+    """What answers on the port: a Launcher (or an app, `launcher=False`), in its boot window
+    for `banners` answers, dropping the ACKs numbered in `drop`, answering ERR instead of the
+    ACK numbered `err_at`, refusing the flash when not `ready`."""
+
+    def __init__(self, launcher=True, banners=0, drop=(), err_at=None, ready=True, selpress_lost=False,
+                 reset_at=None):
+        self.launcher, self.banners, self.drop, self.err_at, self.ready = launcher, banners, set(drop), err_at, ready
+        self.reset_at = reset_at   # the ACK number at which the board restarts into its app
+        self.selpress_lost = selpress_lost
+        self.out, self.raw, self.got, self.seen, self.acks = b"", None, b"", [], 0
+
+    def write(self, data):
+        if self.raw is not None:
+            self.got += data
+            self.acks += 1
+            size = self.raw
+            if self.acks == self.err_at:
+                self.out += b"ERR write failed\r\n"
+                self.raw = None
+                return
+            if self.acks == self.reset_at:
+                self.out += (b"ets Jul 29 2019 12:21:46\r\n\r\nrst:0x8 (TG1WDT_SYS_RESET),boot:0x13 "
+                             b"(SPI_FAST_FLASH_BOOT)\r\nstatus=6 try=1\r\n")
+                self.raw, self.launcher = None, False
+                return
+            n = size if len(self.got) >= size else (len(self.got) // 2048) * 2048
+            if self.acks not in self.drop:
+                self.out += f"ACK {n}/{size}\r\n".encode()
+            if len(self.got) >= size:
+                self.out += b"OK flashed, rebooting\r\n"
+                self.raw = None
+            return
+        for line in data.decode().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            self.seen.append(line)
+            if line == "version":
+                if self.banners:
+                    self.out += (BANNER + "\r\n").encode()
+                    self.banners -= 1
+                elif self.launcher:
+                    self.out += b"Launcher beta-1\r\n"
+            elif line == "nav SelPress":
+                self.out += b"OK nav SelPress\r\n"
+                if not self.selpress_lost:
+                    self.launcher = True
+                    self.out += b"Type 'help' for Serial commands.\r\n"
+            elif line.startswith("settings set "):
+                self.out += b"OK settings loaded\r\n"
+                if '"bootToApp":0' in line:       # the window ends in the menu
+                    self.launcher, self.banners = True, 0
+                    self.out += b"Type 'help' for Serial commands.\r\n"
+            elif line.startswith("flash "):
+                size = int(line.split()[3])
+                if self.ready:
+                    self.raw = size
+                    self.out += f"READY {size}\r\n".encode()
+                else:
+                    self.out += b"ERR no space for app: image does not fit\r\n"
+
+
+class FakeSerial:
+    device = None
+    opened = []
+
+    def __init__(self):
+        self.port = self.baudrate = self.timeout = self.dtr = self.rts = None
+
+    def open(self):
+        FakeSerial.opened.append((self.port, self.baudrate, self.dtr, self.rts))
+
+    def write(self, data):
+        FakeSerial.device.write(data)
+
+    def flush(self):
+        pass
+
+    def read(self, n):
+        d = FakeSerial.device
+        out, d.out = d.out[:n], d.out[n:]
+        return out
+
+    def close(self):
+        FakeSerial.opened.append("closed")
+
+
+@pytest.fixture
+def tool(monkeypatch):
+    spec = importlib.util.spec_from_file_location("launcher_serial_edges", TOOL)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    monkeypatch.setattr(m.serial, "Serial", FakeSerial)
+    FakeSerial.opened = []
+    return m
+
+
+def run(tool, device, tmp_path, capsys, data=b"\x33" * 5000, *args):
+    FakeSerial.device = device
+    f = tmp_path / "app.bin"
+    f.write_bytes(data)
+    rc = tool.main(["--port", "/dev/ttyFAKE", "--name", "camstr", "--file", str(f), "--wait", "1", *args])
+    return rc, json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+
+def test_the_port_is_opened_at_115200_with_both_modem_lines_asserted(tool, tmp_path, capsys):
+    rc, out = run(tool, Device(), tmp_path, capsys)
+    assert rc == 0 and out["ok"] and out["sent"] == 5000 and out["lost_acks"] == 0
+    assert FakeSerial.opened == [("/dev/ttyFAKE", 115200, True, True), "closed"]
+
+
+def test_a_lost_ack_is_waited_out_and_counted_not_fatal(tool, tmp_path, capsys):
+    d = Device(drop={2})
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 0 and out["ok"] and out["sent"] == 5000 and out["lost_acks"] == 1
+    assert d.got == b"\x33" * 5000 and out["reply"].startswith("OK flashed")
+
+
+def test_an_err_mid_stream_stops_the_stream_and_is_the_reply(tool, tmp_path, capsys):
+    rc, out = run(tool, Device(err_at=2), tmp_path, capsys)
+    assert rc == 1 and out["ok"] is False and out["reply"] == "ERR write failed" and out["sent"] == 4096
+
+
+def test_no_ready_means_nothing_is_sent(tool, tmp_path, capsys):
+    d = Device(ready=False)
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 1 and out["ok"] is False and out["sent"] == 0 and out["reply"].startswith("ERR no space")
+    assert d.got == b""
+
+
+def test_a_board_in_its_app_is_said_with_what_the_port_printed(tool, tmp_path, capsys):
+    d = Device(launcher=False)
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 1 and out["ok"] is False and out["reply"] == "no Launcher console within 1 s" and out["tail"] == []
+    assert "flash" not in " ".join(d.seen)
+
+
+def test_the_boot_window_is_answered_and_the_banner_kept_out_of_the_log(tool, tmp_path, capsys):
+    d = Device(launcher=False, banners=1)
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 0 and out["ok"]
+    assert d.seen.count("nav SelPress") == 1 and d.seen.index("nav SelPress") < d.seen.index("flash firmware camstr 5000")
+
+
+def test_the_app_part_is_cut_by_offset_and_length_and_an_empty_part_is_refused(tool, tmp_path, capsys):
+    whole = b"\x00" * 100 + b"\x55" * 300 + b"\xff" * 50
+    d = Device()
+    rc, out = run(tool, d, tmp_path, capsys, whole, "--offset", "100", "--length", "300")
+    assert rc == 0 and d.got == b"\x55" * 300 and "flash firmware camstr 300" in d.seen
+    rc, out = run(tool, Device(), tmp_path, capsys, whole, "--offset", "1000")
+    assert rc == 2 and out == {"ok": False, "reply": "an empty app part"}
+
+
+def test_overwrite_reuses_the_slot_of_that_name(tool, tmp_path, capsys):
+    d = Device()
+    rc, _out = run(tool, d, tmp_path, capsys, b"\x44" * 100, "--overwrite")
+    assert rc == 0 and "flash overwrite camstr 100" in d.seen
+
+
+def test_the_lines_rest_where_the_board_type_says(tool, tmp_path, capsys):
+    rc, out = run(tool, Device(), tmp_path, capsys, b"\x33" * 5000, "--modem-rest", "deasserted")
+    assert rc == 0 and out["ok"]
+    assert FakeSerial.opened == [("/dev/ttyFAKE", 115200, False, False), "closed"]
+
+
+def test_a_board_that_loses_the_key_press_is_entered_through_its_settings(tool, tmp_path, capsys):
+    dev = Device(banners=3, selpress_lost=True)
+    rc, out = run(tool, dev, tmp_path, capsys, b"\x33" * 5000, "--entry", "settings")
+    assert rc == 0 and out["ok"], out
+    sets = [l for l in dev.seen if l.startswith("settings set")]
+    assert sets == ['settings set {"bootToApp":0}', 'settings set {"bootToApp":1}'], "off for the boot, on again in the menu"
+    assert "nav SelPress" not in dev.seen
+    assert dev.seen.index('settings set {"bootToApp":1}') < dev.seen.index("flash firmware camstr 5000")
+
+
+def test_the_key_press_entry_on_a_board_that_loses_it_finds_no_console(tool, tmp_path, capsys):
+    dev = Device(banners=2, selpress_lost=True, launcher=False)
+    rc, out = run(tool, dev, tmp_path, capsys)
+    assert rc == 1 and not out["ok"] and "no Launcher console" in out["reply"]
+    assert dev.seen.count("nav SelPress") == 1
+
+
+
+def test_a_board_that_restarts_under_an_install_is_said_to_and_its_console_kept(tool, tmp_path, capsys):
+    """A board that restarts mid-install into its boot app: the failure keeps the reset line, not
+    only its app's last lines."""
+    cap = tmp_path / "install.log"
+    rc, out = run(tool, Device(reset_at=2), tmp_path, capsys, b"\x33" * 5000, "--capture", str(cap),
+                  "--ack-wait", "0.3")
+    assert rc == 1 and out["resets"] == ["TG1WDT_SYS_RESET"]
+    assert "rst:0x8 (TG1WDT_SYS_RESET)" in cap.read_text() and "READY 5000" in cap.read_text()

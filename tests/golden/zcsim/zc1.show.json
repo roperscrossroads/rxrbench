@@ -1,0 +1,39 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_flasher": "sim",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.role }}",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "zephcore state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  }
+ ],
+ "firmware": {
+  "family": "zephcore",
+  "image": "zephcore-sim-repeater",
+  "role": "repeater"
+ },
+ "meshcore": {
+  "admin_password": "sim-pass-zc1-01",
+  "advert": {
+   "flood_interval_h": 12
+  },
+  "name": "zc1",
+  "radio": {
+   "preset": "usa",
+   "tx_dbm": 2,
+   "tx_enabled": true
+  }
+ },
+ "storage": {
+  "zephcore": {
+   "epoch": 1,
+   "keep_identity": true
+  }
+ }
+}

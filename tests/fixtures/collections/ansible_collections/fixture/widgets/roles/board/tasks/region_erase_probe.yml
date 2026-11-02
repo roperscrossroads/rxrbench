@@ -1,0 +1,17 @@
+---
+# One config region of the probe chip erased (Family.chip_tasks, region_erase): core has
+# checked the go-ahead before this.
+- name: Erase a config region through the probe
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: region_erase
+    image: "{{ board_host_store | default('~/rxrbench/store') }}/{{ bench_image | basename }}"
+    region: "{{ erase_region | default(omit, true) }}"
+    flash_regions: "{{ bench_flash_regions | default([]) }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_region_result
+
+- name: What core's play reads
+  ansible.builtin.set_fact:
+    erased: "{{ board_region_result }}"

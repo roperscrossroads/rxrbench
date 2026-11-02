@@ -1,0 +1,35 @@
+# A fake device registry for the unit tests: the same shape as a site's, no real serials.
+version: 1
+hosts:
+  workstation: {local: true}
+  benchA: {ssh: "tester@bencha", bench_dir: /home/bench/bench}
+  benchB: {ssh: "tester@benchb", bench_dir: /home/bench/bench}
+protected: []
+devices:
+  brain1:
+    kind: serial
+    firmware: port
+    policy: {board_tag: heltec-v4}
+    match: {serial_by_id: usb-Espressif_USB_JTAG_serial_debug_unit_00:00:00:00:00:01-if00}
+  head1:
+    kind: serial
+    firmware: port
+    aliases: [h1]
+    match: {usb_serial: "AAAAAAAAAAAAAAA1"}
+  member1:
+    kind: serial
+    firmware: port
+    match: {usb_serial: "AAAAAAAAAAAAAAA2"}
+  mute1:
+    kind: serial
+    firmware: port
+    policy: {board_tag: heltec-v4, may_transmit: false}
+    match: {usb_serial: "AAAAAAAAAAAAAAA3"}
+  pinned1:
+    kind: serial
+    policy: {board_tag: heltec-v3}
+    match: {host: benchB, serial_by_id: usb-Silicon_Labs_CP2102-if00-port0}
+  stock1:
+    kind: serial
+    firmware: stock
+    match: {usb_vid: "1a86", usb_pid: "7523"}

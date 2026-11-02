@@ -1,0 +1,14 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--ab1
+  |--@family_linux_rauc:
+  |  |--ab1
+  |--@host_simhost:
+  |  |--ab1
+  |--@kind_sim:
+  |  |--ab1
+  |--@no_console:
+  |  |--ab1

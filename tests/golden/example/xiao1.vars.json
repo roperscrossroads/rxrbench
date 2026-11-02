@@ -1,0 +1,192 @@
+{
+ "bench_access_host": "bench1",
+ "bench_apply_allowed": false,
+ "bench_board": "xiao1",
+ "bench_board_tag": "xiao",
+ "bench_board_type": {
+  "mcu": "nrf52840",
+  "uf2": {
+   "app": [
+    159744,
+    999424
+   ],
+   "bootloader_usb": [
+    "2886:0045"
+   ],
+   "dfu": "adafruit-nrfutil",
+   "drive_identity": {
+    "file": "NODEINFO.TXT",
+    "pattern": "^Chip-ID:\\s*([0-9A-Fa-f]{16})\\s*$"
+   },
+   "family": 2913282112,
+   "refuse_families": {
+    "1296388936": "an OTAFIX factory erase",
+    "3596845628": "a bootloader update"
+   },
+   "touch": "dfu"
+  },
+  "zephyr_boards": [
+   "xiao_ble"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_bootloader_tasks": "bootloader_uf2",
+ "bench_can": [],
+ "bench_check_depth": "full",
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "shell-tunnel",
+ "bench_devreg": "xiao1",
+ "bench_diag_defaults": [
+  {
+   "cmd": "meshtastic version",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "name": "state"
+  },
+  {
+   "cmd": "meshtastic status",
+   "name": "status"
+  },
+  {
+   "cmd": "meshtastic lora",
+   "name": "lora"
+  },
+  {
+   "cmd": "meshtastic resets",
+   "name": "resets"
+  }
+ ],
+ "bench_family": "zephyrtastic",
+ "bench_family_facts": {
+  "led_color": "red",
+  "led_mode": "in-use",
+  "radio_check_live": true,
+  "radio_skip": []
+ },
+ "bench_family_tasks": "zephyrtastic",
+ "bench_flasher": "uf2",
+ "bench_fw_kind": "port",
+ "bench_identity_key": "class",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}",
+ "bench_key_escrow": "tunnel",
+ "bench_kind": "serial",
+ "bench_layers": [],
+ "bench_layout": "example",
+ "bench_led": "shell",
+ "bench_led_color": "red",
+ "bench_led_mode": "in-use",
+ "bench_locate": "shell",
+ "bench_may_transmit": true,
+ "bench_mcu": "nrf52840",
+ "bench_plugin": "rxrbench.mesh",
+ "bench_present": true,
+ "bench_radio_check_live": true,
+ "bench_radio_skip": [],
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 30,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "diag": {
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "flash": {
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "shell": {
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "identity",
+   "origin": "device",
+   "tasks": "identity_tunnel",
+   "via": "tunnel"
+  },
+  {
+   "escrow": false,
+   "kind": "channel_keys",
+   "origin": "declared",
+   "tasks": "channel_keys"
+  },
+  {
+   "escrow": false,
+   "kind": "admin_keys",
+   "origin": "declared",
+   "tasks": "admin_keys"
+  }
+ ],
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "meshtastic version",
+   "expect": "^class:\\s+{{ firmware.class }}\\b",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": "0A0B0C0D0E0F1022",
+ "bench_via": "console",
+ "bench_vocabulary": "meshtastic"
+}

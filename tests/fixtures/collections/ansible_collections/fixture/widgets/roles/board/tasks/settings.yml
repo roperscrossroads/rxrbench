@@ -1,0 +1,9 @@
+---
+- name: Read the widget
+  fixture.widgets.widget_facts:
+    build: "{{ widget_build }}"
+  register: widget
+
+- name: Say what it runs
+  ansible.builtin.debug:
+    msg: "WIDGET {{ widget.identity.family }} {{ widget.identity.build }}"

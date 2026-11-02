@@ -1,0 +1,3 @@
+---
+- name: Nothing by default
+  ansible.builtin.meta: noop

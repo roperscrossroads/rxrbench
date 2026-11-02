@@ -1,0 +1,32 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_led_path": "/run/leds/act",
+ "bench_tests": [
+  {
+   "cmd": "cat /etc/os-release",
+   "expect": "^ID=rxrbench-sim$",
+   "name": "os-release"
+  },
+  {
+   "cmd": "command -v setsid sed cut cat",
+   "expect": "setsid",
+   "name": "tools"
+  },
+  {
+   "cmd": "command -v python3 python || echo none",
+   "expect": "^none$",
+   "name": "no-python"
+  }
+ ],
+ "firmware": {
+  "family": "linux",
+  "image": "sim-linux"
+ },
+ "linux": {
+  "os": {
+   "id": "rxrbench-sim",
+   "version_id": "1"
+  }
+ }
+}

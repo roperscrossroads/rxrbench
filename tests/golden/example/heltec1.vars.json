@@ -1,0 +1,180 @@
+{
+ "bench_access_host": "bench1",
+ "bench_apply_allowed": false,
+ "bench_board": "heltec1",
+ "bench_board_tag": "heltec-v4",
+ "bench_board_type": {
+  "mcu": "esp32s3",
+  "psram": "2MB",
+  "zephyr_boards": [
+   "heltec_wifi_lora32_v4"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "regions",
+  "chip"
+ ],
+ "bench_check_depth": "full",
+ "bench_chip_mac": "02:00:00:00:00:21",
+ "bench_compatible": null,
+ "bench_config_via": "shell-tunnel",
+ "bench_devreg": "heltec1",
+ "bench_diag_defaults": [
+  {
+   "cmd": "meshtastic version",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "name": "state"
+  },
+  {
+   "cmd": "meshtastic status",
+   "name": "status"
+  },
+  {
+   "cmd": "meshtastic lora",
+   "name": "lora"
+  },
+  {
+   "cmd": "meshtastic resets",
+   "name": "resets"
+  }
+ ],
+ "bench_family": "zephyrtastic",
+ "bench_family_facts": {
+  "led_color": "red",
+  "led_mode": "in-use",
+  "radio_check_live": true,
+  "radio_skip": []
+ },
+ "bench_family_tasks": "zephyrtastic",
+ "bench_flasher": "esptool",
+ "bench_fw_kind": "port",
+ "bench_identity_key": "class",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}",
+ "bench_key_escrow": "tunnel",
+ "bench_kind": "serial",
+ "bench_layers": [],
+ "bench_layout": "example",
+ "bench_led": "shell",
+ "bench_led_color": "red",
+ "bench_led_mode": "in-use",
+ "bench_locate": "shell",
+ "bench_may_transmit": true,
+ "bench_mcu": "esp32s3",
+ "bench_plugin": "rxrbench.mesh",
+ "bench_present": true,
+ "bench_psram": "2MB",
+ "bench_radio_check_live": true,
+ "bench_radio_skip": [],
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 30,
+  "region": "US"
+ },
+ "bench_routes": {
+  "config": {
+   "assumed": true,
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "diag": {
+   "assumed": true,
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "flash": {
+   "assumed": true,
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  },
+  "shell": {
+   "assumed": true,
+   "bearer": "usb",
+   "can": [
+    "config",
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "bench1",
+   "hosts": [
+    "bench1"
+   ],
+   "state": "live"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": true,
+   "kind": "identity",
+   "origin": "device",
+   "tasks": "identity_tunnel",
+   "via": "tunnel"
+  },
+  {
+   "escrow": false,
+   "kind": "channel_keys",
+   "origin": "declared",
+   "tasks": "channel_keys"
+  },
+  {
+   "escrow": false,
+   "kind": "admin_keys",
+   "origin": "declared",
+   "tasks": "admin_keys"
+  }
+ ],
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "meshtastic version",
+   "expect": "^class:\\s+{{ firmware.class }}\\b",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": "console",
+ "bench_vocabulary": "meshtastic"
+}

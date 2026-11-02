@@ -1,0 +1,1 @@
+{"wifi":[],"favorite":[],"onlyBins":true,"bootToApp":true,"noDotFiles":true,"autoBackup":true,"askSpiffs":true,"bright":100,"dimmerSet":20,"02:00:00:00:00:01-Lilygo T-Embed CC1101":3,"FGCOLOR":2016,"BGCOLOR":0,"ALCOLOR":63488,"odd":12485,"even":13029,"dev":false,"autoConnect":true,"wui_usr":"admin","dwn_path":"/downloads/","wui_pwd":"example-only"}

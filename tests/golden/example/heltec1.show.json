@@ -1,0 +1,58 @@
+{
+ "ansible_python_interpreter": "/home/bench/.venv-mesh/bin/python",
+ "bench_apply_allowed": false,
+ "bench_check_depth": "full",
+ "bench_image": "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "meshtastic version",
+   "expect": "^class:\\s+{{ firmware.class }}\\b",
+   "name": "version"
+  },
+  {
+   "cmd": "meshtastic state",
+   "expect": "^~S\\{.*\\}\\*[0-9a-f]{4}$",
+   "name": "state"
+  }
+ ],
+ "builds": {
+  "zephyrtastic": {
+   "build": "0a1b2c3d",
+   "ref": "main",
+   "tree": "{{ lookup('ansible.builtin.env', 'HOME') }}/zephyrtastic/main",
+   "version": "0.4.44"
+  }
+ },
+ "firmware": {
+  "class": 4,
+  "family": "zephyrtastic"
+ },
+ "meshtastic": {
+  "channels": [
+   {
+    "index": 0,
+    "name": "",
+    "psk": "default",
+    "role": "PRIMARY"
+   }
+  ],
+  "config": {
+   "device": {
+    "rebroadcast_mode": "ALL",
+    "role": "CLIENT"
+   },
+   "lora": {
+    "modem_preset": "LONG_FAST",
+    "region": "US",
+    "tx_enabled": true,
+    "tx_power": 30
+   }
+  },
+  "owner": "heltec1",
+  "owner_short": "helt"
+ },
+ "zephyrtastic": {
+  "intents": "none"
+ }
+}

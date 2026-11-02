@@ -1,0 +1,20 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--bench1
+  |--@boards:
+  |  |--heltec1
+  |  |--xiao1
+  |--@family_zephyrtastic:
+  |  |--heltec1
+  |  |--xiao1
+  |--@class_4:
+  |  |--heltec1
+  |--@host_bench1:
+  |  |--heltec1
+  |  |--xiao1
+  |--@kind_serial:
+  |  |--heltec1
+  |  |--xiao1
+  |--@class_1:
+  |  |--xiao1

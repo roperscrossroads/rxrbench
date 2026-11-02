@@ -1,0 +1,16 @@
+---
+# A plugin's step, reached the way the board role reaches it: by the collection and the task
+# file the inventory published for the board.
+- name: A plugin step
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    bench_plugin: fixture.widgets
+    bench_vocabulary: settings
+    widget_build: abc123
+  tasks:
+    - name: The board's config, by its plugin
+      ansible.builtin.include_role:
+        name: "{{ bench_plugin }}.board"
+        tasks_from: "{{ bench_vocabulary }}"

@@ -1,0 +1,17 @@
+---
+# The probe chip's whole-chip backup (Family.chip_tasks): the flash read through the probe,
+# with the record core's chip_backup module would return.
+- name: Read the chip through the probe
+  fixture.widgets.probe_chip:
+    board: "{{ bench_board }}"
+    chip: "{{ probechip_flash }}"
+    action: backup
+    path: "{{ bench_runs_dir }}/probe-backups/{{ bench_board }}"
+  register: probe_read
+
+- name: What core's backup play reads
+  ansible.builtin.set_fact:
+    chip_backup:
+      path: "{{ bench_runs_dir }}/probe-backups/{{ bench_board }}"
+      chip: "{{ probe_read.chip }}"
+      files: "{{ probe_read.files }}"

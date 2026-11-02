@@ -1,0 +1,74 @@
+# The fleet classes' build recipes as they once stood: the reference
+# tests/unit/test_recipe.py compares catalog/zephyrtastic.yml against. Comments stripped.
+
+[classes.1]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "ble (XIAO nRF52840 + Wio-SX1262)"
+build = "west build -d build-xiao-f7 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-health.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-cluster-sig-required.conf;overlay-ble-peer.conf;overlay-led-status.conf;overlay-quiet-first-boot.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.2]
+board = "heltec_wifi_lora32_v4_r8/esp32s3/procpu"
+hw_model = 132
+variant = "ble + smp-central + depot (courier)"
+build = "west build -d build-heltec-v4r8-f7 --sysbuild -b heltec_wifi_lora32_v4_r8/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-gnss.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-cluster.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-ota-shell.conf;overlay-smp-central.conf;overlay-depot.conf;overlay-health.conf;overlay-coredump-flash.conf;overlay-battery.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-cluster-sign.conf;overlay-xeddsa-sign.conf;overlay-cluster-sig-required.conf;overlay-led-status.conf\" -DEXTRA_DTC_OVERLAY_FILE=\"depot.overlay\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.4]
+board = "heltec_wifi_lora32_v4/esp32s3/procpu"
+hw_model = 110
+variant = "ble + cluster (healthy V4 member)"
+build = "west build -d build-heltec-v4-f7 --sysbuild -b heltec_wifi_lora32_v4/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-gnss.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-cluster.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-v4-member.conf;overlay-health.conf;overlay-coredump-flash.conf;overlay-battery.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-cluster-sign.conf;overlay-xeddsa-sign.conf;overlay-cluster-sig-required.conf;overlay-led-status.conf\" -DEXTRA_DTC_OVERLAY_FILE=\"coredump-big.overlay\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.5]
+board = "heltec_wifi_lora32_v4/esp32s3/procpu"
+hw_model = 110
+variant = "ble + scanner autostart, no cluster, no beacons (listener)"
+build = "west build -d build-heltec-v4-listener --sysbuild -b heltec_wifi_lora32_v4/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-gnss.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-scanner.conf;overlay-v4-member.conf;overlay-v4-listener.conf;overlay-health.conf;overlay-coredump-flash.conf;overlay-battery.conf;overlay-rf.conf\" -DEXTRA_DTC_OVERLAY_FILE=\"coredump-big.overlay\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.6]
+board = "heltec_wifi_lora32_v4_r8/esp32s3/procpu"
+hw_model = 132
+variant = "ble + cluster (healthy V4-R8 member)"
+build = "west build -d build-heltec-v4r8-member --sysbuild -b heltec_wifi_lora32_v4_r8/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-gnss.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-cluster.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-v4r8-member.conf;overlay-health.conf;overlay-coredump-flash.conf;overlay-battery.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-cluster-sign.conf;overlay-xeddsa-sign.conf;overlay-cluster-sig-required.conf;overlay-led-status.conf\" -DEXTRA_DTC_OVERLAY_FILE=\"coredump-big.overlay\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.7]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "ble (XIAO, cluster c2: verifies but does not REQUIRE signatures)"
+build = "west build -d build-xiao-c2 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-health.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-ble-peer.conf;overlay-led-status.conf;overlay-quiet-first-boot.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\" -DCONFIG_MESHTASTIC_FLEET_CLASS=7 -DCONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS=\\\"--custom-tlv\\ 0x00A0\\ 0x07\\\""
+
+[classes.8]
+board = "heltec_wifi_lora32_v4_r8/esp32s3/procpu"
+hw_model = 132
+variant = "R8 listener: scanner autostart, 100000-record PSRAM ring, GNSS clock, no cluster"
+build = "west build -d build-heltec-v4r8-listener8 --sysbuild -b heltec_wifi_lora32_v4_r8/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-gnss.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-coredump-flash.conf;overlay-battery.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-scanner.conf;overlay-listener.conf;overlay-v4r8-listener.conf;overlay-led-status.conf\" -DEXTRA_DTC_OVERLAY_FILE=\"coredump-big.overlay\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.9]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "XIAO listener: scanner autostart, 1024-record RAM ring, no peer link, no cluster"
+build = "west build -d build-xiao-listener9 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-scanner.conf;overlay-listener.conf;overlay-xiao-listener.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""
+
+[classes.10]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "XIAO relay RECEIVING half: class 7 (c2) + overlay-relay; relay off at boot, `meshtastic relay dir in`"
+build = "west build -d build-xiao-relay10 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-health.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-ble-peer.conf;overlay-led-status.conf;overlay-relay.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\" -DCONFIG_MESHTASTIC_FLEET_CLASS=10 -DCONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS=\\\"--custom-tlv\\ 0x00A0\\ 0x0a\\\""
+
+[classes.11]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "XIAO relay EAR: forwards heard broadcast text over the peer link, transmit compiled out; `meshtastic ear peer <id>`"
+build = "west build -d build-xiao-ear11 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-health.conf;overlay-rf.conf;overlay-node-id-from-key.conf;overlay-xeddsa.conf;overlay-ble-peer.conf;overlay-led-status.conf;overlay-relay-ear.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\" -DCONFIG_MESHTASTIC_FLEET_CLASS=11 -DCONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS=\\\"--custom-tlv\\ 0x00A0\\ 0x0b\\\""
+
+[classes.12]
+board = "xiao_ble/nrf52840"
+hw_model = 88
+variant = "XIAO keyless radio HEAD: forwards every heard frame undecoded to its brain over the peer link, retunes on request; no keys, no NodeDB, no identity on the air; `meshtastic attach brain <id>`"
+build = "west build -d build-xiao-head12 --sysbuild -b xiao_ble/nrf52840 main/samples/meshtastic -- -DSHIELD=wio_sx1262_xiao -DEXTRA_CONF_FILE=\"overlay-ota-shell.conf;overlay-ota-ble.conf;overlay-ota-ble-secure.conf;overlay-health.conf;overlay-rf.conf;overlay-ble-peer.conf;overlay-led-status.conf;overlay-attachment-head.conf\" -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\" -DCONFIG_MESHTASTIC_FLEET_CLASS=12 -DCONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS=\\\"--custom-tlv\\ 0x00A0\\ 0x0c\\\""
+
+[classes.13]
+board = "heltec_wifi_lora32_v3/esp32s3/procpu"
+hw_model = 43
+variant = "Heltec V3 keyless radio HEAD: class 12's role on the V3 -- forwards every heard frame undecoded to its brain, transmits what its brain hands it; no keys, no NodeDB; dram0 ~76 %"
+build = "west build -d build-heltec-v3-head13 --sysbuild -b heltec_wifi_lora32_v3/esp32s3/procpu main/samples/meshtastic -- -DEXTRA_CONF_FILE=\"overlay-v4-unified.conf;overlay-nonet.conf;overlay-pm-off.conf;overlay-nomqtt.conf;overlay-ble-peer.conf;overlay-rf.conf;overlay-led-status.conf;overlay-attachment-head.conf\" -DCONFIG_MESHTASTIC_FLEET_CLASS=13 -DCONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS=\\\"--custom-tlv\\ 0x00A0\\ 0x0d\\\" -DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE=\\\"$HOME/.config/zephyrtastic/fleet-ec-p256.pem\\\""

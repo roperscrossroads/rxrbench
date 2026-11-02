@@ -1,0 +1,10 @@
+---
+namespace: fixture
+name: widgets
+version: 0.0.1
+readme: README.md
+authors:
+  - rxrbench tests
+description: A plugin collection the tests load, the smallest one that is whole.
+license:
+  - MIT
