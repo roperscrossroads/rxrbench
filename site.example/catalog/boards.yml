@@ -1,0 +1,56 @@
+---
+# A site's own board types, layered over the tool's catalog/boards.yml: one line per type of
+# board the tool does not know yet (the registry's policy.board_tag names it). `mcu` is what
+# esptool is told; `psram` is checked against the chip before a first flash; `zephyr_boards`
+# are the board names a state line may report for it.
+boards:
+  example-esp32s3-board: {mcu: esp32s3, psram: 8MB, zephyr_boards: [example_board]}
+  # SparkFun Pro Micro RP2040 (DEV-18288): an RP2040 with 16 MB of flash, BOOT and RESET
+  # buttons, a WS2812 LED. Its bootloader is the chip's ROM, the same on every RP2040 board and
+  # under every firmware (CircuitPython, MicroPython, Zephyr, NuttX, QMK, pico-sdk): the
+  # `picoboot` flasher writes and reads it with picotool, finding the chip by its flash id. The
+  # ROM's own drive (2e8a:0003) carries another serial and is not written. `uf2.enter`: how its
+  # firmware is asked into the bootloader, in order; `manual` is BOOT held while RESET is pressed.
+  sparkfun-pro-micro-rp2040:
+    mcu: rp2040
+    flash: 16MB
+    zephyr_boards: [sparkfun_pro_micro_rp2040]
+    uf2:
+      bootloader_usb: ["2e8a:0003"]
+      app: [0x10000000, 0x11000000]
+      family: 0xE48BFF56
+      enter: [reset-interface, touch-1200, manual]
+      drive_serial: none        # the ROM's drive has a serial of its own: uf2_flash refuses it
+      # The ROM's USB serial is not the flash id either: the plug watcher asks picotool which
+      # registered flash id selects the bootloader (docs/ARCHITECTURE.md#plug-watcher-and-busy-marks).
+      hides_chip_id: true
+      identify: picotool
+  # Raspberry Pi Pico 2 W: an RP2350A (two Cortex-M33 or two Hazard3 RISC-V cores, chosen by the
+  # image), 4 MB of flash, a CYW43439 for WiFi and Bluetooth (its LED is on the CYW43439, not a
+  # GPIO). The ROM bootloader's serial is the chip id in OTP, as are its applications' when they
+  # say so (Zephyr: CONFIG_HWINFO_RPI_PICO_CHIP_ID). UF2 families: ARM (secure), RISC-V, and
+  # "absolute" (what Zephyr writes, an image placed where its addresses say).
+  raspberrypi-pico2w:
+    mcu: rp2350
+    flash: 4MB
+    zephyr_boards: [rpi_pico2]
+    uf2:
+      bootloader_usb: ["2e8a:000f"]
+      app: [0x10000000, 0x10400000]
+      family: [0xE48BFF59, 0xE48BFF5A, 0xE48BFF57]
+      enter: [touch-1200, manual]
+  # Adafruit KB2040: an RP2040 with 8 MB of flash in the Pro Micro footprint, a NeoPixel on
+  # GPIO17, a BOOT button. Its factory program (Arduino-pico) and CircuitPython answer a 1200-baud
+  # touch; the flash id is its applications' USB serial (the ROM drive's is another).
+  adafruit-kb2040:
+    mcu: rp2040
+    flash: 8MB
+    zephyr_boards: [adafruit_kb2040]
+    uf2:
+      bootloader_usb: ["2e8a:0003"]
+      app: [0x10000000, 0x10800000]
+      family: 0xE48BFF56
+      enter: [touch-1200, manual]
+      drive_serial: none
+      hides_chip_id: true
+      identify: picotool

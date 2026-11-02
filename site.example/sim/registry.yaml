@@ -1,0 +1,75 @@
+---
+# The simulated Zephyr bench's device registry: a site registry's shape, no hardware in it.
+# Each board is a Zephyr application built for native_sim (`just sim-zephyr-build`), run as a
+# process by sim/simbench.py; `sim_exe` is its factory image in the image store.
+version: 1
+hosts:
+  # this machine: the boards run here, as `just sim-zephyr-up` starts them (layout zsim)
+  simhost: {hostname: this machine, local: true}
+  # the simulated bench host (sim/vmhost.py, `just sim-host-up`): the boards run inside it
+  # under the sim_bench role, given it by `just hosts-setup zsim-vm` (layout zsim-vm)
+  vmhost1:
+    ssh: bench@127.0.0.1
+    port: 2222
+    ssh_key: ~/.cache/rxrbench/vmhost/id_ed25519
+    known_hosts: ~/.cache/rxrbench/vmhost/known_hosts
+    bench_dir: /home/bench/rxrbench
+protected: []
+devices:
+  zb1:
+    kind: sim
+    firmware: sample
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 11}
+    sim_exe: zephyr/zephyr-shell/zephyr.exe
+  zb2:
+    kind: sim
+    firmware: sample
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 12}
+    sim_exe: zephyr/zephyr-shell/zephyr.exe
+  # the rxrbench.zephyr plugin's example application (zapp, `just sim-zapp-build`): settings,
+  # a key the device makes, three versions to move between. No seed declared: a board's
+  # entropy is its own at every boot, so an erased board makes a different key.
+  zb3:
+    kind: sim
+    firmware: zapp
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 13}
+    sim_exe: zephyr/zapp-1.0/zephyr.exe
+  zb4:
+    kind: sim
+    firmware: zapp
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 14}
+    sim_exe: zephyr/zapp-1.0/zephyr.exe
+  # Zephyr's SMP server (samples/subsys/mgmt/mcumgr/smp_svr) with the image group on the flash
+  # simulator's slots: a board of the zephyr_mcumgr family that takes images over MCUmgr on
+  # the shell's pty. No bootloader: an upload lands in the spare slot and stays there.
+  zb5:
+    kind: sim
+    firmware: zsmp
+    policy: {board_tag: native-sim}
+    match: {sim_device_id: 15}
+    sim_exe: zephyr/zsmp/zephyr.exe
+  # NuttX's NSH on its sim board (`just sim-nuttx-build`): a board of the nuttx_nsh family,
+  # speaking on its standard streams, so the bench makes its console pty (sim_console: stdio).
+  nb1:
+    kind: sim
+    firmware: nsh
+    policy: {board_tag: nuttx-sim}
+    match: {sim_device_id: 21}
+    sim_exe: nuttx/nsh/nuttx
+    sim_console: stdio
+  # An emulated MCU (`just sim-qemu-build`): Arm's MPS2 AN385 (a Cortex-M3) under QEMU, with
+  # MCUboot in RAM-load mode and the SMP server as its application, the slots in a simulated
+  # flash kept across a CPU reset. The "executable" is the image's manifest, which says the
+  # machine and what QEMU loads (sim_console: qemu); the board's flash is the machine's RAM,
+  # so a power cycle (the process started again) is the factory image once more.
+  zq1:
+    kind: sim
+    firmware: zq
+    policy: {board_tag: mps2-an385}
+    match: {sim_device_id: 31}
+    sim_exe: zephyr/zq/manifest.json
+    sim_console: qemu

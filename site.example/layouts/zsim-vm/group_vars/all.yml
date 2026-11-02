@@ -1,0 +1,24 @@
+---
+# Sockets, store and the sim flasher: from layers/sim (devreg.yml `layers:`). The boards live
+# on the simulated bench host, so what the layer says for a board on this machine is said
+# here for a board there: the host's python, and its sim bench's run directory (where the
+# sockets, pid and executable files are). The sim bench runs under the host's login user (uid
+# 1000 on a cloud image), in its runtime directory: %t/rxrbench in its unit.
+ansible_python_interpreter: /usr/bin/python3
+bench_sim_run: /run/user/1000/rxrbench
+
+bench_apply_allowed: true
+bench_image: "{{ bench_store }}/zephyr/{{ firmware.image }}"
+
+bench_tests:
+  - {name: version, cmd: kernel version, expect: "^Zephyr version"}
+  - {name: uptime, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms"}
+
+bench_scenarios:
+  - name: both-answer
+    steps:
+      - {board: zb1, name: version, cmd: kernel version, expect: "^Zephyr version"}
+      - {board: zb2, name: up, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms", within: 5}
+      - {board: zb1, name: up, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms"}
+      - {board: zb3, name: version, cmd: settings read string app/version, expect: "^[0-9]+[.][0-9]+$"}
+      - {board: zb4, name: name, cmd: settings read string net/name, expect: "^zb4$", within: 5}

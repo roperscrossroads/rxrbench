@@ -1,0 +1,60 @@
+---
+# Images that are not built from a zephyrtastic class: other firmware families, and published
+# binaries. A board declares one with `firmware: {family: <family>, image: <name>}`.
+#
+#   family       bitpirate | meshcore | meshtastic (stock) | ...
+#   board_tags   the board types this image may be flashed to (the registry's policy.board_tag)
+#   flasher      esptool | esp-image (a whole merged .bin at 0x0, staged raw) | uf2 | rauc (a signed bundle,
+#                installed over ssh) | swd (through a debug probe: a raw .bin, or an Intel HEX or ELF
+#                file converted at staging, written at the address it is linked for)
+#   source       where the bytes are: see module_utils/artifact.py (path, url, github, forgejo).
+#                Anything remote must carry a sha256.
+#   parts        esptool only, when the source is a directory: [{offset, file}]
+#   partition_images  esp-image only: {<partition label or subtype>: <member>}, files of the
+#                same zip a release's full install writes into its partitions (an OTA app,
+#                a file system image), staged into the merged file. Not needed when the
+#                family's plugin reads them from the release (release_partitions, docs/PLUGINS.md)
+#   version      what the firmware reports of itself (a release: x.y.z.<commit>); `just stage`
+#                puts it, and the build it ends in, in the staged manifest
+#   build        the build id it reports, when the version does not end in it
+#   rf           managed: the tool can set this firmware's power and frequency after a flash
+#                unmanaged: it cannot (yet). The board runs at that firmware's own defaults.
+#                none: the device has no radio the RF rules are about
+#
+# A site's own images go in <site>/catalog/firmware.yml (layered over this one).
+
+images:
+  bitpirate-heltec-v3:
+    family: bitpirate
+    summary: ESP32 Bit Pirate built for a Heltec V3 (an example; point source at your build)
+    board_tags: [heltec-v3]
+    flasher: esptool
+    source:
+      type: path
+      path: ~/firmware/ESP32-Bit-Pirate/.pio/build/heltec_wifi_lora_32_V3
+    parts:
+      - {offset: 0x0, file: bootloader.bin}
+      - {offset: 0x8000, file: partitions.bin}
+      - {offset: 0x10000, file: firmware.bin}
+    rf: unmanaged
+  blinky-bluepill:
+    family: bare
+    summary: >-
+      A Zephyr blinky for a Blue Pill behind a bootloader, linked at 0x08004000 (an example; build
+      your own). Its zephyr.hex is staged with `tools/stage_raw.py zephyr.hex --name
+      blinky-bluepill --board-tag bluepill-f103`, which keeps the raw bytes and the address
+      they go at (`base`); only the swd flasher writes such an image, and writes it there
+    board_tags: [bluepill-f103]
+    flasher: swd
+    source:
+      type: path
+      path: .build/store/bare/blinky-bluepill
+    rf: none
+
+# Where each firmware family's source is on this machine: `tree` its repository, `workspace`
+# the west workspace it builds in. Read by the mesh plugin's tools/stage_image.py, `just sim-build` and the tests
+# (site.firmware_source); a site states its own in <site>/catalog/firmware.yml.
+sources:
+  zephyrtastic: {tree: ~/zephyrtastic/main, workspace: ~/zephyrtastic}
+  # zephcore's source is not public: without it its simulated bench is skipped (docs/SIMULATED.md)
+  zephcore: {tree: ~/zephcore, workspace: ~/zephcore-wt}

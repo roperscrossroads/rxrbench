@@ -1,0 +1,30 @@
+---
+# A Heltec-V4 as a plain node: the member image (class 4 of catalog/zephyrtastic.yml) with no role.
+# The firmware's own defaults for the site's region: LongFast at 30 dBm.
+zephyrtastic: {intents: none}
+firmware: {family: zephyrtastic, class: 4}
+meshtastic:
+  owner: heltec1
+  owner_short: helt
+  config:
+    lora: {region: US, modem_preset: LONG_FAST, tx_power: 30, tx_enabled: true}
+    device: {role: CLIENT, rebroadcast_mode: ALL}
+  channels:
+  - {index: 0, name: "", role: PRIMARY, psk: default}
+
+# What this board's declaration may also say, each when it is needed (docs/LAYOUT.md):
+# bench_first_flash: true          # it answers as no family the image's (blank, other firmware):
+#                                  # let the first write erase it whole and flash it
+# bench_boot_radio_ok: true        # a fresh write of an image that boots transmitting outside the
+#                                  # RF rules: its antenna is on a dummy load
+# bench_overwrite: [ota_1]         # a write may take these regions though they hold other firmware
+# bench_app_manager_overwrite: true  # the chip carries an app manager and the write may orphan its
+#                                  # apps (the same as bench_overwrite: [all])
+# bench_flash_unknown: false       # refuse a board that reports no build or hash, rather than
+#                                  # writing it forward
+# bench_ble_rebond: never          # smp over BLE: leave a bond the host holds alone (auto, force)
+# bench_bootloader_policy: exact   # rewrite its ESP32 bootloader when its bytes differ, not only
+#                                  # its signing key
+# bench_locate: buzzer             # `just locate` uses the plugin's locate_buzzer.yml for this
+#                                  # board, not its family's own indicator
+# bench_secret_policy: {identity: {escrow: false}}  # its identity key is not escrowed

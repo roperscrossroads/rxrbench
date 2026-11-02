@@ -1,0 +1,5 @@
+---
+# A simulated Linux device: what it must say it runs. Nothing here can change it.
+firmware: {family: linux, image: sim-linux}
+linux:
+  os: {id: rxrbench-sim, version_id: "1"}

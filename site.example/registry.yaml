@@ -1,0 +1,52 @@
+---
+# An example device registry: the shape of a site's, with documentation names and ids. A device
+# is found by what the hardware itself says (a chip id, a MAC), never by a port name; `just
+# survey` prints a ready-made block for a board it does not know yet, and `just enroll` files it.
+# The example layout (layouts/example) names its boards from here.
+version: 1
+hosts:
+  # A bench host: where boards are plugged in, reached over ssh.
+  bench1: {ssh: "bench@bench1", bench_dir: /home/bench/rxrbench}
+  # The workstation that runs the tool. `local: true` (or `hostname: <its hostname>`) makes it
+  # the host devreg probes in place, and the one `just wsl-attach` attaches boards for.
+  workstation: {local: true}
+protected: []
+devices:
+  # A Heltec WiFi LoRa 32 V4 (ESP32-S3): its USB-Serial-JTAG port carries the chip's MAC.
+  heltec1:
+    kind: serial
+    firmware: port
+    policy: {board_tag: heltec-v4}
+    match: {serial_by_id: usb-Espressif_USB_JTAG_serial_debug_unit_02:00:00:00:00:21-if00}
+    reach:
+      usb: {host: bench1}
+  # A Seeed XIAO nRF52840 with a Wio-SX1262: its USB serial is the chip id, in every USB mode.
+  xiao1:
+    kind: serial
+    firmware: port
+    policy: {board_tag: xiao}
+    match: {usb_serial: "0A0B0C0D0E0F1022"}
+    reach:
+      usb: {host: bench1, state: live, can: [shell, flash, config, diag]}
+      # a route that is not a path: its address is what `devreg resolve --route ble` prints
+      # and `guard --route ble` checks; unproven until an update over it has been seen to work
+      ble: {host: bench1, addr: "02:00:00:00:00:22", state: unproven, can: [flash]}
+  # A Linux device reached over ssh from the bench host (no console): `kind: net`.
+  linux1:
+    kind: net
+    firmware: port
+    aliases: [lin1]
+    reach:
+      ssh: {host: bench1, ip: 192.0.2.50, user: root, port: 22, state: live, can: [shell, flash, diag]}
+  # A chip behind a debug probe (no console, no USB face of its own): `kind: swd`, the probe
+  # named by its registry entry, the chip by its unique id.
+  mcu1:
+    kind: swd
+    reach:
+      swd: {host: bench1, probe: probe1, chip: STM32F103C8, uid: "0123456789ABCDEF01234567", nrst: true,
+            state: live, can: [flash]}
+  probe1:
+    kind: usb
+    match: {usb_vid: "0483", usb_pid: "3748"}
+    reach:
+      usb: {host: bench1}

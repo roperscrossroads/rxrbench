@@ -1,0 +1,91 @@
+---
+# The simulated Zephyr bench's images: Zephyr's own shell sample for native_sim, staged by
+# `just sim-zephyr-build` with its hash. The `bare` family: known by its bytes, spoken to
+# through the Zephyr shell, no config of its own for this tool to write.
+images:
+  zephyr-shell:
+    family: bare
+    summary: Zephyr's shell sample (samples/subsys/shell/shell_module) on native_sim
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephyr/zephyr-shell}
+    rf: none
+  zephyr-shell-b:
+    family: bare
+    summary: the same sample with another shell prompt, so a flash has something to change
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephyr/zephyr-shell-b}
+    rf: none
+  # zapp (rxrbench.zephyr, `just sim-zapp-build`): one application, three versions, so a
+  # bench has an upgrade, a downgrade and a settings store (Zephyr's, the app's config) to back up and put back.
+  zapp-1.0:
+    family: zephyr_settings
+    summary: the rxrbench.zephyr plugin's example application at version 1.0 (settings, a device-made key)
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephyr/zapp-1.0}
+    rf: none
+  zapp-1.1:
+    family: zephyr_settings
+    summary: the rxrbench.zephyr plugin's example application at version 1.1 (settings, a device-made key)
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephyr/zapp-1.1}
+    rf: none
+  zapp-2.0:
+    family: zephyr_settings
+    summary: the rxrbench.zephyr plugin's example application at version 2.0 (settings, a device-made key)
+    board_tags: [native-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/zephyr/zapp-2.0}
+    rf: none
+  # the SMP server (`just sim-zephyr-build` builds and signs both): what a board of the
+  # zephyr_mcumgr family runs, and the second one an upload can carry
+  zsmp:
+    family: zephyr_mcumgr
+    summary: Zephyr's SMP server sample on native_sim, MCUmgr over the shell's pty, signed as an MCUboot image
+    board_tags: [native-sim]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zsmp}
+    rf: none
+  zsmp-b:
+    family: zephyr_mcumgr
+    summary: the SMP server with another shell prompt, at a later version, for an upload to carry
+    board_tags: [native-sim]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zsmp-b}
+    rf: none
+  # NuttX's NSH on the sim board (rxrbench.nuttx, `just sim-nuttx-build`): known by what it
+  # says to `uname -a`; its storage a host directory it mounts
+  nsh:
+    family: nuttx_nsh
+    summary: NuttX's NSH on the sim board (boards/sim, config nsh), the startup ROMFS off
+    board_tags: [nuttx-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/nuttx/nsh}
+    rf: none
+  nsh-b:
+    family: nuttx_nsh
+    summary: the same with another prompt, so an update has something to change
+    board_tags: [nuttx-sim]
+    flasher: sim
+    source: {type: path, path: .build/store/nuttx/nsh-b}
+    rf: none
+  # The SMP server under MCUboot on an emulated MCU (`just sim-qemu-build`): the image a slot
+  # holds, taken over MCUmgr, run by MCUboot from RAM at the next reset; two versions, so an
+  # upgrade is the bootloader's choice and a downgrade its refusal
+  zq:
+    family: zephyr_mcumgr
+    summary: Zephyr's SMP server on the MPS2 AN385 under QEMU, MCUboot in RAM-load mode with revert, version 1.0.0
+    board_tags: [mps2-an385]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zq}
+    rf: none
+  zq-b:
+    family: zephyr_mcumgr
+    summary: the same with another shell prompt, at version 2.0.0, for an upload to carry
+    board_tags: [mps2-an385]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zq-b}
+    rf: none

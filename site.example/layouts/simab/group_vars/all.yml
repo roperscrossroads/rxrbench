@@ -1,0 +1,13 @@
+---
+# The interpreter: from layers/simlinux (devreg.yml `layers:`).
+
+# A simulated device may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+
+# The registry tool the route's address is checked with: this repository's.
+bench_devreg_tool: "{{ bench_repo }}/devreg/devreg.py"
+
+bench_tests:
+  - {name: slot-good, cmd: "rauc status", expect: "boot status: .*good"}
+  - {name: rootfs-read-only, cmd: "grep ' / ' /proc/mounts", expect: "\\bro\\b"}
+  - {name: data-mounted, cmd: "grep ' /data ' /proc/mounts", expect: "/data"}

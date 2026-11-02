@@ -1,0 +1,11 @@
+---
+# simab: one Linux device that is a QEMU machine with A/B slots, with slotguard's health gate
+# (the Linux plugin's sim/simvm.py). It brings its own registry and catalog. Start it with
+# `just sim-vm-up`; the tool then treats it like any other layout.
+plugin: rxrbench.core.devreg
+layers: [simlinux]
+registry: ../../../collections/ansible_collections/rxrbench/linux/sim/vm/registry.yaml
+catalog_dir: ../../../collections/ansible_collections/rxrbench/linux/sim/vm/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  ab1: {host: simhost}

@@ -1,0 +1,16 @@
+---
+# The interpreter and the LED: from layers/simlinux (devreg.yml `layers:`).
+
+# Simulated devices may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+
+# What `just device-test simlinux` checks on each device: it says what it is, and it has the
+# shell tools the plugin's steps use.
+bench_tests:
+  - {name: os-release, cmd: cat /etc/os-release, expect: "^ID=rxrbench-sim$"}
+  - {name: tools, cmd: "command -v setsid sed cut cat", expect: "setsid"}
+  - {name: no-python, cmd: "command -v python3 python || echo none", expect: "^none$"}
+
+# A Linux device installed from a card (a whole-disk image written by `just card` through a
+# registered reader) says which image; these simulated devices have no card:
+# bench_card_image: "{{ bench_store }}/linux/node-sdimg.wic"

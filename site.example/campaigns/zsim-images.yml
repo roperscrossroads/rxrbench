@@ -1,0 +1,14 @@
+---
+# A campaign (docs/ARCHITECTURE.md#runs-tests-and-campaigns): the simulated bench in two states, the same tests in each.
+# `just campaign zsim-images` applies each state, checks the bench is clean after it, then runs
+# its device tests and scenarios; results under runs/<time>/campaign/zsim-images/.
+summary: zb1 on the shell sample, then on its build b, then back
+states:
+  - {state: zsim, label: a}
+  - state: zsim
+    label: b
+    boards:
+      zb1: {firmware: {family: bare, image: zephyr-shell-b}}
+    tests: [zephyr-shells-answer]
+    device_tests: false
+  - {state: zsim, label: back, tests: [zephyr-shells-answer], device_tests: false}

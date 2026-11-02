@@ -1,0 +1,5 @@
+---
+# The simulated bench's rules: a bench that keeps to itself, at low power. The simulated
+# layouts name this file (`rf_ceiling`), so a site's own rules cannot refuse them.
+region: US
+max_tx_power: 2

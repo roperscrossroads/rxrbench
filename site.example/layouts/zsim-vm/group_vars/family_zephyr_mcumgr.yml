@@ -1,0 +1,5 @@
+---
+# What every zephyr_mcumgr board of this layout gets: the shell beside the SMP server answers.
+bench_tests:
+  - {name: version, cmd: kernel version, expect: "^Zephyr version"}
+  - {name: uptime, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms"}

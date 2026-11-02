@@ -1,0 +1,12 @@
+---
+# zcsim: two zephcore repeaters on native_sim (`just sim-build-zephcore`, then
+# `just sim-up zc1 zc2`), behind real brokers in the MeshCore console dialect. The MeshCore
+# family end to end without hardware: storage epoch, radio, name, adverts, admin password.
+plugin: rxrbench.core.devreg
+layers: [sim]
+registry: ../../../collections/ansible_collections/rxrbench/mesh/sim/registry.yaml
+catalog_dir: ../../../collections/ansible_collections/rxrbench/mesh/sim/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  zc1: {host: simhost}
+  zc2: {host: simhost}

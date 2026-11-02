@@ -1,0 +1,17 @@
+---
+# A stock Meshtastic node reached over its network API; nothing flashes it (its image is the
+# container, started by `just sim-mt-up`; the layout declares no flasher).
+firmware: {family: meshtastic, image: meshtasticd-sim}
+routes: {config: wifi}
+meshtastic:
+  owner: bench mt1
+  owner_short: mt1
+  config:
+    lora: {region: US, modem_preset: SHORT_FAST, tx_power: 2, tx_enabled: true}
+    lora_api: {hop_limit: 4}
+    device: {role: CLIENT, rebroadcast_mode: ALL}
+    security:
+      admin_key: ["hex:8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"]
+  channels:
+  - {index: 0, name: ShortFast, role: PRIMARY, psk: default}
+  - {index: 1, name: side, role: SECONDARY, psk: "hex:000102030405060708090a0b0c0d0e0f"}

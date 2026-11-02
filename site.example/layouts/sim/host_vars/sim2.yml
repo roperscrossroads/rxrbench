@@ -1,0 +1,13 @@
+---
+# A simulated board. Its radio is simulated too, but it is declared as a bench board would
+# be: off LongFast, at 2 dBm.
+firmware: {family: zephyrtastic, class: 0}
+meshtastic:
+  owner: sim2
+  owner_short: sim2
+  config:
+    lora: {region: US, modem_preset: SHORT_FAST, tx_power: 2, tx_enabled: true}
+    device: {role: CLIENT, rebroadcast_mode: ALL}
+  channels:
+  - {index: 0, name: ShortFast, role: PRIMARY, psk: default}
+  - {index: 1, name: side, role: SECONDARY, psk: "hex:000102030405060708090a0b0c0d0e0f"}

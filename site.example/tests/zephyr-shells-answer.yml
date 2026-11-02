@@ -1,0 +1,13 @@
+---
+# A library test (docs/ARCHITECTURE.md#runs-tests-and-campaigns): it lives once here and runs on any layout that binds
+# its roles to boards of its own (`bench_test_bindings`). Role `a` is any Zephyr shell board,
+# `b` one of the plugin's settings application; each step names a role, never a board.
+summary: a Zephyr shell board and a settings board both answer
+needs:
+  roles:
+    a: {families: [bare, zephyr_settings], via: [console]}
+    b: {families: [zephyr_settings]}
+steps:
+  - {board: $a, name: version, cmd: kernel version, expect: "^Zephyr version"}
+  - {board: $b, name: up, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms", within: 5}
+  - {board: $b, name: version, cmd: kernel version, expect: "^Zephyr version"}

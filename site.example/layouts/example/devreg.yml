@@ -1,0 +1,15 @@
+---
+# example: two real boards on one bench host, as plain standalone nodes. Copy it to
+# <site>/layouts/<name>/, put your own boards in your registry (`just survey`, `just enroll`)
+# and name them here. `just show example heltec1` prints a board's declared state and where
+# each value comes from; `just plan <name>` says what applying would change.
+#
+# This copy names its own registry and RF ceiling so that it resolves in a checkout with no
+# site; a layout in a site leaves those two lines out and uses the site's.
+plugin: rxrbench.core.devreg
+registry: ../../registry.yaml
+rf_ceiling: ../../rf_rules.yml
+# A layout may tighten the site's rules, never loosen them, e.g. rf_rules: {max_tx_power: 20}
+boards:
+  heltec1: {host: bench1}
+  xiao1: {host: bench1}

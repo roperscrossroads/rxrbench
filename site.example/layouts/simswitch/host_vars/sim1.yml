@@ -1,0 +1,10 @@
+---
+# sim1 as a zephcore repeater (in layout `sim` it is a zephyrtastic node).
+firmware: {family: zephcore, role: repeater, image: zephcore-sim-repeater}
+storage:
+  zephcore: {epoch: 1, keep_identity: true}
+meshcore:
+  name: sim1zc
+  radio: {preset: usa, tx_dbm: 2, tx_enabled: true}
+  advert: {flood_interval_h: 12}
+  admin_password: sim-pass-sw1-01

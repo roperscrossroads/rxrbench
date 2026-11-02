@@ -1,0 +1,6 @@
+---
+# The simulated bench's board types (a layout with its own catalog_dir reads only it).
+boards:
+  native-sim: {mcu: native-sim, zephyr_boards: [native_sim]}
+  nuttx-sim: {mcu: nuttx-sim, nuttx_boards: [sim]}
+  mps2-an385: {mcu: cortex-m3, zephyr_boards: [mps2/an385]}

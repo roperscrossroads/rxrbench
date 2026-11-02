@@ -1,0 +1,7 @@
+---
+# What every nuttx_nsh board of this layout gets: its images are in the NuttX store, its
+# device tests read what it keeps and what it is.
+bench_image: "{{ bench_store }}/nuttx/{{ firmware.image }}"
+bench_tests:
+  - {name: uname, cmd: uname -a, expect: "^NuttX "}
+  - {name: name, cmd: cat /data/name, expect: "^{{ bench_board }}$"}

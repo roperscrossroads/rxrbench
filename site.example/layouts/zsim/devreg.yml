@@ -1,0 +1,19 @@
+---
+# zsim: a bench that is processes, of no firmware project's: two Zephyr applications (the
+# shell sample) on native_sim, on this machine, under the `bare` family. It brings its own
+# registry and catalog (site.example/sim/), so it needs nothing of a site's. Start it with
+# `just sim-zephyr-up` after `just sim-zephyr-build`; the tool then treats it like any other
+# layout: `just plan zsim`, `just apply zsim`, `just device-test zsim`.
+plugin: rxrbench.core.devreg
+layers: [sim]
+registry: ../../sim/registry.yaml
+catalog_dir: ../../sim/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  zb1: {host: simhost}
+  zb2: {host: simhost}
+  zb3: {host: simhost}
+  zb4: {host: simhost}
+  zb5: {host: simhost}
+  nb1: {host: simhost}
+  zq1: {host: simhost}

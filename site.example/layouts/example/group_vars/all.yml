@@ -1,0 +1,47 @@
+---
+# What the whole layout shares. (A bench with several layouts states this once, in a layer.)
+
+# Nothing is written to these boards until this says true: a layout can always be planned.
+bench_apply_allowed: false
+
+# How much the checks read (docs/ARCHITECTURE.md#checking-depth). `full` asks every board what it runs on
+# every plan. `spot` lets a plan take a board's last full read instead, while the bench host's
+# plug watcher has seen nothing on its port since (`-e bench_check_depth=spot` for one run);
+# a write by hand or over the air is not seen, so a bench where people flash boards keeps full.
+bench_check_depth: full
+
+# Where staged images are kept on the workstation (`just stage-image` fills it).
+bench_store: "{{ bench_repo }}/.build/store"
+
+# The modules run on the bench host, in a venv the default install builds there: the mesh
+# plugin's (`mesh` in its host/venvs), since these boards run mesh firmware and its modules
+# import the Meshtastic library. A site with no mesh boards names `~/.venv-bench` instead.
+# `bench` is the example's bench-host user.
+ansible_python_interpreter: /home/bench/.venv-mesh/bin/python
+
+# The firmware build the boards are declared to run, and the staged image of it for each
+# board's class.
+builds:
+  zephyrtastic:
+    tree: "{{ lookup('ansible.builtin.env', 'HOME') }}/zephyrtastic/main"
+    ref: main
+    version: "0.4.44"
+    build: 0a1b2c3d
+bench_image: "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}"
+
+# What `just device-test example` checks on each board.
+bench_tests:
+  - {name: version, cmd: meshtastic version, expect: "^class:\\s+{{ firmware.class }}\\b"}
+  - {name: state, cmd: meshtastic state, expect: "^~S\\{.*\\}\\*[0-9a-f]{4}$"}
+
+# What the whole layout may also say (docs/LAYOUT.md):
+# bench_foreign: warn              # what a plan does with other firmware the survey found on a
+#                                  # chip (info, the default; warn; refuse)
+# bench_diag_commands:             # `just diag` collects these beyond the family's defaults
+#   - {name: uptime, cmd: kernel uptime}
+# bench_diag_console_bytes: 65536  # and this much of each console's log
+# bench_broker_boards: [heltec1]   # the boards a bench host runs serial brokers for
+#
+# For one run, never in a file: `just apply example -e bench_full_erase=true` gives an
+# esp-image board a full install (every data partition as the image has it) instead of an
+# update.

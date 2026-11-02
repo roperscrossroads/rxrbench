@@ -1,0 +1,21 @@
+---
+# zsim-vm: the simulated Zephyr bench (layout zsim) on the simulated bench host: the same two
+# boards, running inside a VM on this machine that the tool treats as a bench host (ssh, the
+# default install, the brokers, the plug watcher), reached as a Pi would be.
+#   just sim-host-setup; just sim-host-up        the host (docs/SIMULATED.md)
+#   just hosts-install vmhost1                   the default install in it
+#   just hosts-setup zsim-vm                     the brokers and the sim bench in it
+#   just plan zsim-vm; just bench-test zsim-vm   the bench
+plugin: rxrbench.core.devreg
+layers: [sim]
+registry: ../../sim/registry.yaml
+catalog_dir: ../../sim/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  zb1: {host: vmhost1}
+  zb2: {host: vmhost1}
+  zb3: {host: vmhost1}
+  zb4: {host: vmhost1}
+  zb5: {host: vmhost1}
+  nb1: {host: vmhost1}
+  zq1: {host: vmhost1}

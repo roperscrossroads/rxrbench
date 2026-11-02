@@ -1,0 +1,21 @@
+---
+# Sockets, interpreter, store and the sim flasher: from layers/sim (devreg.yml `layers:`).
+
+# Simulated boards may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+
+# The image each board is declared to run: from the image store `just sim-build` fills.
+bench_image: "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.class }}"
+
+builds:
+  zephyrtastic:
+    tree: "{{ bench_sources.zephyrtastic.workspace ~ '/main' }}"
+    ref: main
+    version: "0.0.0"
+
+# What `just device-test sim` checks on each board: it answers, it is the class declared for
+# it, its state line is whole, and nothing in its reset history is a watchdog.
+bench_tests:
+  - {name: version, cmd: meshtastic version, expect: "^class:\\s+{{ firmware.class }}\\b"}
+  - {name: state, cmd: meshtastic state, expect: "^~S\\{.*\\}\\*[0-9a-f]{4}$"}
+  - {name: resets, cmd: meshtastic resets, refuse: WATCHDOG}

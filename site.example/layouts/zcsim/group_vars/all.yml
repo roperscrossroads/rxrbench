@@ -1,0 +1,10 @@
+---
+# Sockets, interpreter, store and the sim flasher: from layers/sim (devreg.yml `layers:`).
+bench_apply_allowed: true
+
+# The image each board is declared to run, from the store `just sim-build-zephcore` fills.
+bench_image: "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.role }}"
+
+# What `just device-test zcsim` checks: the state line is whole, and the node may transmit.
+bench_tests:
+  - {name: state, cmd: zephcore state, expect: "^~S\\{.*\\}\\*[0-9a-f]{4}$"}

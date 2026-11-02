@@ -1,0 +1,12 @@
+---
+# Where this site is. A site copies this to <site>/rf_rules.yml; until a region is set, a
+# layout whose boards transmit is refused.
+#
+# The region gives the band a transmitter must stay in and the most it may put out, the
+# values the mesh firmware itself ships for it: US 902-928 MHz, 30 dBm; EU 869.4-869.65 MHz,
+# 27 dBm; JP 920.5-923.5 MHz, 13 dBm. A board declared for another region is refused.
+region: US
+max_tx_power: 30   # dBm: what the region allows. A site may say less, never more.
+
+# A layout's own `rf_rules` may only tighten what is here: a bench that keeps to itself says
+# `rf_rules: {max_tx_power: 2}` in its devreg.yml.

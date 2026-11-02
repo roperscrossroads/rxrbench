@@ -1,0 +1,9 @@
+---
+# The plugin collections this site loads (docs/PLUGINS.md). A site's own collections live in
+# <site>/collections.
+plugins:
+  - rxrbench.mesh
+  - rxrbench.linux
+  - rxrbench.zephyr
+  - rxrbench.nuttx
+  - rxrbench.launcher

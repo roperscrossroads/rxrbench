@@ -1,0 +1,9 @@
+---
+# An emulated MCU under MCUboot: Zephyr's SMP server on the MPS2 AN385 in QEMU, MCUboot in
+# RAM-load mode with revert, the slots in a simulated flash the machine keeps across a CPU
+# reset. Written through the SMP flasher on the pty its broker releases; this is the board
+# where the upload is swapped in: MCUboot runs the uploaded image at the reset and the flasher
+# confirms it, and refuses a lower version (the mode runs the highest it has). A power cycle
+# (`just erase`) is the factory image again: its flash is the machine's RAM.
+firmware: {family: zephyr_mcumgr, image: zq}
+bench_flasher: smp

@@ -1,0 +1,6 @@
+---
+# The simulated A/B device, and the signed bundle it is brought to (`just sim-vm-bundle`).
+firmware: {family: linux_rauc, image: sim-ab-plain}
+bench_bundle: ~/.cache/rxrbench/simvm/bundles/update-1.1-sim.raucb
+# This family names no landing place: the layout says where a bundle goes on the device.
+bench_rauc_remote_bundle: /data/update.raucb

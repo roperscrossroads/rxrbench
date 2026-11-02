@@ -1,0 +1,9 @@
+---
+# What every zephyr_settings board of this layout gets (the group family_zephyr_settings):
+# device tests that read the settings the application keeps, the version being the one of
+# the declared image (zapp-1.1 writes 1.1), so an upgrade or a downgrade shows in the tests.
+bench_tests:
+  - {name: version, cmd: settings read string app/version,
+     expect: "^{{ firmware.image | regex_replace('^zapp-', '') }}$"}
+  - {name: name, cmd: settings read string net/name, expect: "^{{ bench_board }}$"}
+  - {name: uptime, cmd: kernel uptime, expect: "^Uptime: [0-9]+ ms"}

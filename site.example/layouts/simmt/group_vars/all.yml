@@ -1,0 +1,11 @@
+---
+# A simulated node may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+
+# The module runs here and needs the `meshtastic` library: this repo's venv.
+ansible_python_interpreter: "{{ bench_repo }}/venv/bin/python"
+
+# The device registry tool: this repository's own (a bench host's deployed copy, ~/.devreg, is
+# what `just hosts-setup` puts on a real one; a simulated layout runs here).
+bench_tools:
+  devreg: "{{ bench_repo }}/devreg/devreg.py"

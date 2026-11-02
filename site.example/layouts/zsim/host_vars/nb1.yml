@@ -1,0 +1,13 @@
+---
+# A simulated NuttX board: NSH on NuttX's sim, the rxrbench.nuttx plugin's family. Its storage
+# is a host directory it mounts (hostfs) where a real board would mount a flash file system;
+# what it keeps is files there, some of them secrets (the plugin's README).
+firmware: {family: nuttx_nsh, image: nsh}
+nuttx:
+  storage: {at: /data, type: hostfs, source: "{{ bench_sim_run }}/{{ bench_board }}.data"}
+  files:
+    /data/psk: psk-nb1-0123456789abcdef
+    /data/cert: MIIBszCCAVmgAwIBAgIUQnb1cert00000000000000000000000000000000000000000
+    /data/name: nb1
+  secrets: {psk: /data/psk, cert: /data/cert}
+  facts: [/data/name]

@@ -1,0 +1,15 @@
+---
+# What every simulated layout shares (sim, zcsim, simswitch inherit it with `layers: [sim]`).
+# What differs between them (the image, the build, the device tests) stays in each layout.
+
+# Where `just sim-up` keeps the boards' sockets, logs and flash files.
+bench_sim_run: >-
+  {{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}
+bench_socket: "{{ bench_sim_run }}/{{ bench_board }}.sock"
+
+# The modules run here, and a config write needs the `meshtastic` library: this repo's venv.
+ansible_python_interpreter: "{{ bench_repo }}/venv/bin/python"
+
+# The image store `just sim-build` fills, and the flasher that copies a file into a sim board.
+bench_store: "{{ bench_repo }}/.build/store"
+bench_flasher: sim

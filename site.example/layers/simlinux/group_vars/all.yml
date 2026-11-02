@@ -1,0 +1,8 @@
+---
+# What every simulated Linux layout shares.
+
+# The modules run here and drive ssh: this repo's venv.
+ansible_python_interpreter: "{{ bench_repo }}/venv/bin/python"
+
+# A simulated device's LED is a directory with a trigger file, as under /sys/class/leds.
+bench_led_path: /run/leds/act

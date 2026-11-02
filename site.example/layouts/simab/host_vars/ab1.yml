@@ -1,0 +1,7 @@
+---
+# The simulated A/B device, and the signed bundle it is brought to (`just sim-vm-bundle`).
+firmware: {family: linux_slotguard, image: sim-ab}
+bench_bundle: ~/.cache/rxrbench/simvm/bundles/update-1.1-sim.raucb
+# The image was built with a 10 s soak (the harness's), not the family's 300 s.
+bench_health_soak: 10
+bench_wait_good: 180

@@ -1,0 +1,3 @@
+---
+# A simulated Zephyr board: the shell sample, known by its bytes.
+firmware: {family: bare, image: zephyr-shell}

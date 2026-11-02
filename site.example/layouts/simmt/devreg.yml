@@ -1,0 +1,10 @@
+---
+# simmt: stock Meshtastic with no hardware. One node, meshtasticd (Meshtastic's Linux build,
+# simulated radio) in a container, configured through its network API the way a stock node on
+# the network is. Start it with `just sim-mt-up`; then `just plan simmt`, `just apply simmt`.
+plugin: rxrbench.core.devreg
+registry: ../../../collections/ansible_collections/rxrbench/mesh/sim/stock/registry.yaml
+catalog_dir: ../../../collections/ansible_collections/rxrbench/mesh/sim/stock/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  mt1: {host: simhost}

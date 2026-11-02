@@ -1,0 +1,30 @@
+---
+# A XIAO as a plain node: the member image (class 1 of catalog/zephyrtastic.yml) with no role.
+# The firmware's own defaults for the site's region: LongFast at 30 dBm.
+zephyrtastic: {intents: none}
+firmware: {family: zephyrtastic, class: 1}
+meshtastic:
+  owner: xiao1
+  owner_short: xiao
+  config:
+    lora: {region: US, modem_preset: LONG_FAST, tx_power: 30, tx_enabled: true}
+    device: {role: CLIENT, rebroadcast_mode: ALL}
+  channels:
+  - {index: 0, name: "", role: PRIMARY, psk: default}
+
+# A UF2 board's bootloader (`just boot`), when the layout wants one, and the small image that
+# carries the board through the update when its installed image reaches the staging area:
+# bench_bootloader: {name: otafix, version: 0.9.2-OTAFIX2.5, sha256: <the update file's sha256>}
+# bench_bootloader_carrier: "{{ bench_store }}/bare/xiao-carrier"
+#
+# On a first flash, when the app it arrives with could be either of two firmwares whose shells
+# run on the same USB vendor (two Zephyr families on 2fe3), the plan refuses until it is named:
+# bench_uf2_enter_as: zephyrtastic
+#
+# An RP2040 or RP2350 board written through its ROM bootloader (flasher picoboot) may say how to
+# get it there and how long to wait; a XIAO nRF52840 like this one has none of these:
+# bench_picoboot_enter: [touch-1200, "shell:meshtastic dfu", manual]
+# bench_picoboot_manual_wait: 30   # seconds to hold BOOTSEL and press reset (0: not offered)
+# bench_picoboot_enter_wait: 10
+# bench_picoboot_ask_timeout: 15
+# bench_console_elsewhere: true    # its image's shell is on a UART wired to the bench host

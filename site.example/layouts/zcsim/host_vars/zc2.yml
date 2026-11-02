@@ -1,0 +1,10 @@
+---
+# A simulated zephcore repeater. Declared as a bench node would be: the USA preset at 2 dBm.
+firmware: {family: zephcore, role: repeater, image: zephcore-sim-repeater}
+storage:
+  zephcore: {epoch: 1, keep_identity: true}
+meshcore:
+  name: zc2
+  radio: {preset: usa, tx_dbm: 2, tx_enabled: true}
+  advert: {flood_interval_h: 12}
+  admin_password: sim-pass-zc2-01

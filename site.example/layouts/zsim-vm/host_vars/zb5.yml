@@ -1,0 +1,7 @@
+---
+# A simulated Zephyr board that takes images over MCUmgr: Zephyr's SMP server on native_sim,
+# known by the executable it runs, written through the SMP flasher on the pty its broker
+# releases. (Nothing swaps the uploaded image in: native_sim has no bootloader; the flasher
+# says so. The swap itself is the QEMU board's.)
+firmware: {family: zephyr_mcumgr, image: zsmp}
+bench_flasher: smp

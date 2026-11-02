@@ -1,0 +1,12 @@
+---
+# A simulated Zephyr board of the zephyr_settings family: the rxrbench.zephyr plugin's example
+# application, with the settings and secrets a device of it holds (the plugin's README).
+firmware: {family: zephyr_settings, image: zapp-1.0}
+zephyr:
+  device_key: app/key
+  settings:
+    app/psk: psk-zb3-0123456789abcdef
+    tls/cert: MIIBszCCAVmgAwIBAgIUQzb3cert0000000000000000000000000000000000000000
+    net/name: zb3
+  secrets: {psk: app/psk, cert: tls/cert}
+  facts: [app/version, net/name]
