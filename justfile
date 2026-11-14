@@ -346,6 +346,14 @@ bench-test layout *args:
 run layout *args:
     ./venv/bin/python tools/run.py {{layout}} {{args}}
 
+# exercise one board: every verb that applies to it, reads first, then writes each undone within the
+# run, then (--destructive) the destructive ones each with its restore; the board planned at the
+# start and the end; a record per board under runs/<time>/exercise/ (--list says what applies)
+[group("plan and apply")]
+[doc("exercise one board of a layout: every verb that applies to it, reads first, then writes each undone within the run, then with `--destructive` the destructive ones each with its restore; `--list` says what applies and why, `--skip <verb,..>` leaves verbs out, `--record` keeps the record as the site's latest for the board; the record is `runs/<time>/exercise/<board>.json`. It writes to the board: what would run unless `confirm=apply`")]
+exercise layout board *args:
+    ./venv/bin/python tools/exercise.py {{layout}} {{board}} {{args}}
+
 # a campaign: a declared sequence of bench states (<site>/campaigns/<name>.yml), each applied,
 # checked clean and tested in turn; a failed apply stops it (docs/ARCHITECTURE.md#runs-tests-and-campaigns)
 [group("plan and apply")]
