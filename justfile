@@ -354,6 +354,14 @@ run layout *args:
 exercise layout board *args:
     ./venv/bin/python tools/exercise.py {{layout}} {{board}} {{args}}
 
+# the capability matrix's table from the exercise records the site keeps (<site>/exercise/*.json,
+# the newest per board): written between two markers in <site>/docs/CAPABILITY-MATRIX.md, the
+# hand-written notes around it kept; --check says whether the file is what the records say
+[group("plan and apply")]
+[doc("the capability matrix's table from the site's exercise records (`<site>/exercise/*.json`, the newest per board), written between the markers in `<site>/docs/CAPABILITY-MATRIX.md`; `--check` exits 1 when the file is stale, `--stdout` prints the table")]
+matrix *args:
+    ./venv/bin/python tools/matrix.py {{args}}
+
 # a campaign: a declared sequence of bench states (<site>/campaigns/<name>.yml), each applied,
 # checked clean and tested in turn; a failed apply stops it (docs/ARCHITECTURE.md#runs-tests-and-campaigns)
 [group("plan and apply")]

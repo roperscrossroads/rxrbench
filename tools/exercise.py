@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """exercise.py <layout> <board> [--destructive] [--skip verb,..] [--list] [--json]: one board through
 every verb of the tool that applies to it, and a record of what happened. `--record` keeps the
-record as the site's latest for the board (`<site>/exercise/<board>.json`).
+record as the site's latest for the board (`<site>/exercise/<board>.json`), the file
+`tools/matrix.py` reads.
 
 What applies is derived from what the inventory publishes for the board (`ansible-inventory
 --host`), from the firmware catalog and from the images staged in the store, never from a list

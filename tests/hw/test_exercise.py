@@ -3,7 +3,7 @@ runs once per board named in RXRBENCH_HW_BOARDS, and every verb of it is one tes
 verb that does not apply is a skip with its reason and one verb can be asked for with -k. The
 exercise writes to the board: every reversible verb, and with RXRBENCH_HW_DESTRUCTIVE=1 the
 destructive ones too. With RXRBENCH_HW_RECORD=1 the record is kept as the site's latest for the
-board (`<site>/exercise/<board>.json`)."""
+board (`<site>/exercise/<board>.json`), the file tools/matrix.py reads."""
 import importlib.util
 import os
 import subprocess

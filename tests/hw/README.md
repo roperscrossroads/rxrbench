@@ -35,4 +35,5 @@ RXRBENCH_HW_LAYOUT=mybench RXRBENCH_HW_BOARDS=node1 RXRBENCH_HW_DESTRUCTIVE=1 ./
 ```
 
 The record each run leaves is `runs/<time>/exercise/<board>.json`; with `RXRBENCH_HW_RECORD=1` it
-is also kept as the site's latest for the board (`<site>/exercise/<board>.json`).
+is also kept as the site's latest for the board (`<site>/exercise/<board>.json`), which is what
+`just matrix` reads to write the site's capability matrix table.
