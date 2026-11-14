@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          fetch-depth: 0     # a pull request's tests are chosen from what it changed against its base
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
@@ -33,8 +35,19 @@ jobs:
             ./venv/bin/pip install -q -r "$r"
           done
           ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
-      - name: Unit tests
-        run: ./venv/bin/pytest -q -rs tests/unit
+      - name: Unit tests (on a pull request, those its changes need; everything on a push)
+        run: |
+          sel=ALL
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            sel=$(./venv/bin/python tools/select_tests.py "origin/${{ github.base_ref }}..HEAD")
+          fi
+          if [ "$sel" = ALL ]; then
+            ./venv/bin/pytest -q -rs tests/unit
+          else
+            unit=$(printf '%s\n' "$sel" | grep '^tests/unit/' || true)
+            echo "selected: $(printf '%s\n' "$unit" | grep -c . || true) unit test files"
+            if [ -n "$unit" ]; then ./venv/bin/pytest -q -rs $unit; fi
+          fi
       - name: Core alone, without the bundled plugins (core-portability P1)
         run: ./venv/bin/python tools/core_only.py -rs
       - name: Lint

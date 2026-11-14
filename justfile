@@ -135,6 +135,19 @@ devreg *args:
 features *args:
     ./venv/bin/python tools/features.py {{ if args == "" { "--check" } else { args } }}
 
+# the tests a change needs (tools/select_tests.py): the features it touches, the tests that load the
+# changed files, the plays on its plugin's boards; shared ground runs everything
+[group("the tool")]
+[doc("the unit and sim tests a change needs, from what it changed against `base` (default origin/main): the tests of the features it touches and of the files it changed; shared ground (the test harness, plugin loading, requirements, workflows) runs everything")]
+test-changed base="origin/main" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sel=$(./venv/bin/python tools/select_tests.py "{{base}}..HEAD")
+    if [ "$sel" = ALL ]; then sel="tests/unit tests/sim"; fi
+    echo "$sel" | tr ' ' '\n' | sed 's/^/  /'
+    [ -z "$sel" ] && { echo "nothing to test"; exit 0; }
+    ./venv/bin/pytest -q $sel {{args}}
+
 # core alone: the unit tests against a tree with core and a fixture plugin only
 # (docs/ARCHITECTURE.md#core-portability)
 [group("the tool")]

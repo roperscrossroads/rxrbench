@@ -427,9 +427,9 @@ features:
       hw: [came-back]
   - id: core.features
     kind: capability
-    summary: this index, its check, and the features a changed file belongs to
+    summary: this index, its check, and the tests a change needs (the features a changed file belongs to)
     on_board: false
     paths: [features.yml]
-    repo_paths: [tools/features.py]
+    repo_paths: [tools/features.py, tools/select_tests.py]
     tests:
-      unit: [tests/unit/test_features.py]
+      unit: [tests/unit/test_features.py, tests/unit/test_select_tests.py]

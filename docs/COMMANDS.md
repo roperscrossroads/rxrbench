@@ -12,6 +12,7 @@ one that writes outside `apply` is a plan unless `confirm=apply` is among its ar
 | `just setup` | the tool's venv, the collections, sops and age (pinned), the git hooks |
 | `just pins [args ...]` | the pinned single-file tools on this machine: `list`, `install [name ...]`, `path` (`core/host/binaries.yml`, `docs/GETTING-STARTED.md#requirements`) |
 | `just features [args ...]` | the feature index (each collection's `features.yml`): checked against the code by default; `--gaps` what is unproven, `--list` every feature, `--owners <path>...` the features a file belongs to |
+| `just test-changed [base=origin/main] [args ...]` | the unit and sim tests a change needs, from what it changed against `base` (default origin/main): the tests of the features it touches and of the files it changed; shared ground (the test harness, plugin loading, requirements, workflows) runs everything |
 | `just core-only [args ...]` | the unit tests against core alone: a collections tree with `rxrbench.core` and a fixture plugin, no bundled plugin (`docs/ARCHITECTURE.md#core-portability` P1) |
 | `just privacy` | the privacy check alone: refuse site-private text in the tool's tracked files (`CONTRIBUTING.md#public-and-private`) |
 | `just ci [job=containers]` | a GitHub Actions job (default `containers`) and the jobs it needs, run here with `act` as GitHub runs it: a non-root user with sudo, on a clean clone of HEAD (needs `act` and Docker) |
