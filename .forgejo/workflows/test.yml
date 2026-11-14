@@ -5,9 +5,11 @@
 # sims need a Docker daemon inside the job and the simulated bench host needs KVM, so they run
 # on GitHub only (docs/SIMULATED.md).
 #
-# The jobs ask for the label `docker`: a runner that runs each job in its own container (a
-# Debian image with node, which the checkout action needs), as root. Python comes from uv, at
-# the version the workstation runs.
+# The jobs ask for the label `docker`: a runner that runs each job in its own container, as root.
+# Both run in the zephyr-arm image (github.com/roperscrossroads/images, pinned by digest): node for
+# the checkout action, the system python3 with PyYAML as on a bench host, uv with Python 3.12 (the
+# version the workstation runs), the Zephyr SDK's Arm toolchain and the native_sim, QEMU and NuttX
+# host tools.
 name: test
 on:
   push:
@@ -21,6 +23,8 @@ env:
 jobs:
   unit:
     runs-on: docker
+    container:   # zephyr-arm:20261114
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
@@ -28,11 +32,6 @@ jobs:
           # GITHUB_TOKEN) when one is defined, which an organisation may have for something
           # else; this is the job's own token
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Python, and the system python3 with PyYAML as on a bench host
-        run: |
-          apt-get update -q
-          apt-get install -y -q python3 python3-venv python3-pip python3-yaml
-          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh  # upstream (privacy: allow)
       - name: The tool's venv
         run: |
           uv venv -q --python 3.12 --seed venv
@@ -58,6 +57,8 @@ jobs:
   sim:
     runs-on: docker
     needs: unit
+    container:   # zephyr-arm:20261114
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
     env:
       RXRBENCH_ZEPHYR_WORKSPACE: /root/ws
       RXRBENCH_NUTTX_WORKSPACE: /root/ws/nuttx-ws
@@ -65,20 +66,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}   # the job's own token (see the unit job)
-      - name: Host build tools and Python
-        run: |
-          apt-get update -q
-          apt-get install -y -q python3 python3-venv python3-pip python3-yaml ninja-build gperf \
-            device-tree-compiler gcc g++ gcc-multilib g++-multilib qemu-system-arm xz-utils wget \
-            file make bison flex
-          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh  # upstream (privacy: allow)
-      - name: A Zephyr workspace from the repository's manifest, and the SDK's Arm toolchain
+      - name: A Zephyr workspace from the repository's manifest
         run: |
           # the west workspace holds the tool as its manifest project (`self: path: rxrbench`)
           mkdir -p /root/ws && cp -a . /root/ws/rxrbench
           uv venv -q --python 3.12 --seed /root/ws/.venv
-          # CMake from PyPI: Zephyr 4.5 wants 3.28, newer than the distribution's
-          /root/ws/.venv/bin/pip install -q west cmake==3.31.6
+          /root/ws/.venv/bin/pip install -q west
           echo "/root/ws/.venv/bin" >> "$GITHUB_PATH"
           export PATH="/root/ws/.venv/bin:$PATH"
           cd /root/ws
@@ -90,8 +83,6 @@ jobs:
           pip install -q -r zephyr/scripts/requirements-base.txt \
             -r bootloader/mcuboot/scripts/requirements.txt
           west zephyr-export
-          west sdk install -t arm-zephyr-eabi -b /root/sdk
-          d=$(ls -d /root/sdk/*/ | head -1); echo "ZEPHYR_SDK_INSTALL_DIR=${d%/}" >> "$GITHUB_ENV"
       - name: The tool's venv
         working-directory: /root/ws/rxrbench
         run: |
@@ -124,7 +115,7 @@ jobs:
       - name: The MCUmgr client venv the SMP module runs with
         working-directory: /root/ws/rxrbench
         run: |
-          uv venv -q --python 3.13 --seed /root/.venv-mcumgr
+          uv venv -q --python 3.12 --seed /root/.venv-mcumgr
           /root/.venv-mcumgr/bin/pip install -q \
             -r collections/ansible_collections/rxrbench/core/host/venvs/mcumgr.txt
       - name: NuttX, its apps and its sim board at two builds (the nuttx plugin's board)

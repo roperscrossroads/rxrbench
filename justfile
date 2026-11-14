@@ -247,8 +247,8 @@ reboot layout board *args:
 # loopback ports).
 # run a GitHub Actions job (and the jobs it needs) here with act, as GitHub runs it
 [group("the tool")]
-[doc("a GitHub Actions job (default `containers`) and the jobs it needs, run here with `act` as GitHub runs it: a non-root user with sudo, on a clean clone of HEAD (needs `act` and Docker)")]
-ci job="containers":
+[doc("a GitHub Actions job (default `containers`) run here with `act` as GitHub runs it, on a clean clone of HEAD: with the jobs it needs, as a non-root user with sudo; or, for a job with its own image (`mesh-sim`, `sim`), that job alone, as root in its image (needs `act` and Docker)")]
+ci job="containers" *args:
     #!/usr/bin/env bash
     set -euo pipefail
     # a clone, not a worktree: a worktree's .git points back into this repository, which the
@@ -256,10 +256,26 @@ ci job="containers":
     tmp="$(mktemp -d)"; wt="$tmp/rxrbench"
     git clone -q --no-hardlinks . "$wt" && git -C "$wt" checkout -q --detach "$(git rev-parse HEAD)"
     trap 'rm -rf "$tmp"' EXIT
+    wf="$wt/.github/workflows/test.yml"
+    if ./venv/bin/python -c 'import sys, yaml; sys.exit(0 if "container" in yaml.safe_load(open(sys.argv[1]))["jobs"][sys.argv[2]] else 1)' "$wf" {{job}}; then
+        # its own image, as root (act's user options would apply to it too): the job alone, its
+        # needs and its pull-request condition left out
+        ./venv/bin/python - "$wf" {{job}} <<'PY'
+    import sys, yaml
+    p, job = sys.argv[1:]
+    wf = yaml.safe_load(open(p))
+    j = wf["jobs"][job]; j.pop("needs", None); j.pop("if", None)
+    wf["jobs"] = {job: j}; wf["on"] = wf.pop(True, None) or wf.get("on")
+    yaml.safe_dump(wf, open(p, "w"), sort_keys=False)
+    PY
+        act -C "$wt" -W "$wf" -j {{job}} --artifact-server-path "$tmp/artifacts" \
+            -s GITHUB_TOKEN="$(gh auth token 2>/dev/null || true)" {{args}}
+        exit
+    fi
     docker build -q -t rxrbench-act-runner --build-arg UID="$(id -u)" tools/ci >/dev/null
     act -C "$wt" -j {{job}} -P ubuntu-24.04=rxrbench-act-runner --pull=false --bind --network host \
         --env HOME=/home/runner --env USER=runner --env LOGNAME=runner \
-        --container-options "--user runner --group-add $(stat -c %g /var/run/docker.sock)"
+        --container-options "--user runner --group-add $(stat -c %g /var/run/docker.sock)" {{args}}
 
 # stage a catalogued image from its published source (fetched, sha256-checked) into the image store
 [group("plan and apply")]

@@ -15,7 +15,7 @@ one that writes outside `apply` is a plan unless `confirm=apply` is among its ar
 | `just test-changed [base=origin/main] [args ...]` | the unit and sim tests a change needs, from what it changed against `base` (default origin/main): the tests of the features it touches and of the files it changed; shared ground (the test harness, plugin loading, requirements, workflows) runs everything |
 | `just core-only [args ...]` | the unit tests against core alone: a collections tree with `rxrbench.core` and a fixture plugin, no bundled plugin (`docs/ARCHITECTURE.md#core-portability` P1) |
 | `just privacy` | the privacy check alone: refuse site-private text in the tool's tracked files (`CONTRIBUTING.md#public-and-private`) |
-| `just ci [job=containers]` | a GitHub Actions job (default `containers`) and the jobs it needs, run here with `act` as GitHub runs it: a non-root user with sudo, on a clean clone of HEAD (needs `act` and Docker) |
+| `just ci [job=containers] [args ...]` | a GitHub Actions job (default `containers`) run here with `act` as GitHub runs it, on a clean clone of HEAD: with the jobs it needs, as a non-root user with sudo; or, for a job with its own image (`mesh-sim`, `sim`), that job alone, as root in its image (needs `act` and Docker) |
 | `just docs` | the generated reference into `.build/docs`: the collections' modules, plugins and roles (antsibull-docs, Sphinx) and the Python API (pdoc), from the pinned doc tools |
 | `just docs-lint` | antsibull-docs' lint of every collection's docs, as CI runs it |
 | `just docs-layout` | write `docs/LAYOUT.md`'s tables and the role specs' layout variables from `docs/layout-vars.yml` (a unit test checks them) |

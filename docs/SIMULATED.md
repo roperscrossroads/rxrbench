@@ -99,9 +99,15 @@ each brings its bench up and down itself.
 | `sim` | a Zephyr workspace per release (4.5.0 and 4.4.1), the `zsim` images built, NuttX cloned at a pinned tag; the `zsim` tests, MCUmgr, NuttX, the emulated MCU (skipped on 4.4.1), core alone with a sim, run records, campaigns |
 | `vm` | the `sim` job's images, QEMU, the cloud image (cached by its pin); the whole round trip on the simulated host |
 
+`mesh-sim` and `sim` run as root inside a CI image, `ghcr.io/roperscrossroads/zephyr-arm`
+(built from [roperscrossroads/images](https://github.com/roperscrossroads/images), pinned by
+digest): the Zephyr SDK's Arm toolchain, the `native_sim`, QEMU and NuttX host tools and uv's
+Python 3.12, so neither job installs a toolchain. `sim` also keeps its built images in the Actions
+cache, keyed by what they are built from, and builds them again only when that changes.
+
 In `containers` and `mesh-sim` a skipped test fails the job: a sim that did not run tested
 nothing. `just ci [job]` runs a job and the jobs it needs locally with `act`, as GitHub does
-(a non-root user with sudo, a clean clone of HEAD).
+(a clean clone of HEAD; a non-root user with sudo, or the job's own image).
 
 Not in CI, run on a workstation: `zcsim` and `simswitch` (zephcore has no public source), and
 `simab`/`simabrauc` (`tests/sim/test_rauc_sim.py`: the device image is a Yocto build of hours).
@@ -110,7 +116,7 @@ A second workflow, `.github/workflows/docs.yml`, builds the generated reference 
 on each push to `main` and publishes it to GitHub Pages.
 
 On a Forgejo instance, `.forgejo/workflows/test.yml` runs the `unit` job and the `sim` job (Zephyr
-4.5.0) on a runner labelled `docker`; the container sims and the VM need a Docker daemon and KVM,
+4.5.0) on a runner labelled `docker`, in the same image; the container sims and the VM need a Docker daemon and KVM,
 so they run on GitHub only.
 
 ## What they cannot do
