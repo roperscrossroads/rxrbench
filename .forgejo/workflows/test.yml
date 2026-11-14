@@ -82,10 +82,13 @@ jobs:
           export PATH="/root/ws/.venv/bin:$PATH"
           cd /root/ws
           west init -l rxrbench --mf "west-zephyr-$ZEPHYR.yml"
-          west update -o=--depth=1
-          west zephyr-export
+          # --narrow fetches each project's pinned revision itself: a shallow fetch of the branch
+          # tips misses a module pinned to a commit its branch has moved past (zcbor in 4.5.0)
+          west update --narrow -o=--depth=1
+          # Zephyr's Python requirements before its west commands: zephyr-export imports jsonschema
           pip install -q -r zephyr/scripts/requirements-base.txt \
             -r bootloader/mcuboot/scripts/requirements.txt
+          west zephyr-export
           west sdk install -t arm-zephyr-eabi -b /root/sdk
           d=$(ls -d /root/sdk/*/ | head -1); echo "ZEPHYR_SDK_INSTALL_DIR=${d%/}" >> "$GITHUB_ENV"
       - name: The tool's venv
