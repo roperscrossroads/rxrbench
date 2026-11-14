@@ -115,3 +115,43 @@ def test_check_says_whether_the_file_is_what_the_records_say(tmp_path, capsys):
 
 def test_no_record_yet_is_said_in_the_tables_place(tmp_path):
     assert "No exercise record yet" in matrix.render(matrix.load(str(tmp_path)))
+
+
+# ---- the ledger: by board type and firmware, and the public table ------------------------------
+
+LEDGER = [
+    {"ts": "20261114T100000Z", "board": "b1", "board_tag": "type-a", "fw_id": "family=fam;image=fam-a;version=1.2",
+     "verb": "apply", "result": "fail", "tool_commit": "aaa"},
+    {"ts": "20261114T120000Z", "board": "b1", "board_tag": "type-a", "fw_id": "family=fam;image=fam-a;version=1.2",
+     "verb": "apply", "result": "pass", "tool_commit": "bbb"},
+    {"ts": "20261114T120000Z", "board": "b2", "board_tag": "type-b", "fw_id": "family=other;build=deadbeef",
+     "verb": "apply", "result": "fail", "tool_commit": "bbb"},
+]
+
+
+def test_the_ledger_table_is_by_board_type_and_firmware_with_the_newest_result():
+    body = matrix.render_ledger(LEDGER)
+    assert "type-a / fam image fam-a version 1.2 (b1)" in body and "type-b / other build deadbeef (b2)" in body
+    row = next(ln for ln in body.splitlines() if ln.startswith("| `apply`"))
+    day = matrix._when(LEDGER[1]["ts"])[:10]                  # pylint: disable=protected-access
+    assert f"Yes {day} `bbb`" in row and f"**No** {day} `bbb`" in row and "aaa" not in row
+
+
+def test_the_public_table_names_no_board_image_or_build():
+    body = matrix.render_ledger(LEDGER, public=True)
+    assert "b1" not in body.replace("bbb", "") and "fam-a" not in body and "deadbeef" not in body
+    assert "type-a / fam version 1.2" in body and "type-b / other" in body
+
+
+def test_the_public_table_is_written_only_past_the_privacy_check(tmp_path):
+    ok = tmp_path / "ok.md"
+    assert matrix.write_public(str(ok), matrix.render_ledger(LEDGER, public=True)) == 0 and ok.exists()
+    leaky = [{**LEDGER[0], "board_tag": "bench1." + ".".join(["home", "arpa"])}]   # built here: the tree holds no such name
+    bad = tmp_path / "bad.md"
+    assert matrix.write_public(str(bad), matrix.render_ledger(leaky, public=True)) == 1 and not bad.exists()
+
+
+def test_a_v2_record_is_read_like_a_v1_record(tmp_path):
+    (tmp_path / "b1.json").write_text(json.dumps({"v": 2, "run": "20261114T120000Z", "board": "b1",
+                                                  "steps": [], "board_tag": "type-a"}))
+    assert [r["board"] for r in matrix.load(str(tmp_path))] == ["b1"]

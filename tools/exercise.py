@@ -43,6 +43,12 @@ PASS, FAIL, SKIP = "pass", "fail", "skip"
 #: Reversible verbs that write to the bench host or the site only, never to the board: they run
 #: whatever the board's state, since nothing of theirs needs undoing.
 HOST_ONLY = {"backup-regions", "backup-chip", "keys-export"}
+#: What a verb needs this run to have done first, so a selected verb brings it along.
+NEEDS = {"restore-regions": ("backup-regions",), "erase-region": ("backup-regions",),
+         "erase-chip": ("backup-chip",), "family-switch": ("backup-chip",),
+         "update-there-and-back": ("backup-chip",)}
+#: Always run: the start plan (whether the board matches its layout) and the end (came-back).
+ALWAYS = {"plan"}
 #: The flashers whose deep survey resets the chip into its ROM loader and back (core's own names).
 DEEP_RESETS = ("esptool", "esp-image")
 #: The backup play's "Where it went" line: `<board>: regions <stamp> (...); chip <stamp> (...); ...`.
@@ -405,7 +411,8 @@ class Exercise:
     """One board of one layout through every verb that applies to it, in order, recorded."""
 
     def __init__(self, layout, board, destructive=False, skip=(), env=None, runs=RUNS, now=None,
-                 plays=run_play, hv=None, images=None, layout_dir=None, hosts_dir=None, alts=None):
+                 plays=run_play, hv=None, images=None, layout_dir=None, hosts_dir=None, alts=None,
+                 only=(), stale_only=False, entries=None, max_age=None, feats=None):
         self.layout, self.board, self.destructive = layout, board, destructive
         self.skip, self.env, self.runs, self.plays = set(skip), env or {}, runs, plays
         self.layout_dir = layout_dir or site.layout_path(layout)
@@ -422,6 +429,69 @@ class Exercise:
         self.halted = None          # why the writes after a failed one are skipped
         self.dirty = None           # why the writes are skipped when the start was not clean
         self.backups = {}           # this run's own backups by level ("regions", "chip"): their stamps
+        # what to run of what applies: --only names verbs; --stale-only leaves out the verbs whose
+        # last result (the ledger's `entries`) passed against the same code, board type and firmware
+        self.only, self.stale_only, self.max_age = set(only), stale_only, max_age
+        self.entries = entries or []
+        self._feats = feats
+        self.fresh = {}             # verb -> why it is left out as fresh
+
+    # -- what each step depends on (tools/ledger.py) ------------------------------------------
+
+    @property
+    def feats(self):
+        if self._feats is None:
+            import features  # pylint: disable=import-outside-toplevel
+            self._feats = features.load()
+        return self._feats
+
+    def board_tag(self):
+        return self.hv.get("bench_board_tag")
+
+    def firmware(self):
+        import ledger  # pylint: disable=import-outside-toplevel
+        fw = self.hv.get("firmware") if isinstance(self.hv.get("firmware"), dict) else {}
+        return {**{k: fw.get(k) for k in ("family", "image", "class", "version", "build") if fw.get(k) is not None},
+                "id": ledger.fw_id(self.hv)}
+
+    def depends(self, verb):
+        """(the features a verb exercises on this board, their fingerprint)."""
+        import ledger  # pylint: disable=import-outside-toplevel
+        if not hasattr(self, "_depends"):
+            self._depends = {}  # pylint: disable=attribute-defined-outside-init
+        if verb not in self._depends:
+            ids = ledger.step_features(self.hv, verb, self.feats)
+            self._depends[verb] = (ids, ledger.fingerprint(self.hv, ids, self.feats))
+        return self._depends[verb]
+
+    def choose(self):
+        """Which applicable verbs this run leaves out (--only, --stale-only), each with why; the
+        verbs a chosen one needs (its backup) are kept."""
+        import ledger  # pylint: disable=import-outside-toplevel
+        if not self.only and not self.stale_only:
+            return
+        fw = ledger.fw_id(self.hv)
+        out = {}
+        for v in self.verbs:
+            name = v["verb"]
+            if not v["applies"] or v["kind"] == NOT_RUN or name in ALWAYS:
+                continue
+            if self.only and name not in self.only:
+                out[name] = "not among --only"
+                continue
+            if self.stale_only:
+                _ids, fp = self.depends(name)
+                ok, last = ledger.fresh(self.entries, self.board, name, self.board_tag(), fw, fp, self.max_age)
+                if ok:
+                    out[name] = (f"fresh: passed {last.get('ts')} at {last.get('tool_commit')}, and nothing it "
+                                 "depends on has changed")
+        will_run = [v["verb"] for v in self.verbs
+                    if v["verb"] not in out and v["applies"] and v["kind"] != NOT_RUN and v["verb"] not in self.skip
+                    and (v["kind"] != DESTRUCTIVE or self.destructive)]
+        for name in will_run:
+            for need in NEEDS.get(name, ()):
+                out.pop(need, None)
+        self.fresh = out
 
     # -- plays --------------------------------------------------------------------------------
 
@@ -752,11 +822,16 @@ class Exercise:
     # -- the run ------------------------------------------------------------------------------
 
     def _record_step(self, v, result, evidence, msg, seconds):
-        self.steps.append({**v, "result": result, "seconds": round(seconds, 1), "evidence": evidence, "msg": msg})
+        step = {**v, "result": result, "seconds": round(seconds, 1), "evidence": evidence, "msg": msg}
+        if v.get("applies"):
+            step["features"], step["fp"] = self.depends(v["verb"])
+        self.steps.append(step)
 
     def _why_skipped(self, v):
         if v["verb"] in self.skip:
             return "skipped on request"
+        if v["verb"] in self.fresh:
+            return self.fresh[v["verb"]]
         if not v["applies"]:
             return v["reason"]
         if v["kind"] == NOT_RUN:
@@ -773,6 +848,7 @@ class Exercise:
     def go(self):
         """Run every step and return the record."""
         start = time.monotonic()
+        self.choose()
         for v in self.verbs:
             why = self._why_skipped(v)
             if why:
@@ -797,7 +873,9 @@ class Exercise:
                            "after": (self.after or {}).get("reported"), "changes": (self.after or {}).get("changes")},
                           msg, time.monotonic() - t)
         rec = {
-            "v": 1, "run": self.run, "layout": self.layout, "board": self.board, "destructive": self.destructive,
+            "v": 2, "run": self.run, "layout": self.layout, "board": self.board, "destructive": self.destructive,
+            "board_tag": self.board_tag(), "firmware": self.firmware(),
+            "selected": {"only": sorted(self.only), "stale_only": self.stale_only, "left_out": sorted(self.fresh)},
             "family": self.hv.get("bench_family"), "flasher": self.hv.get("bench_flasher"),
             "routes": sorted(_bearers(self.hv) - {None}), "tool_commit": _commit(REPO),
             "site_commit": _commit(self.hv.get("bench_site_dir")),
@@ -813,11 +891,15 @@ class Exercise:
 
 
 def keep(rec, site_dir=None):
-    """Copy a record to the site as the board's latest (`<site>/exercise/<board>.json`); the path."""
-    path = os.path.join(site_dir or site.site_dir(), "exercise", f"{rec['board']}.json")
+    """Copy a record to the site as the board's latest (`<site>/exercise/<board>.json`) and append its
+    steps to the site's ledger (tools/ledger.py); the record's path."""
+    import ledger  # pylint: disable=import-outside-toplevel
+    site_dir = site_dir or site.site_dir()
+    path = os.path.join(site_dir, "exercise", f"{rec['board']}.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as fh:
         json.dump({k: v for k, v in rec.items() if k not in ("path", "kept")}, fh, indent=1)
+    ledger.append(ledger.path_of(site_dir), ledger.lines_of(rec))
     return path
 
 
@@ -844,17 +926,32 @@ def main(argv=None):
     ap.add_argument("--list", action="store_true", help="say what applies and stop")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--record", action="store_true",
-                    help="keep the record as the site's latest for the board (<site>/exercise/<board>.json)")
+                    help="keep the record as the site's latest for the board (<site>/exercise/<board>.json) "
+                         "and its steps in the site's ledger (exercise/ledger.jsonl)")
+    ap.add_argument("--only", default="", help="run only these verbs (comma-separated), with what they need")
+    ap.add_argument("--stale-only", action="store_true",
+                    help="leave out every verb that passed last time against the same code, board type and "
+                         "firmware (the site's ledger); the start plan and came-back always run")
+    ap.add_argument("--max-age", type=int, default=None, metavar="DAYS",
+                    help="with --stale-only: a pass older than this is stale too")
     a = ap.parse_args(argv)
     if a.confirm not in ("", "confirm=apply"):
         ap.error(f"unknown argument {a.confirm!r}: the one word taken here is confirm=apply")
     site.load_env()
-    ex = Exercise(a.layout, a.board, destructive=a.destructive, skip=[s for s in a.skip.split(",") if s])
+    entries = None
+    if a.stale_only:
+        import ledger  # pylint: disable=import-outside-toplevel
+        entries = ledger.read(ledger.path_of(site.site_dir()))
+    ex = Exercise(a.layout, a.board, destructive=a.destructive, skip=[s for s in a.skip.split(",") if s],
+                  only=[s for s in a.only.split(",") if s], stale_only=a.stale_only, entries=entries,
+                  max_age=a.max_age)
     if a.list or a.confirm != "confirm=apply":
+        ex.choose()
         # The exercise writes to the board (an apply, a region restore, a snapshot and the switch
         # back, an image update and back; with --destructive, erases): like every recipe that
         # writes, it runs only with confirm=apply, and says what it would run otherwise.
-        rows = [{**v, "result": "applies" if v["applies"] else "no"} for v in ex.verbs]
+        rows = [{**v, "result": ("left out" if v["verb"] in ex.fresh else "applies") if v["applies"] else "no",
+                 "msg": ex.fresh.get(v["verb"]) or ""} for v in ex.verbs]
         print(json.dumps(ex.verbs, indent=1) if a.json else table(rows))
         if not a.list and not a.json:
             print(f"exercise {a.board}: a plan, nothing was run; add confirm=apply to run it (it writes to the board)")

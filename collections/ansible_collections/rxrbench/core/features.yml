@@ -419,10 +419,10 @@ features:
       sim: [tests/sim/test_zephyr_sim.py, tests/sim/test_vmhost.py]
   - id: core.exercise
     kind: capability
-    summary: the board exercise (every verb that applies to one board, recorded) and the capability matrix
-    repo_paths: [tools/exercise.py, tools/matrix.py]
+    summary: the board exercise (every verb that applies to one board, recorded), its ledger and the matrix
+    repo_paths: [tools/exercise.py, tools/matrix.py, tools/ledger.py]
     tests:
-      unit: [tests/unit/test_exercise.py, tests/unit/test_matrix.py]
+      unit: [tests/unit/test_exercise.py, tests/unit/test_matrix.py, tests/unit/test_ledger.py]
       sim: [tests/sim/test_exercise_sim.py]
       hw: [came-back]
   - id: core.features

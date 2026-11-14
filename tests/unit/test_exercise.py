@@ -576,6 +576,10 @@ def test_without_confirm_apply_the_exercise_says_what_would_run_and_runs_nothing
     class Stub:
         def __init__(self, *a, **kw):
             self.verbs = exercise.applicable(FULL, IMAGES)
+            self.fresh = {}
+
+        def choose(self):
+            pass
 
         def go(self):
             ran.append(True)

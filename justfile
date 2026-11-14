@@ -370,7 +370,7 @@ run layout *args:
 # run, then (--destructive) the destructive ones each with its restore; the board planned at the
 # start and the end; a record per board under runs/<time>/exercise/ (--list says what applies)
 [group("plan and apply")]
-[doc("exercise one board of a layout: every verb that applies to it, reads first, then writes each undone within the run, then with `--destructive` the destructive ones each with its restore; `--list` says what applies and why, `--skip <verb,..>` leaves verbs out, `--record` keeps the record as the site's latest for the board; the record is `runs/<time>/exercise/<board>.json`. It writes to the board: what would run unless `confirm=apply`")]
+[doc("exercise one board of a layout: every verb that applies to it, reads first, then writes each undone within the run, then with `--destructive` the destructive ones each with its restore; `--list` says what applies and why, `--skip <verb,..>` leaves verbs out, `--record` keeps the record as the site's latest for the board and its steps in the site's ledger; `--stale-only` leaves out what passed last time against the same code, board type and firmware (`--max-age DAYS`), `--only <verb,..>` runs those; the record is `runs/<time>/exercise/<board>.json`. It writes to the board: what would run unless `confirm=apply`")]
 exercise layout board *args:
     ./venv/bin/python tools/exercise.py {{layout}} {{board}} {{args}}
 

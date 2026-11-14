@@ -67,9 +67,8 @@ def test_zb3_goes_through_every_verb_that_applies_and_comes_back(bench, site):  
     assert any(n.endswith("-facts") for n in os.listdir(d)) and any(n.endswith("-plan-end") for n in os.listdir(d))
 
 
-def test_a_board_without_the_go_ahead_gets_the_reads_alone(bench, site):  # noqa: F811  pylint: disable=redefined-outer-name
-    """The site's own copy of the layout, with the go-ahead off: the reads and the backups run,
-    nothing that writes the board does, and the record says why for each."""
+def own_site(site, apply_allowed=True):  # noqa: F811  pylint: disable=redefined-outer-name
+    """The site's own copy of the example layouts (zsim copied, so it can be edited), the rest linked."""
     root = site["RXRBENCH_SITE"]
     for entry in os.listdir(os.path.join(REPO, "site.example")):   # the layout's relative paths (../../sim) resolve
         if entry not in ("layouts", "plugins.yml", "identity") and not os.path.exists(os.path.join(root, entry)):
@@ -85,8 +84,16 @@ def test_a_board_without_the_go_ahead_gets_the_reads_alone(bench, site):  # noqa
     with open(gv) as f:
         text = f.read()
     assert "bench_apply_allowed: true" in text
-    with open(gv, "w") as f:
-        f.write(text.replace("bench_apply_allowed: true", "bench_apply_allowed: false"))
+    if not apply_allowed:
+        with open(gv, "w") as f:
+            f.write(text.replace("bench_apply_allowed: true", "bench_apply_allowed: false"))
+    return root
+
+
+def test_a_board_without_the_go_ahead_gets_the_reads_alone(bench, site):  # noqa: F811  pylint: disable=redefined-outer-name
+    """The site's own copy of the layout, with the go-ahead off: the reads and the backups run,
+    nothing that writes the board does, and the record says why for each."""
+    own_site(site, apply_allowed=False)
     applied(bench, site, "zb3")
     rc, out, rec = exercise(bench, site, "zb3", "--destructive", "--skip", "survey")
     steps = {s["verb"]: s for s in rec["steps"]}
@@ -94,3 +101,26 @@ def test_a_board_without_the_go_ahead_gets_the_reads_alone(bench, site):  # noqa
     assert steps["backup-chip"]["result"] == "pass" and steps["plan"]["result"] == "pass" and steps["keys-export"]["result"] == "pass"
     for v in ("apply", "snapshot-switch", "update-there-and-back", "erase-chip", "reboot"):
         assert steps[v]["result"] == "skip" and steps[v]["msg"] == "the layout gives this board no bench_apply_allowed", v
+
+
+def test_a_second_run_with_stale_only_leaves_out_what_passed_and_the_ledger_keeps_both(bench, site):  # noqa: F811  pylint: disable=redefined-outer-name
+    """--record keeps each step in the site's ledger; with nothing changed, --stale-only runs the start
+    plan and came-back and leaves every verb that passed out as fresh."""
+    root = own_site(site)
+    applied(bench, site, "zb3")
+    rc, out, first = exercise(bench, site, "zb3", "--skip", SKIPPED_ON_SIM, "--record")
+    assert rc == 0 and first["passed"] and first["v"] == 2, out + "\n" + failures(first)
+    assert first["board_tag"] and first["firmware"]["id"] != "unknown"
+    ledger_path = os.path.join(root, "exercise", "ledger.jsonl")
+    with open(ledger_path) as f:
+        n_first = len(f.read().splitlines())
+    passed = {s["verb"] for s in first["steps"] if s["result"] == "pass"}
+    rc, out, second = exercise(bench, site, "zb3", "--skip", SKIPPED_ON_SIM, "--stale-only", "--record")
+    assert rc == 0 and second["passed"], out + "\n" + failures(second)
+    steps = {s["verb"]: s for s in second["steps"]}
+    assert steps["plan"]["result"] == "pass" and steps["came-back"]["result"] == "pass"
+    left_out = {v for v, s in steps.items() if s["result"] == "skip" and (s.get("msg") or "").startswith("fresh:")}
+    assert left_out == passed - {"plan", "came-back"}, (left_out, passed)
+    assert "apply" in left_out and "snapshot-switch" in left_out
+    with open(ledger_path) as f:
+        assert len(f.read().splitlines()) == n_first + 2, "the second run adds its plan and came-back"
