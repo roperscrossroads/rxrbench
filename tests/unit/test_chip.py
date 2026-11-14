@@ -213,3 +213,42 @@ def test_the_helpers_whole_chip_erase_needs_the_mac_and_proves_every_block(monke
 def test_a_chip_that_does_not_read_erased_after_the_erase_is_a_failure(monkeypatch, capsys):
     _code, out = _erase(monkeypatch, capsys, FakeEsp(sticky=True), "--mac", "aa:bb:cc:00:11:22")
     assert out["ok"] is False and "4 of 4 blocks do not read erased" in out["error"]
+
+
+class _Loader:
+    """What chip_blocks.connect sees of esptool: detect_chip, run_stub, change_baud."""
+    ESP_ROM_BAUD = 115200
+
+    def __init__(self, jtag=False, otg=False):
+        self.jtag, self.otg, self.bauds = jtag, otg, []
+
+    def run_stub(self):
+        return self
+
+    def uses_usb_jtag_serial(self):
+        return self.jtag
+
+    def uses_usb_otg(self):
+        return self.otg
+
+    def change_baud(self, baud):
+        self.bauds.append(baud)
+
+
+@pytest.mark.parametrize("jtag,otg,env,want", [
+    (False, False, {}, [921600]),                       # a UART bridge: the stub goes fast
+    (True, False, {}, []),                              # USB-Serial-JTAG: its own speed
+    (False, True, {}, []),                              # USB-OTG: its own speed
+    (False, False, {"RXRBENCH_ESP_BAUD": "460800"}, [460800]),
+    (False, False, {"RXRBENCH_ESP_BAUD": "115200"}, []),  # the ROM's own: nothing to change
+])
+def test_the_loader_runs_fast_behind_a_uart_bridge_and_as_it_is_on_native_usb(monkeypatch, jtag, otg, env, want):
+    mod = _helper()
+    loader = _Loader(jtag, otg)
+    fake = type(sys)("esptool")
+    fake.cmds = type(sys)("esptool.cmds")
+    fake.cmds.detect_chip = lambda port, connect_mode: loader
+    monkeypatch.setitem(sys.modules, "esptool", fake)
+    monkeypatch.setitem(sys.modules, "esptool.cmds", fake.cmds)
+    assert mod.connect("/dev/ttyUSB0", environ=env) is loader
+    assert loader.bauds == want

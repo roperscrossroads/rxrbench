@@ -65,7 +65,12 @@ def stale_copy(tools, cmd, text, out):
     return None
 
 
-def blocks(tools, port, *args, timeout=900):
+#: The longest one chip_blocks session may take: a whole 32 MB chip with few erased blocks behind
+#: a UART bridge at 921600 (about 5 min per 16 MB), with room to spare.
+BLOCKS_TIMEOUT = 1800
+
+
+def blocks(tools, port, *args, timeout=BLOCKS_TIMEOUT):
     """Run chip_blocks.py; its last output line is one JSON object."""
     rc, text = common.tool([tools["python"], tools["chip_blocks"], port, *args], timeout=timeout)
     last = text.strip().splitlines()[-1] if text.strip() else ""
@@ -130,7 +135,7 @@ def erase(tools, port, mac):
     `mac`), every block read erased after; then the board is reset (it has nothing to boot: it
     stays in its ROM). Returns the chip's info and the erase's (blocks, seconds)."""
     with booted_after(tools["esptool"], port, tools["chip"]):
-        return blocks(tools, port, "erase", "--mac", mac, timeout=900)
+        return blocks(tools, port, "erase", "--mac", mac)
 
 
 def _esptool_reset(esptool, port, chip):

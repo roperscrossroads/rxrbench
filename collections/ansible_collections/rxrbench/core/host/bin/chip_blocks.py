@@ -61,6 +61,7 @@ Runs with the bench host's esptool venv (~/.venv-esp/bin/python).
 """
 import hashlib
 import json
+import os
 import struct
 import sys
 import time
@@ -69,10 +70,32 @@ BLOCK = 64 * 1024
 ERASED = hashlib.md5(b"\xff" * BLOCK).hexdigest()
 
 
-def connect(port):
+#: The baud the stub is moved to behind a UART bridge (a CH340, a CP210x): the ROM connects at
+#: 115200, ~11 KB/s, so a nearly full 16 MB chip took longer than 15 min where 921600 reads it in
+#: about 5. A native USB port (USB-Serial-JTAG, USB-OTG) runs at its own speed whatever the baud,
+#: and is left as it is. RXRBENCH_ESP_BAUD overrides it (115200 keeps the ROM's).
+FAST_BAUD = 921600
+
+
+def native_usb(esp):
+    """Whether the loader talks over the chip's own USB, where the baud means nothing."""
+    for way in ("uses_usb_jtag_serial", "uses_usb_otg"):
+        try:
+            if getattr(esp, way, None) and getattr(esp, way)():
+                return True
+        except Exception:  # noqa: BLE001 - a chip that cannot say: treat it as a bridge
+            pass
+    return False
+
+
+def connect(port, environ=None):
     from esptool import cmds  # pylint: disable=import-outside-toplevel
     esp = cmds.detect_chip(port, connect_mode="default-reset")
-    return esp.run_stub()
+    esp = esp.run_stub()
+    baud = int((environ if environ is not None else os.environ).get("RXRBENCH_ESP_BAUD") or FAST_BAUD)
+    if baud != esp.ESP_ROM_BAUD and not native_usb(esp):
+        esp.change_baud(baud)
+    return esp
 
 
 def size_of(esp):
