@@ -77,6 +77,13 @@ options:
     type: str
     choices: [asserted, deasserted]
     default: asserted
+  self_update_wait:
+    description: After Launcher's own update is installed (as the app C(launch)), seconds the host
+      tool waits on the port for Launcher to say it has copied itself over its own partition.
+      Unseen, the apply fails with the port left released and the board not reset, since a reset
+      mid-copy leaves a half-written Launcher.
+    type: float
+    default: 300.0
   apply_allowed:
     description: The layout's go-ahead to write (C(bench_apply_allowed)).
     type: bool
@@ -170,9 +177,11 @@ class Runner:
                     f"delete slot {step['label']}")
         elif k == "manager":
             img = step["image"]
-            self.install("launch", img["path"], img["app_offset"], img["app_size"], overwrite=False)
-            # the new copy boots from its slot, copies itself into Launcher's partition and
-            # reboots; a power-on then lands in it
+            # the new copy boots from its slot, copies itself over Launcher's partition and
+            # reboots: the host tool keeps the port until it has said so, and nothing reopens or
+            # resets the board before (a reset mid-copy leaves a half-written Launcher)
+            self.install("launch", img["path"], img["app_offset"], img["app_size"], overwrite=False,
+                         self_update=True)
             self.reenter()
         elif k == "install":
             if step.get("replace"):
@@ -186,9 +195,13 @@ class Runner:
         else:
             raise console.ConsoleError(f"{self.p['board']}: unknown step {k!r}")
 
-    def install(self, name, path, offset, length, overwrite):
-        """The host tool on the released, guarded port; the broker gets the port back after."""
-        self.b.release(ttl=self.p["wait"] + 600)
+    def install(self, name, path, offset, length, overwrite, self_update=False):
+        """The host tool on the released, guarded port; the broker gets the port back after,
+        except after Launcher's own update that was not seen to finish: then the port stays
+        released until its time is up, and nothing resets the board meanwhile."""
+        settle = self.p["self_update_wait"] if self_update else 0.0
+        self.b.release(ttl=self.p["wait"] + 600 + settle)
+        give_back = True
         try:
             port, why = common.guarded_port(self.devreg, self.p["board"])
             if why:
@@ -198,11 +211,13 @@ class Runner:
                     "--entry", self.p.get("entry", "selpress"), "--modem-rest", self.p.get("modem_rest", "asserted")]
             if overwrite:
                 argv.append("--overwrite")
+            if settle:
+                argv += ["--self-update-wait", str(settle)]
             # the board's whole say during the install, beside its broker's log
             capture = os.path.expanduser(f"~/rxrbench/logs/{self.p['board']}-install-{name}.log")
             if os.path.isdir(os.path.dirname(capture)):
                 argv += ["--capture", capture]
-            rc, out = common.tool(argv, timeout=900)
+            rc, out = common.tool(argv, timeout=900 + settle)
             last = next((ln for ln in reversed(out.strip().splitlines()) if ln.startswith("{")), None)
             try:
                 r = json.loads(last) if last else {}
@@ -221,8 +236,19 @@ class Runner:
                                         + (f"; the board said last: {' | '.join(r['tail'])}"
                                            if r.get("tail") else "")
                                         + (f" (all of it: {capture})" if "--capture" in argv else ""))
+            if settle and not (r.get("self_update") or {}).get("seen"):
+                give_back = False
+                raise console.ConsoleError(
+                    f"{self.p['board']}: Launcher's update went in as the app `launch`, but it was not "
+                    f"seen to finish copying itself over Launcher's partition within {settle:.0f} s "
+                    f"({(r.get('self_update') or {}).get('reply') or 'no line from it'}): the port stays "
+                    f"released for {self.p['wait'] + 600 + settle:.0f} s and the board is not reset, since "
+                    f"a reset mid-copy leaves a half-written Launcher; look at the board before anything "
+                    f"opens its port")
+            self.self_update = r.get("self_update")
         finally:
-            self.b.reacquire()
+            if give_back:
+                self.b.reacquire()
 
     def reenter(self):
         """Launcher's console again after a step that rebooted the board."""
@@ -246,6 +272,7 @@ def main():
             "leave": {"type": "bool", "default": True},
             "entry": {"type": "str", "choices": list(console.ENTRIES), "default": "selpress"},
             "modem_rest": {"type": "str", "choices": ["asserted", "deasserted"], "default": "asserted"},
+            "self_update_wait": {"type": "float", "default": 300.0},
             **gate.ARGS,
         },
         supports_check_mode=True,

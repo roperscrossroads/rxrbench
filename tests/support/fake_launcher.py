@@ -45,10 +45,17 @@ class FakeLauncher:
     def __init__(self, version="beta-60a40c8", window=0.0, tick=0.05, apps=(), boot=None,
                  flash_size=0x400000, name="Cheap Yellow Display", has_version=True,
                  mac="02:00:00:00:00:02", selpress_lost=False, has_overwrite=True, busy=0.0,
-                 banner_delay=0.0):
+                 banner_delay=0.0, self_update=None, update_to=None):
         self.version, self.window, self.tick = version, window, tick
         # a CYD's console answers before its boot screen prints the first banner
         self.banner_delay = banner_delay
+        # Launcher's own update, installed as the app `launch`: it boots it and copies itself over
+        # Launcher's partition for `self_update` seconds (None: it never says it finished), then
+        # prints the table line and restarts as `update_to`. A power-on meanwhile is counted in
+        # `resets_mid_copy`: on hardware it leaves a half-written Launcher.
+        self.self_update, self.update_to = self_update, update_to
+        self.copying_until = None
+        self.resets_mid_copy = 0
         self.selpress_lost = selpress_lost   # the press is answered but the boot loop never sees it
         self.has_version = has_version       # releases up to 2.9.1 have no `version` command
         # `flash overwrite` came after 2.9.1 (Launcher ebb2649): a 2.9.1 console does not know it,
@@ -97,6 +104,8 @@ class FakeLauncher:
         return [r for r in self.table if r[1] == "app" and r[2] != "test"]
 
     def power_on(self):
+        if self.copying_until is not None:
+            self.resets_mid_copy += 1
         self.state = "window"
         self.window_until = time.monotonic() + self.window
         self.banners_from = time.monotonic() + self.banner_delay
@@ -118,6 +127,13 @@ class FakeLauncher:
         last_banner = 0.0
         while not self.stop:
             now = time.monotonic()
+            if self.copying_until is not None and self.self_update is not None and now >= self.copying_until:
+                self.copying_until = None
+                self.table = [r for r in self.table if not r[0].startswith("launch")]
+                self.version, self.boot = self.update_to or self.version, None
+                self.out("Partition table updated: boot_repair=0 removed_ota=1\r\n")
+                self.reboots += 1
+                self.power_on()
             if self.state == "window":
                 if now >= self.window_until:
                     if self.settings.get("bootToApp"):
@@ -183,6 +199,10 @@ class FakeLauncher:
             self.out("OK flashed, rebooting\r\n")
             self.reboots += 1
             self.state = "app"
+            if name == "launch" and (self.self_update is not None or self.update_to):
+                # the new Launcher copies itself over its own partition: busy, no console
+                self.copying_until = time.monotonic() + (self.self_update or 0.0) if self.self_update is not None \
+                    else float("inf")
 
     def _execute(self, line):
         if self.state == "app":

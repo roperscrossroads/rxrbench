@@ -19,7 +19,9 @@ next piece sent, since the device answers it with a count covering both; a devic
 behind lost bytes, and the install ends saying how far it got.
 
 The last line printed is one JSON object: {"ok", "sent", "size", "lost_acks", "reply",
-"seconds"}; exit 0 when the device said OK.
+"seconds"}; exit 0 when the device said OK. With --self-update-wait (Launcher's own update,
+streamed in as the app `launch`), it also has "self_update": whether Launcher was seen to finish
+copying itself over its own partition, which no one may reset it during.
 """
 import argparse
 import json
@@ -31,6 +33,9 @@ import serial
 
 BANNER = "Press the button to enter the Launcher"
 #: an ESP32 ROM's first word after any reset: `rst:0x1 (POWERON_RESET),boot:0x13 (...)`
+#: what Launcher prints once its update has copied itself over its own partition and fixed the
+#: table (src/idf/idf_update.cpp, with printf): before it, Launcher's partition is half written
+SELF_UPDATED = "Partition table updated:"
 RESET = re.compile(r"rst:0x[0-9a-f]+ \(([A-Z0-9_]+)\)")
 
 
@@ -69,6 +74,21 @@ class Link:
 
     def close(self):
         self.s.close()
+
+    def reopen(self, until):
+        """The same port again, its lines where they rest (set on the object before the open):
+        a native-USB port goes away while the board restarts. False when it did not come back."""
+        try:
+            self.s.close()
+        except Exception:  # noqa: BLE001 - a port that is already gone
+            pass
+        while time.monotonic() < until:
+            try:
+                self.s.open()
+                return True
+            except (serial.SerialException, OSError):
+                time.sleep(0.25)
+        return False
 
     def send(self, line):
         self.s.write(line.encode() + b"\n")
@@ -201,6 +221,33 @@ def install(link, name, data, overwrite=False, chunk=2048, ack_wait=5.0):
             "seconds": round(time.monotonic() - t0, 1)}
 
 
+def await_self_update(link, timeout):
+    """After Launcher's own update went in as the app `launch`: the board boots it, and it erases
+    Launcher's partition, copies itself over it, prints SELF_UPDATED and restarts. A reset before
+    that line leaves a half-written Launcher, and opening a port can be one (a bridge whose RTS
+    drives EN), so this tool, which holds the port as the board rests, reads on until the line or
+    `timeout`. It sends nothing. {"seen", "line", "seconds"}."""
+    t0 = time.monotonic()
+    end = t0 + timeout
+    while True:
+        for line in link.pending:
+            if SELF_UPDATED in line:
+                return {"seen": True, "line": line.strip(), "seconds": round(time.monotonic() - t0, 1)}
+        if time.monotonic() >= end:
+            return {"seen": False, "seconds": round(time.monotonic() - t0, 1)}
+        try:
+            new = list(link.lines())
+        except (serial.SerialException, OSError):
+            if not link.reopen(end):
+                return {"seen": False, "seconds": round(time.monotonic() - t0, 1),
+                        "reply": "the port did not come back"}
+            continue
+        if new:
+            link.pending = (link.pending + new)[-200:]
+        else:
+            time.sleep(0.05)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", required=True)
@@ -218,6 +265,9 @@ def main(argv=None):
     ap.add_argument("--capture", help="write every line the board printed to this file")
     ap.add_argument("--modem-rest", choices=["asserted", "deasserted"], default="asserted",
                     help="where the port's DTR and RTS rest (the board type's modem_rest)")
+    ap.add_argument("--self-update-wait", type=float, default=0.0,
+                    help="after the install, wait up to this long for Launcher to finish copying itself "
+                         "over its own partition (its own update, installed as `launch`)")
     a = ap.parse_args(argv)
     with open(a.file, "rb") as f:
         data = f.read()
@@ -237,6 +287,8 @@ def main(argv=None):
             # what the board said besides ACKs: a reboot banner, a panic, an ERR
             r["tail"] = [l for l in link.log if not l.startswith("ACK")][-8:]
             r["resets"] = resets_after_ready(link.log)
+        elif a.self_update_wait > 0:
+            r["self_update"] = await_self_update(link, a.self_update_wait)
     finally:
         link.close()
         if a.capture:

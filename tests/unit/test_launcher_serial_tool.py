@@ -226,3 +226,40 @@ def test_a_board_already_in_the_menu_is_entered_with_no_key_press(tool, tmp_path
     d = Device()
     rc, out = run(tool, d, tmp_path, capsys)
     assert rc == 0 and out["ok"] and "nav SelPress" not in d.seen
+
+
+class SelfUpdating(Device):
+    """After `OK flashed`, the new Launcher copies itself over its partition: its port goes away
+    with the reboot (`vanish` reads fail) and comes back, then it prints the table line."""
+
+    def __init__(self, vanish=0, finishes=True, **kw):
+        super().__init__(**kw)
+        self.vanish, self.finishes, self.after = vanish, finishes, 0
+
+
+def test_launchers_own_update_is_waited_for_on_the_port_the_tool_holds(tool, tmp_path, capsys, monkeypatch):
+    dev = SelfUpdating(vanish=2)
+    real = FakeSerial.read
+
+    def read(self, n):
+        d = FakeSerial.device
+        if d.after and d.vanish:
+            d.vanish -= 1
+            raise tool.serial.SerialException("device reports readiness to read but returned no data")
+        if d.after == 1 and not d.vanish and d.finishes:
+            d.after = 2
+            d.out += b"I (812) Partitioneer: Copying\r\nPartition table updated: boot_repair=0 removed_ota=1\r\n"
+        chunk = real(self, n)
+        if b"OK flashed" in chunk:
+            d.after = 1                         # the tool has read it: the board reboots now
+        return chunk
+    monkeypatch.setattr(FakeSerial, "read", read)
+    monkeypatch.setattr(FakeSerial, "close", lambda self: FakeSerial.opened.append("closed"))
+    rc, out = run(tool, dev, tmp_path, capsys, b"\x33" * 5000, "--self-update-wait", "5")
+    assert rc == 0 and out["self_update"]["seen"] and "removed_ota=1" in out["self_update"]["line"]
+    assert FakeSerial.opened.count("closed") >= 2, "the port that went away with the reboot was opened again"
+
+
+def test_a_self_update_that_never_says_it_finished_is_reported_unseen(tool, tmp_path, capsys):
+    rc, out = run(tool, SelfUpdating(finishes=False), tmp_path, capsys, b"\x33" * 5000, "--self-update-wait", "0.5")
+    assert out["ok"] and out["self_update"]["seen"] is False

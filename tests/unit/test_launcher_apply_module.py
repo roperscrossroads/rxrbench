@@ -181,3 +181,45 @@ def test_on_launcher_2_9_1_an_app_is_reinstalled_by_deleting_its_slot_first(rig,
     assert "partition delete camstr" in node.seen
     assert node.flashed == [("camstr", declared["data"])], "into a slot named camstr again, not a second one"
     assert [a["label"] for a in r["launcher"]["apps"]] == ["camstr"] and r["launcher"]["boot"] == "camstr"
+
+
+def manager_params(tmp_path, declared, version="3.0.0"):
+    data = esp_image(b"\x44" * 6000)
+    f = tmp_path / "launcher.bin"
+    f.write_bytes(data)
+    mgr = {"path": str(f), "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+           "app_offset": 0, "app_size": len(data), "image": "launcher-3", "version": version}
+    return {**declared["params"], "images": {"manager": mgr, "apps": {}}, "launcher": {}}
+
+
+def test_launchers_own_update_is_not_reset_until_it_has_copied_itself(rig, declared, tmp_path, monkeypatch):
+    """The board copies the new Launcher over its own partition after `OK flashed`: the host tool
+    keeps the port until Launcher says it is done, and only then is the board entered again."""
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=8.0, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_power_on(monkeypatch, node, window=2.0)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**manager_params(tmp_path, declared), "socket": sock,
+                                                           "apply_allowed": True, "wait": 8,
+                                                           "self_update_wait": 20})
+    assert how == "exit", r
+    assert node.resets_mid_copy == 0, "nothing reset the board while Launcher copied itself"
+    assert node.version == "3.0.0" and r["launcher"]["version"] == "3.0.0"
+
+
+def test_a_self_update_not_seen_to_finish_leaves_the_port_released_and_the_board_alone(rig, declared, tmp_path,
+                                                                                       monkeypatch):
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=None, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_power_on(monkeypatch, node, window=2.0)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**manager_params(tmp_path, declared), "socket": sock,
+                                                           "apply_allowed": True, "wait": 8,
+                                                           "self_update_wait": 1.5})
+    assert how == "fail" and "not seen to finish copying itself" in r["msg"] and "not reset" in r["msg"]
+    assert node.resets_mid_copy == 0
+    import socket as so
+    s = so.socket(so.AF_UNIX)
+    s.connect(sock)
+    s.sendall(b'{"op": "status"}\n')
+    st = json.loads(s.makefile().readline())
+    s.close()
+    assert st["open"] is False and st["released_for"] > 0, "the broker has not taken the port back"
