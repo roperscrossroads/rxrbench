@@ -128,6 +128,13 @@ cp210x-serial host *args:
 devreg *args:
     python3 devreg/devreg.py "$@"
 
+# the feature index: each collection's features.yml, checked against the code (every family,
+# verb, flasher and route has a feature; every path and test exists); --gaps, --list, --owners <path>
+[group("the tool")]
+[doc("the feature index (each collection's `features.yml`): checked against the code by default; `--gaps` what is unproven, `--list` every feature, `--owners <path>...` the features a file belongs to")]
+features *args:
+    ./venv/bin/python tools/features.py {{ if args == "" { "--check" } else { args } }}
+
 # core alone: the unit tests against a tree with core and a fixture plugin only
 # (docs/ARCHITECTURE.md#core-portability)
 [group("the tool")]

@@ -1,0 +1,435 @@
+---
+# What rxrbench.core does: the code each feature depends on (paths, in this collection) and the tests
+# that prove it (files from the repository root; hw: the exercise verbs that prove it on a board).
+# tools/features.py checks it covers every exercise verb, family, flasher and route.
+features:
+  # ---- the verbs (tools/exercise.py VERBS) -----------------------------------------------------
+  - id: core.verb.survey
+    kind: verb
+    name: survey
+    summary: what is plugged into a bench host, identified and filed as facts
+    paths: [playbooks/survey.yml, plugins/modules/usb_survey.py, plugins/module_utils/hwsurvey.py]
+    tests:
+      unit: [tests/unit/test_usb_survey.py, tests/unit/test_survey_probes.py, tests/unit/test_survey_store.py,
+             tests/unit/test_hwsurvey.py]
+      hw: [survey]
+  - id: core.verb.survey-deep
+    kind: verb
+    name: survey-deep
+    summary: the survey that reads each chip through its ROM (resets the board)
+    paths: [playbooks/survey.yml, plugins/modules/usb_survey.py, host/bin/swd_survey.py]
+    tests:
+      unit: [tests/unit/test_survey_deep_probe.py, tests/unit/test_swd_survey.py]
+      hw: [survey-deep]
+  - id: core.verb.facts
+    kind: verb
+    name: facts
+    summary: what each board says it is and runs, filed as facts
+    paths: [playbooks/facts.yml, plugins/module_utils/identity.py]
+    tests:
+      unit: [tests/unit/test_identity.py, tests/unit/test_facts_commit.py, tests/unit/test_facts_note.py]
+      sim: [tests/sim/test_zephyr_sim.py]
+      hw: [facts]
+  - id: core.verb.plan
+    kind: verb
+    name: plan
+    summary: the difference between a layout and its boards, writing nothing (--check --diff)
+    paths: [playbooks/apply.yml, roles/board/**, plugins/inventory/devreg.py, plugins/module_utils/layout.py,
+            plugins/module_utils/layers.py]
+    tests:
+      unit: [tests/unit/test_layout.py, tests/unit/test_layers.py, tests/unit/test_layouts.py, tests/unit/test_state.py]
+      sim: [tests/sim/test_zephyr_sim.py, tests/sim/test_sim_layout.py]
+      hw: [plan]
+  - id: core.verb.apply
+    kind: verb
+    name: apply
+    summary: write what differs, then read the board back
+    paths: [playbooks/apply.yml, roles/board/**, plugins/modules/board_flash.py, plugins/module_utils/gate.py]
+    tests:
+      unit: [tests/unit/test_gate.py, tests/unit/test_role_specs.py]
+      sim: [tests/sim/test_zephyr_sim.py, tests/sim/test_zephyr_app_sim.py, tests/sim/test_sim_flash.py]
+      hw: [apply]
+  - id: core.verb.secrets
+    kind: verb
+    name: secrets
+    summary: the board holds the secrets its layout declares, read back without showing them
+    paths: [playbooks/secrets.yml]
+    tests:
+      sim: [tests/sim/test_secrets_sim.py, tests/sim/test_zephyr_app_sim.py]
+      hw: [secrets]
+  - id: core.verb.diag
+    kind: verb
+    name: diag
+    summary: the family's diagnostic commands through the board's console
+    paths: [playbooks/diag.yml]
+    tests:
+      unit: [tests/unit/test_diag_play.py, tests/unit/test_debug.py]
+      hw: [diag]
+  - id: core.verb.device-test
+    kind: verb
+    name: device-test
+    summary: the layout's device tests and scenarios, run on the board
+    paths: [playbooks/test.yml, playbooks/scenario.yml, plugins/modules/device_run.py, plugins/module_utils/testlib.py]
+    tests:
+      unit: [tests/unit/test_device_test_play.py, tests/unit/test_device_test_steps.py, tests/unit/test_testlib.py,
+             tests/unit/test_scenario_play.py]
+      hw: [device-test]
+  - id: core.verb.locate
+    kind: verb
+    name: locate
+    summary: which bench host and port a board is on now
+    paths: [playbooks/locate.yml, plugins/module_utils/location.py]
+    tests:
+      unit: [tests/unit/test_location.py]
+      hw: [locate]
+  - id: core.verb.boot
+    kind: verb
+    name: boot
+    summary: bootloaders planned and written
+    paths: [playbooks/boot.yml, plugins/modules/bootloader_flash.py]
+    tests:
+      unit: [tests/unit/test_boot_otafix.py, tests/unit/test_boot_radio.py]
+      hw: [boot]
+  - id: core.verb.reboot
+    kind: verb
+    name: reboot
+    summary: the board restarted and seen to come back
+    paths: [playbooks/reboot.yml, plugins/modules/board_reboot.py, plugins/module_utils/reboot.py,
+            plugins/module_utils/bootid.py]
+    tests:
+      unit: [tests/unit/test_reboot.py, tests/unit/test_bootid.py]
+      hw: [reboot]
+  - id: core.verb.backup-regions
+    kind: verb
+    name: backup-regions
+    summary: the config regions read, recorded with the chip they came from
+    paths: [playbooks/backup.yml, plugins/modules/region_backup.py, plugins/module_utils/flash/region_flow.py,
+            plugins/module_utils/regions.py]
+    tests:
+      unit: [tests/unit/test_backup.py, tests/unit/test_region_flow.py, tests/unit/test_regions.py]
+      hw: [backup-regions]
+  - id: core.verb.restore-regions
+    kind: verb
+    name: restore-regions
+    summary: a region backup written back to the chip it came from
+    paths: [playbooks/restore-regions.yml, plugins/modules/region_restore.py, plugins/module_utils/flash/region_flow.py]
+    tests:
+      unit: [tests/unit/test_restore.py, tests/unit/test_restore_report.py, tests/unit/test_region_flow.py]
+      hw: [restore-regions]
+  - id: core.verb.erase-region
+    kind: verb
+    name: erase-region
+    summary: one named config region erased, nothing else
+    paths: [playbooks/erase.yml, plugins/modules/region_erase.py]
+    tests:
+      unit: [tests/unit/test_erase.py]
+      hw: [erase-region]
+  - id: core.verb.backup-chip
+    kind: verb
+    name: backup-chip
+    summary: the whole chip read and kept
+    paths: [playbooks/backup.yml, plugins/modules/chip_backup.py, plugins/module_utils/flash/chip_flow.py,
+            plugins/module_utils/flash/chip.py, host/bin/chip_blocks.py]
+    tests:
+      unit: [tests/unit/test_chip.py, tests/unit/test_chip_flow.py, tests/unit/test_esptool_chip.py,
+             tests/unit/test_swd_chip_backup.py, tests/unit/test_picochip.py]
+      hw: [backup-chip]
+  - id: core.verb.erase-chip
+    kind: verb
+    name: erase-chip
+    summary: the whole chip erased, refused without a backup of it, proved erased
+    paths: [playbooks/erase-chip.yml, plugins/modules/chip_erase.py, plugins/module_utils/flash/chip_flow.py]
+    tests:
+      unit: [tests/unit/test_erase.py, tests/unit/test_chip_flow.py]
+      sim: [tests/sim/test_exercise_sim.py]
+      hw: [erase-chip]
+  - id: core.verb.snapshot-switch
+    kind: verb
+    name: snapshot-switch
+    summary: a named snapshot of the boards, and the switch back to it
+    paths: [playbooks/snapshot.yml, playbooks/switch.yml, playbooks/restore-chip.yml, plugins/modules/chip_restore.py]
+    tests:
+      unit: [tests/unit/test_chip_plays_route.py, tests/unit/test_restore_chip_report.py]
+      sim: [tests/sim/test_exercise_sim.py]
+      hw: [snapshot-switch]
+  - id: core.verb.update-there-and-back
+    kind: verb
+    name: update-there-and-back
+    summary: an update to a second image and back
+    paths: [playbooks/apply.yml, roles/board/**, plugins/modules/board_flash.py]
+    tests:
+      sim: [tests/sim/test_exercise_sim.py, tests/sim/test_zephyr_app_sim.py]
+      hw: [update-there-and-back]
+  - id: core.verb.keys-export
+    kind: verb
+    name: keys-export
+    summary: a device's own key escrowed into the site's encrypted store
+    paths: [playbooks/keys-export.yml]
+    tests:
+      unit: [tests/unit/test_escrow_migrate.py]
+      sim: [tests/sim/test_secrets_sim.py]
+      hw: [keys-export]
+  - id: core.verb.keys-restore
+    kind: verb
+    name: keys-restore
+    summary: an escrowed key given back to its device
+    paths: [playbooks/keys-restore.yml]
+    tests:
+      sim: [tests/sim/test_secrets_sim.py]
+      hw: [keys-restore]
+  - id: core.verb.family-switch
+    kind: verb
+    name: family-switch
+    summary: the board as another family (the site's alternative declaration) and back
+    paths: [playbooks/apply.yml, playbooks/host.yml]
+    tests:
+      sim: [tests/sim/test_family_switch.py]
+      hw: [family-switch]
+  - id: core.verb.first-flash
+    kind: verb
+    name: first-flash
+    summary: a board that runs nothing the layout knows, flashed once on the layout's word
+    paths: [playbooks/apply.yml, plugins/module_utils/gate.py]
+    tests:
+      unit: [tests/unit/test_gate.py]
+    gap: the exercise never runs it (it would need a board wiped first); proven by hand only
+  - id: core.verb.card
+    kind: verb
+    name: card
+    summary: a Linux board's SD card or eMMC image written from the bench host
+    paths: [playbooks/card.yml, plugins/modules/card_write.py, plugins/module_utils/flash/card.py]
+    tests:
+      unit: [tests/unit/test_flash_card.py]
+    gap: no exercise run writes a card (it needs the card in a reader on the bench host)
+
+  # ---- the families core owns ---------------------------------------------------------------
+  - id: core.family.bare
+    kind: family
+    name: bare
+    summary: a chip the tool only backs up, erases and restores (no firmware it speaks to)
+    paths: [plugins/plugin_utils/families/bare.py]
+    tests:
+      unit: [tests/unit/test_families.py]
+      hw: [backup-chip, erase-chip]
+  - id: core.family.zephyr_mcumgr
+    kind: family
+    name: zephyr_mcumgr
+    summary: a Zephyr application updated over MCUmgr (SMP) under MCUboot
+    paths: [plugins/plugin_utils/families/zephyr_mcumgr.py, plugins/module_utils/flash/smp.py]
+    tests:
+      unit: [tests/unit/test_flash_smp.py]
+      sim: [tests/sim/test_mcumgr_sim.py, tests/sim/test_qemu_sim.py]
+      hw: [apply, update-there-and-back]
+
+  # ---- the flashers (module_utils/flash/common.py FLASHERS) ------------------------------------
+  - id: core.flasher.esptool
+    kind: flasher
+    name: esptool
+    summary: an ESP32 written through its ROM loader
+    paths: [plugins/module_utils/flash/esptool.py, plugins/module_utils/flash/esptool_chip.py,
+            plugins/module_utils/flash/esptool_regions.py, host/bin/chip_blocks.py]
+    tests:
+      unit: [tests/unit/test_esptool_chip.py, tests/unit/test_flash_wired.py, tests/unit/test_cp210x_serial.py]
+      hw: [apply, backup-chip, erase-chip]
+  - id: core.flasher.esp-image
+    kind: flasher
+    name: esp-image
+    summary: an ESP32 written as a merged image, partitions kept where the table says
+    paths: [plugins/module_utils/flash/espimage.py, plugins/module_utils/flash/esp_image_regions.py,
+            plugins/modules/esp_image_flash.py, plugins/module_utils/esppart.py]
+    tests:
+      unit: [tests/unit/test_esp_image.py, tests/unit/test_esp_image_regions.py, tests/unit/test_esppart.py]
+      hw: [apply, backup-regions, restore-regions]
+  - id: core.flasher.uf2
+    kind: flasher
+    name: uf2
+    summary: a board's UF2 bootloader drive written
+    paths: [plugins/module_utils/flash/uf2.py, host/bin/uf2_flash.py]
+    tests:
+      unit: [tests/unit/test_uf2_flash.py]
+      hw: [apply]
+  - id: core.flasher.picoboot
+    kind: flasher
+    name: picoboot
+    summary: an RP2040/RP2350 written and read through its ROM bootloader (picotool)
+    paths: [plugins/module_utils/flash/picoboot.py, plugins/module_utils/flash/picochip.py,
+            plugins/modules/picoboot_flash.py]
+    tests:
+      unit: [tests/unit/test_picoboot.py, tests/unit/test_picochip.py]
+      hw: [apply, backup-chip, erase-chip]
+  - id: core.flasher.smp
+    kind: flasher
+    name: smp
+    summary: an image uploaded over MCUmgr (serial, UDP), tested and confirmed under MCUboot
+    paths: [plugins/module_utils/flash/smp.py, plugins/modules/smp_flash.py, host/bin/smp_stat.py]
+    tests:
+      unit: [tests/unit/test_flash_smp.py]
+      sim: [tests/sim/test_mcumgr_sim.py]
+      hw: [apply]
+  - id: core.flasher.swd
+    kind: flasher
+    name: swd
+    summary: a chip written and read through a debug probe
+    paths: [plugins/module_utils/flash/swd.py, plugins/module_utils/flash/swdchip.py,
+            plugins/module_utils/flash/swd_regions.py, plugins/modules/swd_flash.py, plugins/modules/swd_identify.py,
+            host/bin/swd_chip.py]
+    tests:
+      unit: [tests/unit/test_flash_swd.py, tests/unit/test_swd_chip_backup.py, tests/unit/test_swd_regions.py,
+             tests/unit/test_swd_identify.py, tests/unit/test_probechip_end_to_end.py]
+      hw: [backup-chip, erase-chip]
+  - id: core.flasher.sim
+    kind: flasher
+    name: sim
+    summary: the simulated boards' flasher (native_sim, QEMU)
+    on_board: false
+    paths: [plugins/module_utils/flash/sim.py, plugins/module_utils/flash/simchip.py]
+    tests:
+      unit: [tests/unit/test_simchip.py]
+      sim: [tests/sim/test_sim_flash.py, tests/sim/test_zephyr_sim.py]
+
+  # ---- the routes (module_utils/routes.py DEFAULT_ORDER) ----------------------------------------
+  - id: core.route.usb
+    kind: route
+    name: usb
+    summary: a board reached on its USB port (console, flash)
+    paths: [plugins/module_utils/routes.py, plugins/module_utils/broker_client.py, host/broker/**]
+    tests:
+      unit: [tests/unit/test_routes.py, tests/unit/test_broker.py, tests/unit/test_broker_dialects.py]
+      hw: [diag, apply]
+  - id: core.route.ssh
+    kind: route
+    name: ssh
+    summary: a board reached over ssh (Linux)
+    paths: [plugins/module_utils/routes.py, plugins/module_utils/ssh.py]
+    tests:
+      unit: [tests/unit/test_routes.py, tests/unit/test_tunnel.py]
+      sim: [tests/sim/test_linux_sim.py]
+  - id: core.route.swd
+    kind: route
+    name: swd
+    summary: a chip reached through a debug probe
+    paths: [plugins/module_utils/routes.py, plugins/module_utils/flash/swd.py]
+    tests:
+      unit: [tests/unit/test_routes.py, tests/unit/test_flash_swd.py]
+      hw: [backup-chip]
+  - id: core.route.ble
+    kind: route
+    name: ble
+    summary: a board reached over Bluetooth LE
+    paths: [plugins/module_utils/routes.py]
+    tests:
+      unit: [tests/unit/test_routes.py]
+    gap: no test reaches a board over BLE, simulated or real
+  - id: core.route.wifi
+    kind: route
+    name: wifi
+    summary: a board reached over WiFi (network API, SMP over UDP)
+    paths: [plugins/module_utils/routes.py]
+    tests:
+      unit: [tests/unit/test_routes.py]
+    gap: no exercise run takes a WiFi route
+  - id: core.route.eth
+    kind: route
+    name: eth
+    summary: a board reached over Ethernet (SMP over UDP)
+    paths: [plugins/module_utils/routes.py, plugins/module_utils/flash/smp.py]
+    tests:
+      unit: [tests/unit/test_routes.py, tests/unit/test_flash_smp.py]
+      hw: [apply]
+  - id: core.route.lora
+    kind: route
+    name: lora
+    summary: a board reached over the mesh (LoRa), through a gateway node
+    paths: [plugins/module_utils/routes.py]
+    tests:
+      unit: [tests/unit/test_routes.py]
+    gap: no test reaches a board over LoRa
+
+  # ---- core capabilities ------------------------------------------------------------------------
+  - id: core.devreg
+    kind: capability
+    summary: boards resolved by name, never by a raw path; ambiguity refused; the write guard
+    paths: [plugins/inventory/devreg.py]
+    tests:
+      unit: [tests/unit/test_devreg.py, tests/unit/test_devlock.py, tests/unit/test_registry_contract.py]
+  - id: core.broker
+    kind: capability
+    summary: one serial broker per board owns its console; commands read to completion; secrets kept out
+    paths: [host/broker/**, plugins/module_utils/broker_client.py, roles/serial_broker/**]
+    tests:
+      unit: [tests/unit/test_broker.py, tests/unit/test_broker_dialects.py]
+      hw: [diag]
+  - id: core.plugwatch
+    kind: capability
+    summary: "the plug watcher: boards plugged and unplugged, identified, announced"
+    paths: [host/plugwatch.py]
+    tests:
+      unit: [tests/unit/test_plugwatch.py]
+  - id: core.bench-host
+    kind: capability
+    summary: the bench host's default install and setup (brokers, tools, venvs, the registry copy)
+    paths: [roles/bench_host/**, roles/default_install/**, playbooks/host.yml, playbooks/install.yml, host/venvs/**]
+    tests:
+      unit: [tests/unit/test_core_host_tools.py, tests/unit/test_doctor.py]
+  - id: core.secrets-store
+    kind: capability
+    summary: the site's SOPS-encrypted secrets, read by family and kind, never logged
+    paths: [plugins/module_utils/site.py, plugins/lookup/**]
+    tests:
+      unit: [tests/unit/test_site_env.py, tests/unit/test_site_root.py, tests/unit/test_escrow_migrate.py]
+      sim: [tests/sim/test_secrets_sim.py]
+  - id: core.run-state
+    kind: capability
+    summary: a run's state record (declared, reported, changes per board) and its timing
+    on_board: false
+    paths: [plugins/callback/**, plugins/plugin_utils/runrecord.py]
+    tests:
+      unit: [tests/unit/test_state_callback.py, tests/unit/test_timing.py, tests/unit/test_compare.py]
+      sim: [tests/sim/test_run_state_sim.py]
+  - id: core.rf-rules
+    kind: capability
+    summary: the site's RF rules (power, channel) checked against every radio a layout declares
+    on_board: false
+    paths: [plugins/module_utils/rfrules.py, plugins/module_utils/rflayout.py]
+    tests:
+      unit: [tests/unit/test_rfrules.py]
+  - id: core.plugins
+    kind: capability
+    summary: plugins found by name, families merged, core running with no bundled plugin
+    on_board: false
+    paths: [plugins/plugin_utils/registry.py, plugins/plugin_utils/families/**, plugins/module_utils/familyspec.py]
+    tests:
+      unit: [tests/unit/test_plugins.py, tests/unit/test_families.py, tests/unit/test_portability.py]
+      sim: [tests/sim/test_core_only_sim.py]
+  - id: core.campaign
+    kind: capability
+    summary: campaigns (a sequence of layout states and tests) and their records
+    on_board: false
+    paths: [playbooks/apply.yml]
+    tests:
+      unit: [tests/unit/test_campaign.py]
+      sim: [tests/sim/test_campaign_sim.py]
+  - id: core.sim-bench
+    kind: capability
+    summary: the simulated benches (native_sim, QEMU, containers, a VM bench host)
+    on_board: false
+    paths: [roles/sim_bench/**]
+    tests:
+      unit: [tests/unit/test_simboard_stdio.py, tests/unit/test_simvm_setup.py, tests/unit/test_vmhost.py]
+      sim: [tests/sim/test_zephyr_sim.py, tests/sim/test_vmhost.py]
+  - id: core.exercise
+    kind: capability
+    summary: the board exercise (every verb that applies to one board, recorded) and the capability matrix
+    repo_paths: [tools/exercise.py, tools/matrix.py]
+    tests:
+      unit: [tests/unit/test_exercise.py, tests/unit/test_matrix.py]
+      sim: [tests/sim/test_exercise_sim.py]
+      hw: [came-back]
+  - id: core.features
+    kind: capability
+    summary: this index, its check, and the features a changed file belongs to
+    on_board: false
+    paths: [features.yml]
+    repo_paths: [tools/features.py]
+    tests:
+      unit: [tests/unit/test_features.py]

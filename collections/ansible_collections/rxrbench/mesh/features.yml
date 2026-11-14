@@ -1,0 +1,90 @@
+---
+# What rxrbench.mesh does (LoRa mesh firmware on microcontrollers): the code each feature depends on
+# (paths, in this collection) and the tests that prove it (tools/features.py).
+features:
+  - id: mesh.family.zephyrtastic
+    kind: family
+    name: zephyrtastic
+    summary: Zephyr-native Meshtastic through its shell (state line, config, radio, keys)
+    paths: [plugins/plugin_utils/families/zephyrtastic.py, plugins/module_utils/config.py,
+            plugins/module_utils/consoles.py, plugins/module_utils/state.py]
+    tests:
+      unit: [tests/unit/test_config.py, tests/unit/test_stateline.py, tests/unit/test_live_settings.py]
+      sim: [tests/sim/test_sim_board.py, tests/sim/test_managed_sim.py, tests/sim/test_sim_layout.py]
+      hw: [apply, plan, secrets, backup-regions, restore-regions]
+  - id: mesh.family.zephcore
+    kind: family
+    name: zephcore
+    summary: the MeshCore-compatible node on Zephyr (repeater, companion, room server)
+    paths: [plugins/plugin_utils/families/zephcore.py, plugins/module_utils/meshcore.py]
+    tests:
+      unit: [tests/unit/test_meshcore.py]
+      sim: [tests/sim/test_zephcore_sim.py]
+  - id: mesh.family.meshtastic
+    kind: family
+    name: meshtastic
+    summary: stock Meshtastic, through its phone API (serial, TCP); the web flasher's update and full erase
+    paths: [plugins/plugin_utils/families/meshtastic.py, plugins/module_utils/stocknode.py,
+            plugins/module_utils/stockradio.py, plugins/module_utils/stocksteps.py, plugins/modules/meshtastic_*.py]
+    tests:
+      unit: [tests/unit/test_meshtastic_stock.py, tests/unit/test_meshtastic_release.py,
+             tests/unit/test_meshtastic_identity.py, tests/unit/test_stock_flash.py, tests/unit/test_stock_steps.py,
+             tests/unit/test_simmt.py]
+      sim: [tests/sim/test_meshtastic_stock_sim.py]
+      hw: [apply, backup-regions, erase-chip]
+  - id: mesh.family.meshcore
+    kind: family
+    name: meshcore
+    summary: stock MeshCore, through its companion protocol
+    paths: [plugins/plugin_utils/families/meshcore.py, plugins/module_utils/meshcore.py, plugins/modules/meshcore_*.py]
+    tests:
+      unit: [tests/unit/test_meshcore.py]
+      hw: [apply, plan]
+  - id: mesh.radio
+    kind: capability
+    summary: radio settings (region, preset, channel, power) planned and applied, within the site's RF rules
+    paths: [plugins/module_utils/radio.py, plugins/module_utils/meshrf.py, plugins/modules/*_radio.py]
+    tests:
+      unit: [tests/unit/test_radio.py, tests/unit/test_rfrules.py, tests/unit/test_enums.py]
+      sim: [tests/sim/test_managed_sim.py]
+      hw: [apply]
+  - id: mesh.identity
+    kind: capability
+    summary: a node's identity key escrowed and given back, so a reflash keeps the node id
+    paths: [plugins/modules/*_identity.py]
+    tests:
+      unit: [tests/unit/test_meshtastic_identity.py, tests/unit/test_identity_from_record.py]
+      sim: [tests/sim/test_secrets_sim.py]
+      hw: [keys-export, keys-restore]
+  - id: mesh.network-config
+    kind: capability
+    summary: a node's WiFi and network API settings
+    paths: [plugins/module_utils/netconfig.py, plugins/modules/meshtastic_net_config.py]
+    tests:
+      unit: [tests/unit/test_netconfig.py]
+  - id: mesh.intents
+    kind: capability
+    summary: zephyrtastic intents, LED, scan and the attach (BLE) helpers
+    paths: [plugins/module_utils/intents.py, plugins/module_utils/attach.py, plugins/modules/zephyrtastic_*.py]
+    tests:
+      unit: [tests/unit/test_intents.py, tests/unit/test_led.py, tests/unit/test_attach.py]
+  - id: mesh.uf2-bootloader
+    kind: capability
+    summary: the XIAO nRF52840 UF2 bootloader (OTAFIX) planned and updated; nRF ids
+    paths: [plugins/modules/uf2_bootloader.py, host/bin/xiao_otafix.py, host/bin/xiao_ble_dfu.py]
+    tests:
+      unit: [tests/unit/test_xiao_otafix.py, tests/unit/test_boot_otafix.py, tests/unit/test_nrf_ids.py]
+      hw: [boot]
+  - id: mesh.images
+    kind: capability
+    summary: firmware images staged from builds and releases, their partition maps and recipes
+    on_board: false
+    paths: [tools/stage_image.py, tools/partmap.py, host/bin/imginfo.py, plugins/module_utils/recipe.py]
+    tests:
+      unit: [tests/unit/test_stage_catalog.py, tests/unit/test_recipe.py, tests/unit/test_mesh_board_types.py]
+  - id: mesh.tunnel
+    kind: capability
+    summary: a node reached through another's tunnel
+    paths: [plugins/module_utils/tunnel.py]
+    tests:
+      unit: [tests/unit/test_tunnel.py]

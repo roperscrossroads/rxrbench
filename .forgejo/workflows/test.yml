@@ -51,6 +51,7 @@ jobs:
           ./venv/bin/yamllint -s .
           ./venv/bin/ansible-lint
           ./venv/bin/python tools/privacy_check.py
+          ./venv/bin/python tools/features.py --check
       - name: The docs as antsibull-docs reads them
         run: ./venv/bin/python tools/docs.py lint
 

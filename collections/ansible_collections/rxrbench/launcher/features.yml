@@ -1,0 +1,46 @@
+---
+# What rxrbench.launcher does (ESP32 boards under the Launcher app manager, through its console).
+features:
+  - id: launcher.family.launcher
+    kind: family
+    name: launcher
+    summary: a board under Launcher (its slots, settings, networks) planned and applied through its console
+    paths: [plugins/plugin_utils/families/launcher.py, plugins/module_utils/console.py, plugins/module_utils/plan.py,
+            plugins/modules/launcher_apply.py, plugins/modules/launcher_facts.py, plugins/modules/launcher_state.py]
+    tests:
+      unit: [tests/unit/test_launcher_family.py, tests/unit/test_launcher_console.py, tests/unit/test_launcher_plan.py,
+             tests/unit/test_launcher_apply_module.py, tests/unit/test_launcher_state_module.py]
+      hw: [apply, plan, facts]
+  - id: launcher.app-install
+    kind: capability
+    summary: an app streamed into a slot over the serial console (the host tool on the released port)
+    paths: [host/bin/launcher_serial.py, plugins/modules/launcher_apply.py]
+    tests:
+      unit: [tests/unit/test_launcher_serial_tool.py, tests/unit/test_launcher_apply_module.py]
+      hw: [apply]
+  - id: launcher.self-update
+    kind: capability
+    summary: Launcher updated to a declared version (its own update installed as an app, copied over itself)
+    paths: [host/bin/launcher_serial.py, plugins/modules/launcher_apply.py, plugins/module_utils/plan.py]
+    tests:
+      unit: [tests/unit/test_launcher_apply_module.py, tests/unit/test_launcher_serial_tool.py]
+      hw: [apply]
+  - id: launcher.first-install
+    kind: capability
+    summary: Launcher written whole on a chip that has none (esptool, at 0x0)
+    paths: [plugins/modules/launcher_install.py, roles/board/tasks/update_launcher.yml]
+    tests:
+      unit: [tests/unit/test_launcher_install.py]
+  - id: launcher.images
+    kind: capability
+    summary: Launcher releases and app images resolved and staged; the web UI's view of the slots
+    paths: [plugins/module_utils/images.py, plugins/module_utils/webui.py, plugins/modules/launcher_images.py]
+    tests:
+      unit: [tests/unit/test_launcher_images.py, tests/unit/test_launcher_webui.py]
+  - id: launcher.boards
+    kind: capability
+    summary: the Launcher board types (entry, modem lines, boot window) as the catalog declares them
+    paths: [catalog/boards.yml]
+    tests:
+      unit: [tests/unit/test_launcher_family.py]
+      hw: [facts]

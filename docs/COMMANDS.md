@@ -11,6 +11,7 @@ one that writes outside `apply` is a plan unless `confirm=apply` is among its ar
 | `just doctor [args ...]` | what this machine has of what the simulated benches need, and what provides a missing one; `--require zephyr,nuttx` makes the exit code say whether those can run |
 | `just setup` | the tool's venv, the collections, sops and age (pinned), the git hooks |
 | `just pins [args ...]` | the pinned single-file tools on this machine: `list`, `install [name ...]`, `path` (`core/host/binaries.yml`, `docs/GETTING-STARTED.md#requirements`) |
+| `just features [args ...]` | the feature index (each collection's `features.yml`): checked against the code by default; `--gaps` what is unproven, `--list` every feature, `--owners <path>...` the features a file belongs to |
 | `just core-only [args ...]` | the unit tests against core alone: a collections tree with `rxrbench.core` and a fixture plugin, no bundled plugin (`docs/ARCHITECTURE.md#core-portability` P1) |
 | `just privacy` | the privacy check alone: refuse site-private text in the tool's tracked files (`CONTRIBUTING.md#public-and-private`) |
 | `just ci [job=containers]` | a GitHub Actions job (default `containers`) and the jobs it needs, run here with `act` as GitHub runs it: a non-root user with sudo, on a clean clone of HEAD (needs `act` and Docker) |

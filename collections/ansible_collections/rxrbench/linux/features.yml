@@ -1,0 +1,34 @@
+---
+# What rxrbench.linux does (Linux devices over ssh: plain, RAUC A/B, slotguard's health gate).
+features:
+  - id: linux.family.linux
+    kind: family
+    name: linux
+    summary: a plain Linux device over ssh (facts, its host key)
+    paths: [plugins/plugin_utils/families/linux.py, plugins/module_utils/osinfo.py, plugins/module_utils/hostkey.py,
+            plugins/modules/linux_facts.py, plugins/modules/linux_host_key.py]
+    tests:
+      unit: [tests/unit/test_linux_families.py, tests/unit/test_linux_host_key.py]
+      sim: [tests/sim/test_linux_sim.py]
+  - id: linux.family.linux_rauc
+    kind: family
+    name: linux_rauc
+    summary: a Linux device with RAUC A/B slots, updated by bundle
+    paths: [plugins/plugin_utils/families/linux_rauc.py, plugins/module_utils/rauc.py, plugins/modules/rauc_*.py]
+    tests:
+      unit: [tests/unit/test_flash_rauc.py, tests/unit/test_linux_families.py]
+      sim: [tests/sim/test_rauc_sim.py]
+  - id: linux.family.linux_slotguard
+    kind: family
+    name: linux_slotguard
+    summary: RAUC A/B with slotguard's health gate and rollback
+    paths: [plugins/plugin_utils/families/linux_slotguard.py, plugins/module_utils/rauc.py]
+    tests:
+      unit: [tests/unit/test_linux_families.py]
+      sim: [tests/sim/test_rauc_sim.py]
+  - id: linux.card-images
+    kind: capability
+    summary: a card image (wic) staged for the card verb; the U-Boot sandbox
+    paths: [tools/stage_wic.py, tools/uboot_sandbox.py]
+    tests:
+      unit: [tests/unit/test_flash_card.py]

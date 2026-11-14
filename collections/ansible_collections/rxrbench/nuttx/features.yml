@@ -1,0 +1,13 @@
+---
+# What rxrbench.nuttx does (Apache NuttX through NSH).
+features:
+  - id: nuttx.family.nuttx_nsh
+    kind: family
+    name: nuttx_nsh
+    summary: NuttX through NSH (version, files), flashed by picoboot or uf2
+    paths: [plugins/plugin_utils/families/nuttx_nsh.py, plugins/module_utils/nfiles.py, plugins/modules/nuttx_files.py,
+            tools/nuttx_sim.py]
+    tests:
+      unit: [tests/unit/test_nuttx_sim_tool.py]
+      sim: [tests/sim/test_nuttx_sim.py]
+      hw: [apply, plan]

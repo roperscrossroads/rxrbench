@@ -1,0 +1,13 @@
+---
+# What rxrbench.zephyr does (Zephyr applications on the settings shell).
+features:
+  - id: zephyr.family.zephyr_settings
+    kind: family
+    name: zephyr_settings
+    summary: a Zephyr application's settings read and written through its shell
+    paths: [plugins/plugin_utils/families/zephyr_settings.py, plugins/module_utils/zsettings.py,
+            plugins/modules/zephyr_settings.py]
+    tests:
+      unit: [tests/unit/test_zsettings.py]
+      sim: [tests/sim/test_zephyr_app_sim.py, tests/sim/test_exercise_sim.py]
+      hw: [apply, plan, snapshot-switch]

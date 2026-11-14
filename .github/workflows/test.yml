@@ -42,6 +42,7 @@ jobs:
           ./venv/bin/yamllint -s .
           ./venv/bin/ansible-lint
           ./venv/bin/python tools/privacy_check.py
+          ./venv/bin/python tools/features.py --check
       - name: The docs as antsibull-docs reads them (the pinned doc tools, their own venv)
         # ansible-lint passes a DOCUMENTATION it cannot read; this fails it, and a markup or
         # argument spec antsibull-docs would render wrong

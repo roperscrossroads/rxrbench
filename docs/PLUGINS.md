@@ -252,6 +252,11 @@ markers, and a unit test fails when a recipe lacks either or a README is stale.
 
 ## Tests a plugin should keep
 
+- `features.yml` beside the collection's code lists what it does: its families and capabilities,
+  the code each depends on (globs) and the tests that prove it (unit and sim files, and the board
+  exercise's verbs that prove it on hardware). `just features` checks that every family, verb,
+  flasher and route has a feature, that every path and test file exists, and that a feature with
+  no test says why (`gap:`); `just features --gaps` lists what is unproven.
 - `tests/unit/test_families.py` holds every loaded family: every row has every field, and the spec
   survives being sent as JSON.
 - `tests/unit/test_portability.py` holds core to never comparing a plugin's names and never
