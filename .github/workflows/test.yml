@@ -156,6 +156,8 @@ jobs:
           repository: roperscrossroads/zephyrtastic
           ref: ${{ env.ZEPHYRTASTIC_REV }}
           path: zephyrtastic
+      - name: HOME as root's own (GitHub sets /github/home in a container; see the sim job)
+        run: echo "HOME=/root" >> "$GITHUB_ENV"
       - name: zephyrtastic's Zephyr workspace (its own manifest; native_sim needs no vendor HAL)
         run: |
           # west and Zephyr's Python requirements in a venv on PATH for the later steps (the
@@ -249,6 +251,10 @@ jobs:
         run: |
           echo "RXRBENCH_ZEPHYR_WORKSPACE=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
           echo "RXRBENCH_NUTTX_WORKSPACE=$GITHUB_WORKSPACE/nuttx-ws" >> "$GITHUB_ENV"
+          # GitHub gives a container job HOME=/github/home, but root's home is /root: Ansible
+          # expands a bench host's ~ from the user's entry (/root), a module from HOME, and an
+          # image staged in one ~ would not be found in the other
+          echo "HOME=/root" >> "$GITHUB_ENV"
       # The built images, from the cache when nothing they are built from has changed: the west
       # manifest, the NuttX release, the build tools, the boards' configurations and this file.
       # The tests need only the images (and the MCUmgr venv, sops and age), so a hit skips the
