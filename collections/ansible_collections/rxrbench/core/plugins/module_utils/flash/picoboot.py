@@ -48,6 +48,13 @@ UF2_MAGIC = (0x0A324655, 0x9E5D5157, 0x0AB16F30)
 FLAG_NOT_MAIN_FLASH = 0x00000001
 FLAG_FAMILY = 0x00002000
 ENTER_DEFAULT = ("reset-interface", "touch-1200")
+#: How much of the flash one `picotool save` reads. picotool 2.1 slows down as the range grows,
+#: so a long range is read in pieces this size (4 MB read whole at 109 KB/s, in 128 KB
+#: pieces at 270 KB/s, the same bytes).
+SAVE_PIECE = 128 * 1024
+#: Seconds one piece may take (it takes about half a second).
+SAVE_PIECE_TIMEOUT = 60
+
 #: Seconds to wait for the bootloader after each way in (the board resetting and enumerating).
 ENTER_WAIT = 10.0
 #: Seconds an ask may take (open the port, touch it or send the command, close it): under one on
@@ -289,12 +296,38 @@ s.close()
             self.entered, self.wrote = None, False
 
     def save(self, lo, hi, dest, timeout=None):
-        """The chip's flash from `lo` to `hi` into the file `dest` (the chip in its bootloader)."""
-        # picotool reads at about 64 KB/s: a whole 16 MB chip takes four minutes
-        rc, out = self._pt("save", "-r", f"0x{lo:x}", f"0x{hi:x}", dest,
-                           timeout=timeout or max(300, (hi - lo) // 20000))
-        if rc != 0:
-            raise common.FlashError(f"picotool save 0x{lo:x}..0x{hi:x} failed: {out.strip()[-300:]}")
+        """The chip's flash from `lo` to `hi` into the file `dest` (the chip in its bootloader),
+        read in pieces of SAVE_PIECE and joined: picotool 2.1's `save` slows down as its range
+        grows (about 270 KB/s for 128 KB, 65 KB/s for a whole 8 MB chip; the same bytes in
+        pieces come back identical), while the flash and the USB link do not. `timeout` is per
+        piece. The file is written as `dest`.part and renamed when whole: a read that fails
+        leaves no partial file under the name a backup is kept by."""
+        piece, part = dest + ".piece.bin", dest + ".part"
+        try:
+            with open(part, "wb") as out:
+                for a in range(lo, hi, SAVE_PIECE):
+                    b = min(a + SAVE_PIECE, hi)
+                    if os.path.exists(piece):     # a save that writes nothing must not pass the last piece off
+                        os.unlink(piece)
+                    rc, msg = self._pt("save", "-r", f"0x{a:x}", f"0x{b:x}", piece,
+                                       timeout=timeout or SAVE_PIECE_TIMEOUT)
+                    if rc != 0:
+                        raise common.FlashError(f"picotool save 0x{a:x}..0x{b:x} (of 0x{lo:x}..0x{hi:x}) "
+                                                f"failed: {msg.strip()[-300:]}")
+                    try:
+                        with open(piece, "rb") as f:
+                            data = f.read()
+                    except OSError as e:
+                        raise common.FlashError(f"picotool save 0x{a:x}..0x{b:x} wrote no file: {e}") from e
+                    if len(data) != b - a:
+                        raise common.FlashError(f"picotool save 0x{a:x}..0x{b:x} gave {len(data)} bytes, "
+                                                f"not {b - a}")
+                    out.write(data)
+            os.replace(part, dest)
+        finally:
+            for f in (piece, part):
+                if os.path.exists(f):
+                    os.unlink(f)
 
     def _read(self, lo, hi):
         fd, tmp = tempfile.mkstemp(suffix=".bin")

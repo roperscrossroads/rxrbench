@@ -276,3 +276,56 @@ def test_an_image_whose_shell_is_not_on_the_usb_port_is_refused_for_a_board_reac
     assert not any("USB port" in r for r in f.preflight())
     f.console_expected, manifest["console"] = False, "uart"   # a board with no console of its own
     assert not any("USB port" in r for r in f.preflight())
+
+
+def test_a_long_range_is_read_in_pieces_and_joined_byte_for_byte(chip, monkeypatch):
+    # picotool's save slows down as its range grows: a range is read in pieces
+    tmp, tool, set_state, log, flash = chip
+    data = os.urandom(0x40000)
+    flash.write_bytes(data)
+    set_state(boot=True)
+    monkeypatch.setattr(picoboot, "SAVE_PIECE", 0x10000)
+    rom = picoboot.Bootrom("pog1", CHIP, SPEC, picotool=tool)
+    out = tmp / "out.bin"
+    rom.save(BASE + 0x100, BASE + 0x30000, str(out))
+    assert out.read_bytes() == data[0x100:0x30000]
+    saves = [c.split()[2:4] for c in log() if c.startswith("save")]
+    assert saves[0] == [f"0x{BASE + 0x100:x}", f"0x{BASE + 0x10100:x}"]
+    assert saves[-1][1] == f"0x{BASE + 0x30000:x}" and len(saves) == 3
+    assert not list(tmp.glob("*.piece.bin"))
+
+
+def test_a_piece_that_fails_or_comes_back_short_stops_the_read(chip, monkeypatch):
+    tmp, tool, set_state, _, flash = chip
+    set_state(boot=True)
+    monkeypatch.setattr(picoboot, "SAVE_PIECE", 0x10000)
+    rom = picoboot.Bootrom("pog1", CHIP, SPEC, picotool=tool)
+    with pytest.raises(common.FlashError, match="gave"):    # past the end of the flash
+        rom.save(BASE + 0x30000, BASE + 0x50000, str(tmp / "short.bin"))
+    set_state(boot=False)
+    with pytest.raises(common.FlashError, match="failed"):
+        rom.save(BASE, BASE + 0x20000, str(tmp / "none.bin"))
+    assert not list(tmp.glob("*.piece.bin"))
+    assert not list(tmp.glob("short.bin*")) and not list(tmp.glob("none.bin*")), \
+        "a read that failed leaves nothing under the backup's name, nor a .part"
+
+
+def test_a_piece_whose_save_exits_0_but_writes_nothing_is_not_the_last_piece_again(chip, monkeypatch):
+    """A stale piece of the same length would pass silently as the next range's bytes."""
+    tmp, tool, set_state, _, flash = chip
+    flash.write_bytes(os.urandom(0x40000))
+    set_state(boot=True)
+    monkeypatch.setattr(picoboot, "SAVE_PIECE", 0x10000)
+    rom = picoboot.Bootrom("pog1", CHIP, SPEC, picotool=tool)
+    real, calls = rom._pt, []                              # pylint: disable=protected-access
+
+    def pt(*args, **kw):
+        calls.append(args[0])
+        if args[0] == "save" and calls.count("save") == 2:
+            return 0, ""                                    # rc 0, no file written
+        return real(*args, **kw)
+    monkeypatch.setattr(rom, "_pt", pt)
+    out = tmp / "chip.bin"
+    with pytest.raises(common.FlashError, match="wrote no file"):
+        rom.save(BASE, BASE + 0x30000, str(out))
+    assert not out.exists() and not list(tmp.glob("chip.bin*"))
