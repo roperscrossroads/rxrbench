@@ -50,7 +50,7 @@ def test_the_steps_come_in_order_launcher_settings_networks_apps_with_the_boot_s
     kinds = [s["kind"] for s in p["steps"]]
     assert kinds == ["manager", "settings", "wui_password", "wifi_replace", "wifi_add", "wifi_del",
                      "install", "install"]
-    assert p["steps"][1]["changes"] == {"bootToApp": 0, "bootTimer": 2}
+    assert p["steps"][1]["changes"] == {"bootToApp": False, "bootTimer": 2}
     installs = [s for s in p["steps"] if s["kind"] == "install"]
     assert [s["label"] for s in installs] == ["wifite", "camstr"], "the boot slot is installed last"
     assert installs[1]["overwrite"] is True and "no record" in installs[1]["why"]
@@ -219,13 +219,13 @@ def test_every_step_kind_has_a_line_and_none_carries_a_secret():
         {"kind": "version", "to": "beta-7777777"},
         {"kind": "install", "label": "camstr", "image": "cam-stream", "app_size": 5000, "overwrite": True,
          "why": "the slot holds wifi-test"},
-        {"kind": "settings", "changes": {"bootToApp": 0, "wui_usr": "ops"}},
+        {"kind": "settings", "changes": {"bootToApp": False, "wui_usr": "ops"}},
         {"kind": "mystery"}]]
     assert lines == ["WebUI password -> as declared", "delete slot wifite", "boot slot wifite -> camstr",
                      "Launcher's version cannot be read on this build (no `version` command before main); "
                      "beta-7777777 is declared: compare through the WebUI's /systeminfo",
                      "install cam-stream into slot camstr (5000 B, reusing the slot): the slot holds wifi-test",
-                     "settings bootToApp=0, wui_usr=ops", "mystery"]
+                     "settings bootToApp=false, wui_usr=ops", "mystery"]
 
 
 def test_pruning_removes_only_undeclared_slots_and_the_boot_slot_goes_last():

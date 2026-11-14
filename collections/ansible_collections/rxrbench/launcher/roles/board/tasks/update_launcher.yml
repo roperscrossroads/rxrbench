@@ -81,7 +81,7 @@
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
   when:
     - board_launcher.no_launcher | default(false)
-    - board_images.manager
+    - board_images.manager is truthy
   register: board_installed
 
 - name: Launcher as declared, now that it is there
@@ -121,7 +121,7 @@
   when:
     - board_launcher.no_launcher | default(false)
     - board_installed is skipped
-    - not (ansible_check_mode and board_images.manager)
+    - not (ansible_check_mode and board_images.manager is truthy)
 
 - name: What differs, or what was done
   ansible.builtin.debug:

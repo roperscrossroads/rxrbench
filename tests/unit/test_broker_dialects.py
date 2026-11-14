@@ -210,12 +210,12 @@ def test_an_attend_may_answer_the_prompt_with_a_line_of_the_clients_choosing(lau
     the menu. The client names the answer; the dialect's own stays the default."""
     node, board, log, console = launcher(window=1.0, tick=0.05, selpress_lost=True)
     with board as b:
-        r = b.request(op="attend", dialect="launcher", ttl=10, answer='settings set {"bootToApp":0}')
+        r = b.request(op="attend", dialect="launcher", ttl=10, answer='settings set {"bootToApp":false}')
         assert r["attending"] is True
         end = time.time() + 3
         while node.state != "menu" and time.time() < end:
             time.sleep(0.02)
-        assert node.state == "menu" and node.settings["bootToApp"] == 0
+        assert node.state == "menu" and node.settings["bootToApp"] is False
         assert b.exec("version", dialect="launcher") == "Launcher beta-60a40c8"
         assert console.attended == 1 and "nav SelPress" not in node.seen
         r = b.request(op="attend", dialect="launcher", ttl=10, answer="two\nlines")

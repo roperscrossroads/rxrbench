@@ -124,6 +124,21 @@ def test_a_board_in_its_app_is_reset_into_launcher_through_the_banner(rig, monke
     assert node.state == "app" and node.reboots == 1, "the app is booted again"
 
 
+def test_a_version_reply_inside_the_window_waits_for_the_banner(rig, monkeypatch):
+    """A CYD's console answers `version` before its boot screen prints the first banner: taking
+    that reply for the menu stopped the attending, the window went unanswered, the app booted."""
+    monkeypatch.setattr(console, "WINDOW", 2.0)
+    node, board = rig(apps=[("camstr", 0x100000)], boot="camstr", window=1.5, tick=0.05, banner_delay=0.5)
+    time.sleep(0.1)
+    node.state = "app"
+    with board as b:
+        monkeypatch.setattr(board, "request", _reset_powers_on(board, node))
+        v, how = console.enter(b, wait=5, poll=0.2)
+        assert (v, how) == ("beta-60a40c8", "entered")
+        assert node.seen.count("nav SelPress") == 1
+        assert node.state == "menu", "the window was answered: Launcher stays in its menu"
+
+
 def test_no_launcher_within_the_wait_is_said_plainly(rig, monkeypatch):
     node, board = rig(window=0.0)
     node.state = "app"
@@ -145,10 +160,10 @@ def test_a_port_that_cannot_reset_says_so_and_stops_attending(rig):
 def test_settings_are_written_and_read_back(rig):
     node, board = rig()
     with board as b:
-        console.set_settings(b, {"bootToApp": 0, "bootTimer": 2})
+        console.set_settings(b, {"bootToApp": False, "bootTimer": 2})
         f = console.read(b)
     assert f["settings"]["boot_to_app"] is False and f["settings"]["boot_timer"] == 2
-    assert node.settings["bootToApp"] == 0
+    assert node.settings["bootToApp"] is False
 
 
 def _reset_powers_on(board, node, window=None):

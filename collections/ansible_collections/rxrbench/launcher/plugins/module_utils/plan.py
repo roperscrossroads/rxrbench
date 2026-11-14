@@ -18,6 +18,8 @@ last: an install selects the slot it wrote), then what is left over. The boot sl
 set over the serial console: when no install chooses it, the step is reported as needing the
 WebUI route (or Launcher's `boot <label>` once it has one), a difference, not a failure.
 """
+
+import json
 import os
 
 
@@ -77,7 +79,8 @@ def plan(declared, facts, records=None):
             continue
         have = facts.get("settings", {}).get(ours)
         if have != want:
-            changes[theirs] = int(want) if isinstance(want, bool) else want
+            # a flag stays a bool: Launcher skips a 0 or 1 for one (`is<bool>()`)
+            changes[theirs] = want
             after["settings"][ours] = want
     if changes:
         steps.append({"kind": "settings", "changes": changes})
@@ -145,7 +148,7 @@ def shown(step):
     if k == "manager":
         return f"Launcher {step['from']} -> {step['to']}"
     if k == "settings":
-        return "settings " + ", ".join(f"{a}={b}" for a, b in sorted(step["changes"].items()))
+        return "settings " + ", ".join(f"{a}={json.dumps(b) if isinstance(b, bool) else b}" for a, b in sorted(step["changes"].items()))
     if k == "wui_password":
         return "WebUI password -> as declared"
     if k in ("wifi_add", "wifi_replace", "wifi_del"):

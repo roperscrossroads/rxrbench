@@ -45,7 +45,8 @@ def resets_after_ready(log):
 
 #: What the boot banner is answered with, to stay in Launcher: a key press, or bootToApp
 #: turned off for this boot (Launcher merges and applies it at once; put back in the menu).
-ENTRIES = {"selpress": "nav SelPress", "settings": 'settings set {"bootToApp":0}'}
+#: JSON `false`, not 0: Launcher's `is<bool>()` skips a number and answers OK all the same.
+ENTRIES = {"selpress": "nav SelPress", "settings": 'settings set {"bootToApp":false}'}
 MENU = "Type 'help'"
 
 
@@ -100,35 +101,53 @@ class Link:
                 time.sleep(0.01)
 
 
+QUIET = 0.8   # longer than the boot window's banner interval (~0.5 s): no banner for this long is no window
+
+
 def enter(link, wait, entry="selpress"):
     """Launcher's console, answering: as it is, or through the boot banner (answered the
-    moment it shows, before the window closes, with `ENTRIES[entry]`). After the `settings`
-    answer the menu line is waited for and bootToApp put back on."""
+    moment it shows, before the window closes, with `ENTRIES[entry]`). Launcher's console
+    answers `version` inside its boot window too, so a reply alone is not the menu: after a
+    banner the menu line is waited for, and a reply counts by itself only once no banner has
+    come for `QUIET` (a board already in the menu). After the `settings` answer bootToApp is
+    put back on in the menu."""
     link.send("")
     link.send("version")
-    end, asked, answered, menu = time.monotonic() + wait, time.monotonic(), False, False
-    while time.monotonic() < end:
-        line = link.wait(lambda l: l.startswith("Launcher ") or BANNER in l or MENU in l, 1.0)
+    t0 = time.monotonic()
+    end, asked, answered, menu, replied = t0 + wait, t0, False, False, None
+    last_banner = None
+    while time.monotonic() < end or (replied is not None and last_banner is None
+                                      and time.monotonic() < replied + QUIET):
+        line = link.wait(lambda l: l.startswith("Launcher ") or BANNER in l or MENU in l, 0.1)
+        now = time.monotonic()
         if line is not None and MENU in line:
             menu = True
+        if line is not None and BANNER in line:
+            last_banner = now
+            if not answered:
+                link.send(ENTRIES[entry])
+                answered = True
+            link.pending = [l for l in link.pending if BANNER not in l]
         if line is not None and line.startswith("Launcher "):
             # the answers to what was sent here (`OK nav SelPress`, `OK settings loaded`) are
             # not the install's: nothing of them waits for the next command
             link.pending = [l for l in link.pending if not l.startswith(("OK", "ERR"))]
+            replied = replied or now
+        if menu and (answered or replied is not None):
+            # what answered the entry's own lines (the empty line's ERR, `OK nav SelPress`) is
+            # not the install's: nothing of it may wait for the next command
+            link.pending = [l for l in link.pending if not l.startswith(("OK", "ERR"))]
             if answered and entry == "settings":
-                if not menu and link.wait(lambda l: MENU in l, 8.0) is None:
-                    return False                       # the window did not end in the menu
-                link.send('settings set {"bootToApp":1}')
+                link.send('settings set {"bootToApp":true}')
                 ok = link.wait(lambda l: l.startswith(("OK", "ERR")), 5.0)
                 return bool(ok and ok.startswith("OK"))
             return True
-        if line is not None and BANNER in line and not answered:
-            link.send(ENTRIES[entry])
-            answered = True
-            link.pending = [l for l in link.pending if BANNER not in l]
-        if line is not None or time.monotonic() - asked > 2.0:
+        if replied is not None and last_banner is None and now - replied >= QUIET:
+            link.pending = [l for l in link.pending if not l.startswith(("OK", "ERR"))]
+            return True                                 # in the menu already: no window
+        if replied is None and now - asked > 2.0:
             link.send("version")
-            asked = time.monotonic()
+            asked = now
     return False
 
 

@@ -143,8 +143,8 @@ def test_a_board_that_loses_the_key_press_is_entered_by_its_settings_and_reads_a
     L = r["launcher"]
     assert (L["running"], L["entered"], L["left"], L["boot"]) == (True, True, True, "m9base")
     assert L["settings"]["boot_to_app"] is True, "read as it was: the entry's change is undone before the read"
-    assert node.settings["bootToApp"] == 1 and node.state == "app"
-    assert node.seen.count('settings set {"bootToApp":0}') == 1 and "nav SelPress" not in node.seen
+    assert node.settings["bootToApp"] is True and node.state == "app"
+    assert node.seen.count('settings set {"bootToApp":false}') == 1 and "nav SelPress" not in node.seen
 
 
 def test_the_key_press_entry_on_a_board_that_loses_it_is_a_named_failure(rig, monkeypatch):

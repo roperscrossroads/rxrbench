@@ -117,8 +117,8 @@ def test_settings_and_the_webui_password_are_written_and_read_back(rig, declared
               "launcher": {"boot_timer": 2, "boot_to_app": False}, "secrets": {"wui_password": "n3w-pw"}}
     how, r = fake_module.run(launcher_apply, monkeypatch, params)
     assert how == "exit" and r["changed"] is True
-    assert r["steps"] == ["settings bootTimer=2, bootToApp=0", "WebUI password -> as declared"]
-    assert node.settings["bootTimer"] == 2 and node.settings["bootToApp"] == 0 and node.settings["wui_pwd"] == "n3w-pw"
+    assert r["steps"] == ["settings bootTimer=2, bootToApp=false", "WebUI password -> as declared"]
+    assert node.settings["bootTimer"] == 2 and node.settings["bootToApp"] is False and node.settings["wui_pwd"] == "n3w-pw"
     assert "n3w-pw" not in json.dumps(r)
     assert r["launcher"]["settings"]["boot_timer"] == 2 and r["launcher"]["settings"]["boot_to_app"] is False
 

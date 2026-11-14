@@ -34,10 +34,16 @@ from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
 DIALECT = "launcher"
 #: What the boot banner is answered with, to stay in Launcher: a key press (the default) or
 #: the setting (`launcher_enter: settings` on the board's type).
-ENTRIES = {"selpress": "nav SelPress", "settings": 'settings set {"bootToApp":0}'}
+#: The flag is JSON `false`: Launcher reads it with ArduinoJson's `is<bool>()`, which skips a 0
+#: or 1 (every release, 2.9.1 to 3.0.0) and still answers `OK settings loaded`.
+ENTRIES = {"selpress": "nav SelPress", "settings": 'settings set {"bootToApp":false}'}
 #: Seconds after the power-on by which a window ended by `bootToApp` off has closed (a 2.9.1
 #: window is 2 s + 3 s with bootToApp on; off, it ends at 2 s); the setting is put back then.
 SETTLE = 3.0
+#: Seconds after the power-on by which a boot window with bootToApp on has closed (2.9.1: 2 s +
+#: 3 s; a CYD with bootTimer 4: 5 s). Launcher's console answers inside the window too, so a
+#: `version` reply is not the menu: the banner is attended until then.
+WINDOW = 6.0
 #: Commands that carry a secret after these words: a WiFi password, the settings JSON (the
 #: WebUI password is in it). The broker keeps everything after the words out of its log.
 SECRET_PREFIXES = ("wifi connect ", "wifi add ", "settings set ")
@@ -225,10 +231,16 @@ def enter(board, wait=25.0, poll=1.0, entry="selpress"):
         time.sleep(poll)
         v = version(board, deadline=2.0)
         if v:
+            # the console answers inside the boot window as well: keep the banner attended until
+            # the window has closed, then ask again (an unanswered window boots the app)
+            time.sleep(max(0.0, t0 + WINDOW - time.monotonic()))
             board.request(op="attend", dialect=DIALECT, ttl=0)
+            if not version(board, deadline=2.0):
+                raise ConsoleError(f"{board.board}: Launcher answered inside its boot window, then the "
+                                   f"app booted: the banner went unanswered within {WINDOW:.0f} s")
             if entry == "settings":
                 time.sleep(max(0.0, t0 + SETTLE - time.monotonic()))
-                set_settings(board, {"bootToApp": 1})
+                set_settings(board, {"bootToApp": True})
                 if not version(board, deadline=2.0):
                     raise ConsoleError(f"{board.board}: the app booted after the settings entry: the boot "
                                        f"window outlasted {SETTLE:.0f} s and bootToApp was put back too soon")

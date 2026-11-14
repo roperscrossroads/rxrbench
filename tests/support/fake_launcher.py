@@ -30,6 +30,10 @@ import threading
 import time
 import tty
 
+#: The settings Launcher reads as bools (`is<bool>()` in applySettingsFromRoot).
+BOOL_SETTINGS = {"bootToApp", "DDLB", "dev", "autoConnect", "onlyBins", "askSpiffs", "autoBackup",
+                 "noDotFiles", "LauncherKeyLvl"}
+
 BANNER = "Press the button to enter the Launcher!"
 #: What a release prints for a subtype it has no name for (serial_console.cpp names only
 #: ota_N, fat, spiffs and littlefs).
@@ -40,8 +44,11 @@ MENU = "Type 'help' for Serial commands."
 class FakeLauncher:
     def __init__(self, version="beta-60a40c8", window=0.0, tick=0.05, apps=(), boot=None,
                  flash_size=0x400000, name="Cheap Yellow Display", has_version=True,
-                 mac="02:00:00:00:00:02", selpress_lost=False, has_overwrite=True, busy=0.0):
+                 mac="02:00:00:00:00:02", selpress_lost=False, has_overwrite=True, busy=0.0,
+                 banner_delay=0.0):
         self.version, self.window, self.tick = version, window, tick
+        # a CYD's console answers before its boot screen prints the first banner
+        self.banner_delay = banner_delay
         self.selpress_lost = selpress_lost   # the press is answered but the boot loop never sees it
         self.has_version = has_version       # releases up to 2.9.1 have no `version` command
         # `flash overwrite` came after 2.9.1 (Launcher ebb2649): a 2.9.1 console does not know it,
@@ -61,9 +68,9 @@ class FakeLauncher:
             self.table.append((label, "app", f"ota_{i}", self._next_offset(), size))
         self.boot = boot
         self.name = name
-        self.settings = {"onlyBins": 1, "bootToApp": 1, "bootTimer": 4, "DDLB": 1,
+        self.settings = {"onlyBins": True, "bootToApp": True, "bootTimer": 4, "DDLB": True,
                          "wui_usr": "admin", "wui_pwd": "launcher", "dev": False,
-                         "autoConnect": 1, "wifi": [{"ssid": "lab-iot", "pwd": "hunter22"}],
+                         "autoConnect": True, "wifi": [{"ssid": "lab-iot", "pwd": "hunter22"}],
                          f"{mac}-{name}": 3}          # Launcher's per-board entry: the chip's MAC
         self.master, slave = pty.openpty()
         tty.setraw(slave)
@@ -92,6 +99,7 @@ class FakeLauncher:
     def power_on(self):
         self.state = "window"
         self.window_until = time.monotonic() + self.window
+        self.banners_from = time.monotonic() + self.banner_delay
 
     def out(self, text):
         os.write(self.master, text.encode())
@@ -117,7 +125,7 @@ class FakeLauncher:
                     else:
                         self.state = "menu"      # nothing to boot into: the menu
                         self.out(MENU + "\r\n")
-                elif now - last_banner >= self.tick:
+                elif now - last_banner >= self.tick and now >= getattr(self, "banners_from", 0.0):
                     self.out(BANNER + "\r\n")
                     last_banner = now
             try:
@@ -213,7 +221,11 @@ class FakeLauncher:
             self.out(json.dumps(self.settings, separators=(",", ":")) + "\r\n")
         elif line.startswith("settings set "):
             try:
-                self.settings.update(json.loads(line[len("settings set "):]))
+                sent = json.loads(line[len("settings set "):])
+                # Launcher reads each flag with ArduinoJson's is<bool>(): a 0 or 1 is not a
+                # bool, so it is skipped (and still answered OK), as every release does
+                self.settings.update({k: v for k, v in sent.items()
+                                      if k not in BOOL_SETTINGS or isinstance(v, bool)})
                 self.out("OK settings loaded\r\n")
             except ValueError:
                 self.out("ERR invalid settings json\r\n")

@@ -17,10 +17,12 @@ class Device:
     ACK numbered `err_at`, refusing the flash when not `ready`."""
 
     def __init__(self, launcher=True, banners=0, drop=(), err_at=None, ready=True, selpress_lost=False,
-                 reset_at=None):
+                 reset_at=None, answers_in_window=False):
         self.launcher, self.banners, self.drop, self.err_at, self.ready = launcher, banners, set(drop), err_at, ready
         self.reset_at = reset_at   # the ACK number at which the board restarts into its app
         self.selpress_lost = selpress_lost
+        # a real Launcher's console answers `version` inside its boot window as well
+        self.answers_in_window = answers_in_window
         self.out, self.raw, self.got, self.seen, self.acks = b"", None, b"", [], 0
 
     def write(self, data):
@@ -45,12 +47,17 @@ class Device:
                 self.raw = None
             return
         for line in data.decode().split("\n"):
+            if data.decode() == "\n" and (self.launcher or self.banners):   # an empty line, as Launcher answers it
+                self.out += b"ERR unknown command, type 'help' for command list\r\n"
+                return
             line = line.strip()
             if not line:
                 continue
             self.seen.append(line)
             if line == "version":
                 if self.banners:
+                    if self.answers_in_window:      # the reply first, the window's banner after it
+                        self.out += b"Launcher 2.9.1\r\n"
                     self.out += (BANNER + "\r\n").encode()
                     self.banners -= 1
                 elif self.launcher:
@@ -62,7 +69,8 @@ class Device:
                     self.out += b"Type 'help' for Serial commands.\r\n"
             elif line.startswith("settings set "):
                 self.out += b"OK settings loaded\r\n"
-                if '"bootToApp":0' in line:       # the window ends in the menu
+                if '"bootToApp":false' in line:   # the window ends in the menu (a 0 is no bool:
+                    # Launcher's is<bool>() skips it and the window runs on)
                     self.launcher, self.banners = True, 0
                     self.out += b"Type 'help' for Serial commands.\r\n"
             elif line.startswith("flash "):
@@ -182,9 +190,9 @@ def test_a_board_that_loses_the_key_press_is_entered_through_its_settings(tool, 
     rc, out = run(tool, dev, tmp_path, capsys, b"\x33" * 5000, "--entry", "settings")
     assert rc == 0 and out["ok"], out
     sets = [l for l in dev.seen if l.startswith("settings set")]
-    assert sets == ['settings set {"bootToApp":0}', 'settings set {"bootToApp":1}'], "off for the boot, on again in the menu"
+    assert sets == ['settings set {"bootToApp":false}', 'settings set {"bootToApp":true}'], "off for the boot, on again in the menu"
     assert "nav SelPress" not in dev.seen
-    assert dev.seen.index('settings set {"bootToApp":1}') < dev.seen.index("flash firmware camstr 5000")
+    assert dev.seen.index('settings set {"bootToApp":true}') < dev.seen.index("flash firmware camstr 5000")
 
 
 def test_the_key_press_entry_on_a_board_that_loses_it_finds_no_console(tool, tmp_path, capsys):
@@ -203,3 +211,18 @@ def test_a_board_that_restarts_under_an_install_is_said_to_and_its_console_kept(
                   "--ack-wait", "0.3")
     assert rc == 1 and out["resets"] == ["TG1WDT_SYS_RESET"]
     assert "rst:0x8 (TG1WDT_SYS_RESET)" in cap.read_text() and "READY 5000" in cap.read_text()
+
+
+def test_a_version_reply_inside_the_boot_window_is_not_the_menu(tool, tmp_path, capsys):
+    """Launcher answers `version` while its boot window still runs (seen on a CYD): taking
+    that reply for the menu left the window unanswered, bootToApp booted the app mid-stream."""
+    d = Device(launcher=False, banners=2, answers_in_window=True)
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 0 and out["ok"], out
+    assert d.seen.index("nav SelPress") < d.seen.index("flash firmware camstr 5000")
+
+
+def test_a_board_already_in_the_menu_is_entered_with_no_key_press(tool, tmp_path, capsys):
+    d = Device()
+    rc, out = run(tool, d, tmp_path, capsys)
+    assert rc == 0 and out["ok"] and "nav SelPress" not in d.seen

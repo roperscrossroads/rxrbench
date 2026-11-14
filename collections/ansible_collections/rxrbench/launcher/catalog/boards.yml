@@ -7,7 +7,10 @@
 # whose RTS holds EN while asserted) and `launcher_enter` (`settings`: the boot banner is
 # answered by turning bootToApp off instead of a key press, on a build that loses the press).
 boards:
-  cyd-2432s028r-2usb: {mcu: esp32, sd: true}
+  # Launcher 3.0.0 shows a shortcut card per app on its touch boot screen; with two apps a
+  # pass of the boot loop outlasts the input task's 75 ms, which clears a serial key press
+  # first (read on the board). bootToApp off ends the window in the menu on every release.
+  cyd-2432s028r-2usb: {mcu: esp32, sd: true, launcher_enter: settings}
   # CH340K with RTS on EN: both lines asserted hold the chip in reset; its input task clears
   # a key press before the boot loop reads it (both read on the board; CHANGELOG).
   thinknode-m9: {mcu: esp32s3, psram: 8MB, sd: true, modem_rest: deasserted, launcher_enter: settings}
