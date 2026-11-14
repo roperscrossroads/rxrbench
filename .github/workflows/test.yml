@@ -42,14 +42,14 @@ jobs:
             sel=$(./venv/bin/python tools/select_tests.py "origin/${{ github.base_ref }}..HEAD")
           fi
           if [ "$sel" = ALL ]; then
-            ./venv/bin/pytest -q -rs tests/unit
+            ./venv/bin/pytest -q -rs -n auto --dist loadfile tests/unit
           else
             unit=$(printf '%s\n' "$sel" | grep '^tests/unit/' || true)
             echo "selected: $(printf '%s\n' "$unit" | grep -c . || true) unit test files"
-            if [ -n "$unit" ]; then ./venv/bin/pytest -q -rs $unit; fi
+            if [ -n "$unit" ]; then ./venv/bin/pytest -q -rs -n auto --dist loadfile $unit; fi
           fi
       - name: Core alone, without the bundled plugins (core-portability P1)
-        run: ./venv/bin/python tools/core_only.py -rs
+        run: ./venv/bin/python tools/core_only.py -rs -n auto --dist loadfile
       - name: Lint
         run: |
           ./venv/bin/yamllint -s .
@@ -161,7 +161,7 @@ jobs:
           set -o pipefail
           # the one test of these that needs zephcore (no public source) is left out by name, so
           # that any other skip still fails the job
-          ./venv/bin/pytest -q -rs tests/sim/test_sim_board.py tests/sim/test_managed_sim.py \
+          ./venv/bin/pytest -q -rs -n auto --dist loadfile tests/sim/test_sim_board.py tests/sim/test_managed_sim.py \
             tests/sim/test_secrets_sim.py tests/sim/test_sim_layout.py tests/sim/test_sim_flash.py \
             --deselect tests/sim/test_secrets_sim.py::test_a_key_a_board_made_is_escrowed_compared_and_never_shown \
             | tee sims.out
@@ -272,7 +272,7 @@ jobs:
         run: ./venv/bin/python tools/doctor.py --require zephyr,qemu,nuttx,smp,secrets
       - name: The simulated Zephyr bench, and what a device keeps
         run: >-
-          ./venv/bin/pytest -q -rs tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
+          ./venv/bin/pytest -q -rs -n auto --dist loadfile tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
           tests/sim/test_mcumgr_sim.py tests/sim/test_nuttx_sim.py tests/sim/test_qemu_sim.py
           tests/sim/test_core_only_sim.py tests/sim/test_run_state_sim.py tests/sim/test_campaign_sim.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2

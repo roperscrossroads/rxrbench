@@ -36,6 +36,8 @@ cryptography==50.0.2
     #   imgtool
 distro==1.9.0
     # via ansible-lint
+execnet==2.1.2
+    # via pytest-xdist
 filelock==4.2.6
     # via ansible-lint
 imgtool==2.4.0
@@ -79,6 +81,10 @@ pygments==2.21.0
 pyserial==3.5
     # via -r requirements.in
 pytest==9.2.0
+    # via
+    #   -r requirements.in
+    #   pytest-xdist
+pytest-xdist==3.8.0
     # via -r requirements.in
 pytokens==0.4.1
     # via black

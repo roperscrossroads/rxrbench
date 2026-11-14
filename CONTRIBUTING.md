@@ -20,7 +20,7 @@ just doctor       # what this machine has of what the simulated benches need
 | Command | What it runs |
 |---|---|
 | `just test` | the unit and sim tests, yamllint, ansible-lint (production profile) and the privacy check; needs no hardware |
-| `./venv/bin/pytest -q tests/unit` | the unit tests alone (seconds to a minute) |
+| `./venv/bin/pytest -q -n auto --dist loadfile tests/unit` | the unit tests alone, one worker per core (pytest-xdist; each file stays in one worker): a minute or two |
 | `./venv/bin/pytest -q tests/sim` | the simulated benches; each is skipped until its images are built ([docs/SIMULATED.md](docs/SIMULATED.md)) |
 | `just core-only` | the unit tests against a collections tree holding only `rxrbench.core` and a fixture plugin: core must work without any bundled plugin |
 | `just golden check` | every layout resolved and compared with its recorded form |

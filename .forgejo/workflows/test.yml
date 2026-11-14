@@ -43,9 +43,9 @@ jobs:
           ./venv/bin/ansible-galaxy collection install -r requirements.yml -p .collections
           echo "$PWD/venv/bin" >> "$GITHUB_PATH"
       - name: Unit tests
-        run: ./venv/bin/pytest -q -rs tests/unit
+        run: ./venv/bin/pytest -q -rs -n 4 --dist loadfile tests/unit
       - name: Core alone, without the bundled plugins (core-portability P1)
-        run: ./venv/bin/python tools/core_only.py -rs
+        run: ./venv/bin/python tools/core_only.py -rs -n 4 --dist loadfile
       - name: Lint
         run: |
           ./venv/bin/yamllint -s .
@@ -164,6 +164,6 @@ jobs:
       - name: The simulated Zephyr bench, and what a device keeps
         working-directory: /root/ws/rxrbench
         run: >-
-          ./venv/bin/pytest -q -rs tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
+          ./venv/bin/pytest -q -rs -n 4 --dist loadfile tests/sim/test_zephyr_sim.py tests/sim/test_zephyr_app_sim.py
           tests/sim/test_mcumgr_sim.py tests/sim/test_nuttx_sim.py tests/sim/test_qemu_sim.py
           tests/sim/test_core_only_sim.py tests/sim/test_run_state_sim.py tests/sim/test_campaign_sim.py

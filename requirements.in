@@ -8,6 +8,7 @@ ansible-core==2.20.1
 ansible-lint
 yamllint
 pytest
+pytest-xdist
 pyyaml
 pyserial
 pyusb>=1.2

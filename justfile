@@ -146,7 +146,7 @@ test-changed base="origin/main" *args:
     if [ "$sel" = ALL ]; then sel="tests/unit tests/sim"; fi
     echo "$sel" | tr ' ' '\n' | sed 's/^/  /'
     [ -z "$sel" ] && { echo "nothing to test"; exit 0; }
-    ./venv/bin/pytest -q $sel {{args}}
+    ./venv/bin/pytest -q -n auto --dist loadfile $sel {{args}}
 
 # core alone: the unit tests against a tree with core and a fixture plugin only
 # (docs/ARCHITECTURE.md#core-portability)
@@ -517,7 +517,7 @@ docs-serve port='8765':
 [group("the tool")]
 [doc("unit and sim tests (each sim skipped until its images are built), lint, the privacy check; needs no hardware")]
 test:
-    ./venv/bin/pytest -q tests/unit tests/sim
+    ./venv/bin/pytest -q -n auto --dist loadfile tests/unit tests/sim
     ./venv/bin/yamllint -s .
     ./venv/bin/ansible-lint 2>&1 | cat
     ./venv/bin/python tools/privacy_check.py
