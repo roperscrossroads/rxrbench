@@ -36,6 +36,7 @@
         enter_wait: "{{ bench_picoboot_enter_wait | default(omit) }}"
         ask_timeout: "{{ bench_picoboot_ask_timeout | default(omit) }}"
         flasher: "{{ bench_flasher | default(omit) }}"
+        route: "{{ (bench_routes | default({})).flash | default(omit) }}"
         run_dir: "{{ bench_sim_run | default(omit) }}"
         families: "{{ bench_families }}"
         apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
