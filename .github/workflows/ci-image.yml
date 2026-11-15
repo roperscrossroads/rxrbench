@@ -1,0 +1,86 @@
+---
+# The CI image (ci/image/README.md): the apko base, then the tool's Python environment on it,
+# pushed as ghcr.io/roperscrossroads/rxrbench-ci:req-<key> (and latest, and a date). Built when
+# a file it is made from changes, weekly for new Wolfi packages, and by hand.
+name: ci-image
+on:
+  push:
+    paths:
+      - requirements.txt
+      - requirements.yml
+      - collections/ansible_collections/*/*/requirements.txt
+      - docs/tools/requirements.txt
+      - ci/image/**
+      - .github/workflows/ci-image.yml
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  APKO_VERSION: "1.2.19"
+  IMAGE: ghcr.io/roperscrossroads/rxrbench-ci
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: apko (pinned, checksum checked)
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          cd "$(mktemp -d)"
+          base="https://github.com/chainguard-dev/apko/releases/download/v${APKO_VERSION}"
+          curl -fsSLO "${base}/apko_${APKO_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "${base}/checksums.txt"
+          grep "  apko_${APKO_VERSION}_linux_amd64.tar.gz\$" checksums.txt | sha256sum -c -
+          tar xzf "apko_${APKO_VERSION}_linux_amd64.tar.gz"
+          install -m0755 apko_*/apko "$HOME/.local/bin/apko"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: The base (apko)
+        id: base
+        run: |
+          set -euo pipefail
+          apko build --arch x86_64 ci/image/rxrbench-ci.apko.yaml rxrbench-ci-base:build "$RUNNER_TEMP/base.tar"
+          loaded=$(docker load -i "$RUNNER_TEMP/base.tar" | sed -n 's/^Loaded image: //p' | tail -1)
+          echo "image=$loaded" >> "$GITHUB_OUTPUT"
+          echo "base: $loaded"
+
+      - name: The tool's environment on it
+        id: build
+        run: |
+          set -euo pipefail
+          key=$(ci/image/requirements-key)
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx/src"
+          # only the files the image is made from, at their paths in the repo
+          cp --parents requirements.txt requirements.yml docs/tools/requirements.txt \
+            collections/ansible_collections/*/*/requirements.txt "$ctx/src/"
+          cp ci/image/Dockerfile "$ctx/"
+          docker build --build-arg BASE="${{ steps.base.outputs.image }}" --build-arg KEY="$key" \
+            -t "$IMAGE:req-$key" -t "$IMAGE:latest" -t "$IMAGE:$(date -u +%Y%m%d)" "$ctx"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: It runs the tool
+        run: |
+          docker run --rm "$IMAGE:req-${{ steps.build.outputs.key }}" sh -c \
+            '/opt/venv/bin/ansible-playbook --version | head -1 && /opt/venv/bin/just --version \
+             && python3 -c "import yaml" && ls /opt/collections/ansible_collections && git --version'
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push -q "$IMAGE:req-${{ steps.build.outputs.key }}"
+          # latest and the date move only from main; a branch's image is found by its key alone
+          if [ "${{ github.ref }}" = refs/heads/main ]; then
+            docker push -q "$IMAGE:latest"
+            docker push -q "$IMAGE:$(date -u +%Y%m%d)"
+          fi
+          docker image inspect "$IMAGE:req-${{ steps.build.outputs.key }}" --format '{{index .RepoDigests 0}}'

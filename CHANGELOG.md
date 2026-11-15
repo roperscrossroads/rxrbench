@@ -9,6 +9,10 @@
   boards so marked, and `tools/exercise.py <layout> <board> confirm=apply --ci` refuses any other
   and takes the destructive verbs from the board, never from the command line.
 
+- **A CI image**: `ghcr.io/roperscrossroads/rxrbench-ci`, a Wolfi base assembled by apko with
+  the tool's pinned Python environment on it (`ci/image/`). The unit job runs in it when one was
+  built from the same requirements, and installs them itself otherwise.
+
 ### Fixed
 
 - **The exercise found no region backup on a real board**: a region backup is named for its time

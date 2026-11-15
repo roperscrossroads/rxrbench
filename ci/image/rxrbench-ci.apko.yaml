@@ -1,0 +1,36 @@
+# The base of rxrbench's CI image: Wolfi, assembled by apko (no build step runs here). Python
+# 3.12 with PyYAML on the system interpreter (devreg runs under the machine's own python3, as on a
+# bench host), uv to make the venvs, and what a CI job and the actions it runs use: a shell, git,
+# ssh, curl and the archivers. The tool's Python environment is added on top (ci/image/Dockerfile).
+# Root, as GitHub's job containers expect (the workspace they mount is written by the job).
+---
+contents:
+  repositories:
+    - https://packages.wolfi.dev/os
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+  packages:
+    - wolfi-baselayout
+    - ca-certificates-bundle
+    - glibc-locale-posix
+    - busybox
+    - bash
+    - gnutar
+    - gzip
+    - xz
+    - zstd
+    - git
+    - openssh-client
+    - curl
+    - python-3.12
+    - py3.12-pyyaml
+    - uv
+
+environment:
+  LANG: C.UTF-8
+  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+cmd: /bin/bash
+
+archs:
+  - x86_64

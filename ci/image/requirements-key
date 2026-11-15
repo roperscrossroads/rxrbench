@@ -1,0 +1,7 @@
+#!/bin/sh
+# The key of the CI image's environment: a hash of every file it is built from. The image is
+# tagged req-<key>; a job uses it only when the key of its own checkout is the same.
+cd "$(dirname "$0")/../.." || exit 1
+cat requirements.txt collections/ansible_collections/*/*/requirements.txt requirements.yml \
+    docs/tools/requirements.txt ci/image/Dockerfile ci/image/rxrbench-ci.apko.yaml \
+  | sha256sum | cut -c1-16
