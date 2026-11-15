@@ -52,8 +52,9 @@ ALWAYS = {"plan"}
 #: The flashers whose deep survey resets the chip into its ROM loader and back (core's own names).
 DEEP_RESETS = ("esptool", "esp-image")
 #: The backup play's "Where it went" line: `<board>: regions <stamp> (...); chip <stamp> (...); ...`.
-#: The stamps are this run's own backups, which every restore of the run writes back by name.
-BACKUP_STAMP = re.compile(r"\b(regions|chip) (\d{8}T\d{6}Z) \(")
+#: The stamps are this run's own backups, which every restore of the run writes back by name: a
+#: region backup's name carries the build it was read from (`20261115T144156Z-8d9b1b18`).
+BACKUP_STAMP = re.compile(r"\b(regions|chip) (\d{8}T\d{6}Z(?:-[0-9A-Za-z]+)?) \(")
 RECAP = re.compile(r"^(\S+)\s*:\s*ok=(\d+)\s+changed=(\d+)\s+unreachable=(\d+)\s+failed=(\d+)\s+skipped=(\d+)",
                    re.M)
 

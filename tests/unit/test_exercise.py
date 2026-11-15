@@ -176,7 +176,8 @@ def test_staged_builds_count_as_images_of_their_family_for_their_board_type(tmp_
 
 # ---- the runner, against fake plays ----------------------------------------------------------
 
-REGIONS_STAMP, CHIP_STAMP = "20261114T130000Z", "20261114T130001Z"
+# a region backup is named for its time and the build it was read from; a chip backup for its time
+REGIONS_STAMP, CHIP_STAMP = "20261114T130000Z-8d9b1b18", "20261114T130001Z"
 
 
 class Plays:
