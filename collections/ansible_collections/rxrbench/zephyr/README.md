@@ -38,7 +38,7 @@ long as a shell line can write: it is checked by its digest, not read back.
 | Kind | Origin | What |
 |---|---|---|
 | `device_key` | device | The setting `zephyr.device_key` names, made by the device at first boot. `just secrets` compares it with the site's escrow; `just keys-export` escrows it; `just keys-restore` writes it back after an erase. |
-| `psk`, `cert` | declared | The settings `zephyr.secrets` names, compared with the layout's values; the settings step writes them. |
+| `psk`, `cert`, `wifi_psk` | declared | The settings `zephyr.secrets` names, compared with the layout's values; the settings step writes them. `wifi_psk` is the key of the network the device joins (zapp's `wifi/psk`). |
 
 ## The example application
 
@@ -66,7 +66,7 @@ catalog entry says what it provides and the board exercise picks a second image 
 | `state` | `zapp state` | rxrbench's [state line](../../../../docs/PLUGINS.md#the-state-line): family, app, version, board target, chip id |
 | `locate` | `zapp locate on/off/blink [s]` | the board's LED (a GPIO `led0` or a WS2812 `led-strip`) |
 | `selftest` | `zapp test flash/entropy/temp/wifi/all/list` | the board's hardware, one `test <name> pass/fail` line each: a layout binds them as device tests (`bench_tests`) |
-| `wifi` | `zapp wifi status/connect` | the CYW43439 on a W board: joins the network the settings `wifi/ssid` and `wifi/psk` name (the PSK a declared secret), DHCP |
+| `wifi` | `zapp wifi status/connect` | the CYW43439 on a W board: joins the network the settings `wifi/ssid` and `wifi/psk` name (`secrets: {wifi_psk: wifi/psk}`), DHCP |
 
 `just zapp-build <board> <version>` builds it for a board of `sim/zapp/hw/boards.yml` (Pico 2 W,
 Pico W, KB2040, Pro Micro RP2040: a storage partition at the top of flash, the CDC-ACM console,

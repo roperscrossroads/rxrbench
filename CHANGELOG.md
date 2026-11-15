@@ -4,6 +4,8 @@
 
 ### New
 
+- **A WiFi key as a Zephyr secret**: the zephyr plugin's secret kind `wifi_psk` (a network key the
+  device joins with), declared and compared by digest as `psk` is, kept out of every log.
 - **zapp 3.x for real boards**: the zephyr plugin's example application chooses its features by
   Kconfig (digest, reboot, bootsel, state line, locate, self-tests, WiFi from settings) and lists
   them; `just zapp-build <board> <version>` builds it for a Pico 2 W, Pico W, KB2040 or Pro Micro

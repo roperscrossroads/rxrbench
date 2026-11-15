@@ -113,3 +113,11 @@ def test_a_firmware_without_the_digest_command_is_an_error_not_a_match():
     b.store["tls/cert"] = "x"
     with pytest.raises(zsettings.SettingsError, match="printed no digest line"):
         zsettings.differs(b, "tls/cert", "x", secret="x", digest_command="zapp digest")
+
+
+def test_a_wifi_key_is_a_declared_secret_of_its_own_kind():
+    from ansible_collections.rxrbench.zephyr.plugins.plugin_utils.families import zephyr_settings
+    fam = zephyr_settings.Family()
+    hv = {"zephyr": {"device_key": "app/key", "secrets": {"psk": "app/psk", "wifi_psk": "wifi/psk"}}}
+    kinds = {s["kind"]: s["origin"] for s in fam.board_secrets(hv)}
+    assert kinds == {"device_key": "device", "psk": "declared", "wifi_psk": "declared"}

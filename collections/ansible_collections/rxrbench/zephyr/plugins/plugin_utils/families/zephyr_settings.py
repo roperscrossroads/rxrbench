@@ -20,10 +20,12 @@ class Family(base.Family):
     config_regions = (("storage", "STORAGE"),)
 
     #: device_key: made by the device at first boot, escrowed by `keys-export`, given back by
-    #: `keys-restore`. psk and cert: the layout's values, compared by `secrets.yml`.
+    #: `keys-restore`. psk, cert and wifi_psk (a network key the device joins with): the
+    #: layout's values, compared by `secrets.yml`.
     secrets = ({"kind": "device_key", "origin": "device", "via": "console"},
                {"kind": "psk", "origin": "declared"},
-               {"kind": "cert", "origin": "declared"})
+               {"kind": "cert", "origin": "declared"},
+               {"kind": "wifi_psk", "origin": "declared"})
 
     def board_secrets(self, hostvars):
         """Only the kinds this board declares a setting for."""
