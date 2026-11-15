@@ -59,8 +59,13 @@
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
   register: board_launcher
   # The module's own failure stands (a board that does not answer is skipped by the play, a
-  # refusal stops it), but a chip without Launcher is the install step's to handle below.
-  failed_when: board_launcher.failed | default(false) and not (board_launcher.no_launcher | default(false))
+  # refusal stops it), but a chip without Launcher is the install step's to handle below, and
+  # steps left because the board did not come back into Launcher fail once what was done is
+  # recorded (below).
+  failed_when: >-
+    board_launcher.failed | default(false)
+    and not (board_launcher.no_launcher | default(false))
+    and board_launcher.left is not defined
   no_log: true
 
 # No console of Launcher's answered, by reset or otherwise: the chip runs something else. The
@@ -102,6 +107,7 @@
          | combine({'devreg': bench_devreg_tool} if bench_devreg_tool is defined else {}) }}
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
   register: board_launcher_after
+  failed_when: board_launcher_after.failed | default(false) and board_launcher_after.left is not defined
   no_log: true
   when:
     - board_installed is not skipped
@@ -175,3 +181,10 @@
   when:
     - not ansible_check_mode
     - board_launcher.installed | default({}) | length > 0
+
+# A board that does not come back into Launcher by itself after a reset (native USB): what was
+# done is recorded above, and the steps left wait for someone to put it in Launcher.
+- name: Steps left for the next apply
+  ansible.builtin.fail:
+    msg: "{{ board_launcher.msg }}"
+  when: board_launcher.left is defined

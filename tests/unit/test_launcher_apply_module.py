@@ -312,3 +312,45 @@ def test_steps_after_a_self_update_checked_by_its_bytes_are_named_for_the_next_a
                                                            "chip": "esp32s3"})
     assert how == "fail" and "matches the image" in r["msg"] and "put it in Launcher" in r["msg"]
     assert "cam-stream" in r["msg"] and r["read_back"]["version"] == "3.0.0"
+
+
+def two_apps(tmp_path, declared):
+    """Two apps: cam-stream into slot camstr and a second image into slot second."""
+    data = esp_image(b"\x55" * 4000)
+    f = tmp_path / "second.bin"
+    f.write_bytes(data)
+    rec = {"path": str(f), "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+           "app_offset": 0, "app_size": len(data), "image": "second", "version": None}
+    p = declared["params"]
+    return {**p, "images": {"manager": None, "apps": {**p["images"]["apps"], "second": rec}},
+            "launcher": {"apps": {"camstr": {"image": "cam-stream"}, "second": {"image": "second"}}}}
+
+
+def test_an_install_on_a_board_that_does_not_come_back_into_launcher_is_returned_with_the_rest(
+        rig, declared, tmp_path, monkeypatch):
+    """Launcher 2.9.1 on the T-Embed (2026-11-15): the first install said OK and the board booted
+    the app, out of the console's reach. Its record is returned (the role keeps it, so the next
+    apply does not install it again) and the install left is named."""
+    node, sock = rig.make(tick=0.05)
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**two_apps(tmp_path, declared), "socket": sock,
+                                                           "apply_allowed": True, "wait": 3})
+    assert how == "fail" and "put it in Launcher" in r["msg"], r
+    assert len(node.flashed) == 1
+    first = node.flashed[0][0]
+    assert list(r["installed"]) == [first] and f"installed into slot {first}" in r["msg"]
+    assert len(r["left"]) == 1 and first not in r["left"][0]
+
+
+def test_an_install_as_the_last_step_stands_when_the_board_does_not_come_back(rig, declared, monkeypatch):
+    node, sock = rig.make(tick=0.05)
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    params = {**declared["params"], "launcher": {"apps": {"camstr": {"image": "cam-stream"}}}}
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**params, "socket": sock,
+                                                           "apply_allowed": True, "wait": 3})
+    assert how == "exit", r
+    rec = declared["record"]
+    assert r["installed"] == {"camstr": {"sha256": rec["sha256"], "size": rec["size"], "image": "cam-stream"}}
+    assert "left" not in r and node.flashed == [("camstr", declared["data"])]

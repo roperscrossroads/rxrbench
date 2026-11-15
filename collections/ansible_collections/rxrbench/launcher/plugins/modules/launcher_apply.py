@@ -126,6 +126,12 @@ launcher:
   description: What the board holds after (before, in a plan), without passwords.
   returned: always
   type: dict
+left:
+  description: The steps not done because the board did not come back into Launcher by itself
+    after a reset (a native-USB board boots its app then); what was done is in C(installed) and
+    C(read_back), and the module fails naming them for the next apply.
+  returned: when steps were left
+  type: list
 read_back:
   description: Launcher's partition read back and compared with the image, when Launcher did not
     answer after its own update ({version, offset, size, sha256}).
@@ -164,6 +170,9 @@ class Runner:
         # Launcher's own update, checked by reading its partition back when Launcher did not
         # answer after it: the board is then in its app, and no later step can reach the console
         self.read_back = None
+        # why the console is out of reach after a step that rebooted the board (None while in
+        # Launcher): what is done stands, the rest waits for someone to put the board in Launcher
+        self.out = None
 
     def ok(self, out, what):
         if not str(out).startswith("OK"):
@@ -202,6 +211,7 @@ class Runner:
                 # the copy said it was done; a board that comes into Launcher only on a power-on
                 # (native USB: a reset boots the app) is checked by its bytes instead
                 self.read_back_manager(img, str(e))
+                self.out = str(e)
         elif k == "install":
             if step.get("replace"):
                 self.ok(console.exec_line(b, f"partition delete {step['label']}", self.p["deadline"]),
@@ -210,7 +220,12 @@ class Runner:
                          overwrite=step["overwrite"])
             self.installed[step["label"]] = {"sha256": step["sha256"], "size": step["size"],
                                              "image": step["image"]}
-            self.reenter()
+            try:
+                self.reenter()
+            except console.ConsoleError as e:
+                # the install said OK; a board that comes into Launcher only on a power-on keeps
+                # it, and its record is returned with the steps left
+                self.out = str(e)
         else:
             raise console.ConsoleError(f"{self.p['board']}: unknown step {k!r}")
 
@@ -363,20 +378,31 @@ def main():
                 module.exit_json(**result)
             runner = Runner(module, b, p)
             for i, step in enumerate(pl["steps"]):
-                if runner.read_back:
-                    rest = pl["steps"][i:]
-                    module.fail_json(msg=f"{p['board']}: Launcher {runner.read_back['version']} is on the board "
-                                         f"(its partition read back matches the image), but the board does not "
-                                         f"come back into Launcher by itself after a reset; put it in Launcher "
-                                         f"and apply again for what is left: "
-                                         + "; ".join(plan.shown(s) for s in rest),
-                                     read_back=runner.read_back, **result)
+                if runner.out:
+                    # what was done is returned (the role records it) and the rest named
+                    rest = [plan.shown(s) for s in pl["steps"][i:]]
+                    done = []
+                    if runner.read_back:
+                        done.append(f"Launcher {runner.read_back['version']} is on the board (its partition "
+                                    f"read back matches the image)")
+                    if runner.installed:
+                        done.append("installed into slot " + ", ".join(runner.installed))
+                    result.update(installed=runner.installed, left=rest)
+                    if runner.read_back:
+                        result.update(read_back=runner.read_back,
+                                      launcher={**result["launcher"], "version": runner.read_back["version"]})
+                    module.fail_json(msg=f"{p['board']}: " + "; ".join(done) + ", but the board does not come "
+                                         f"back into Launcher by itself after a reset ({runner.out}); put it "
+                                         f"in Launcher and apply again for what is left: " + "; ".join(rest),
+                                     **result)
                 runner.run(step)
-            if runner.read_back:
-                # Launcher's own update was the last step and its bytes are proven: the rest of
-                # what was read before it stands
-                result.update(read_back=runner.read_back,
-                              launcher={**result["launcher"], "version": runner.read_back["version"]})
+            if runner.out:
+                # the last step rebooted the board out of reach: its install said OK, Launcher's
+                # own update is proven by its bytes, and the rest of what was read before stands
+                result.update(installed=runner.installed)
+                if runner.read_back:
+                    result.update(read_back=runner.read_back,
+                                  launcher={**result["launcher"], "version": runner.read_back["version"]})
                 result["diff"] = {"before": pl["before"], "after": pl["after"]}
                 module.exit_json(**result)
             # read back: nothing may differ now, the boot slot apart
