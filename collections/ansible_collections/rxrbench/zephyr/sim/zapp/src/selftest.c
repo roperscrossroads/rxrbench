@@ -8,7 +8,8 @@
  * flash    a setting written to the storage partition, read back, compared and deleted
  * entropy  two draws from the random source, not equal and not all zero
  * temp     the die temperature, between 0 and 90 C (on a chip with a sensor: the RP2040's)
- * wifi     the link up with an address (in a build with WiFi)
+ * wifi     the link up with an address (in a build with WiFi): when it is not, the network the
+ *          settings name now is joined first (settings written since boot) and given 20 s
  * all      each of the above this build has; `zapp test list` names them
  */
 #include <errno.h>
@@ -105,11 +106,21 @@ static bool t_wifi(const struct shell *sh)
 #ifdef CONFIG_ZAPP_WIFI
 	char addr[16];
 
+	if (!zapp_wifi_up(addr, sizeof(addr))) {
+		settings_load_subtree("wifi");   /* settings written since boot */
+		if (zapp_wifi_connect() == -ENOENT) {
+			shell_print(sh, "test wifi fail no network in the settings (wifi/ssid)");
+			return false;
+		}
+		for (int i = 0; i < 40 && !zapp_wifi_up(addr, sizeof(addr)); i++) {
+			k_msleep(500);
+		}
+	}
 	if (zapp_wifi_up(addr, sizeof(addr))) {
 		shell_print(sh, "test wifi pass up at %s", addr);
 		return true;
 	}
-	shell_print(sh, "test wifi fail not up (zapp wifi status)");
+	shell_print(sh, "test wifi fail not up within 20 s (zapp wifi status)");
 	return false;
 #else
 	shell_print(sh, "test wifi fail no WiFi in this build");
