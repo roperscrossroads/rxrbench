@@ -260,7 +260,7 @@ def flash_reads(monkeypatch, params, data=None):
 
 def test_a_self_update_on_a_board_that_does_not_come_back_into_launcher_is_checked_by_its_bytes(
         rig, declared, tmp_path, monkeypatch):
-    """Launcher 3.0.0 on the T-Embed (2026-11-15): the update copied itself, then a reset boots
+    """Launcher 3.0.0 on the T-Embed: the update copied itself, then a reset boots
     the app, so its partition is read back and compared with the image; nothing else was to do."""
     node, sock = rig.make(tick=0.05, version="2.9.9", self_update=1.0, update_to="3.0.0")
     monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
@@ -328,7 +328,7 @@ def two_apps(tmp_path, declared):
 
 def test_an_install_on_a_board_that_does_not_come_back_into_launcher_is_returned_with_the_rest(
         rig, declared, tmp_path, monkeypatch):
-    """Launcher 2.9.1 on the T-Embed (2026-11-15): the first install said OK and the board booted
+    """Launcher 2.9.1 on the T-Embed: the first install said OK and the board booted
     the app, out of the console's reach. Its record is returned (the role keeps it, so the next
     apply does not install it again) and the install left is named."""
     node, sock = rig.make(tick=0.05)

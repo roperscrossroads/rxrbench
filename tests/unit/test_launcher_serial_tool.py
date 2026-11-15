@@ -274,7 +274,7 @@ def test_a_self_update_that_never_says_it_finished_is_reported_unseen(tool, tmp_
 def test_launcher_3_0_0s_own_update_with_no_ok_is_done_once_it_reboots_and_copies_itself(tool, tmp_path, capsys,
                                                                                          monkeypatch):
     """3.0.0 saves the `launch` slot and reboots into it without `OK flashed`; the copy's own
-    line then says the update went in (seen on the T-Embed, 2026-11-15)."""
+    line then says the update went in (as the T-Embed does)."""
     dev = SelfUpdating()
     dev.no_ok = True
     real = FakeSerial.read

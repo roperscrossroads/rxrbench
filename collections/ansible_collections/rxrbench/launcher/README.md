@@ -95,14 +95,13 @@ Launcher's default password before the device is on a shared network.
 ## On hardware
 
 Applies have completed on three boards: Launcher's own update to 3.0.0 on a CYD 2432S028, a
-ThinkNode M9 and a LilyGo T-Embed CC1101 Plus (2026-11-14), and on the T-Embed a round trip
-3.0.0 → 2.9.1 → 3.0.0 with its apps reinstalled (2026-11-15). Both boards on 2.9.1 were first
-read whole through their brokers (`tests/fixtures/launcher/` holds what each printed), and the
-CYD's whole chip backed up through esptool and restored over another firmware. The modules are
-proven against a fake console behind a real broker (`tests/unit/test_launcher_*`);
-`tests/hw/test_launcher_boards.py` reads real boards, read-only. Board quirks (modem-line rest
-states, native-USB reset, settings carried between boards):
-[docs/HARDWARE.md](../../../../docs/HARDWARE.md).
+ThinkNode M9 and a LilyGo T-Embed CC1101 Plus, and on the T-Embed a round trip 3.0.0 → 2.9.1 →
+3.0.0 with its apps reinstalled. Both boards on 2.9.1 were first read whole through their
+brokers (`tests/fixtures/launcher/` holds what each printed), and the CYD's whole chip backed up
+through esptool and restored over another firmware. The modules are proven against a fake
+console behind a real broker (`tests/unit/test_launcher_*`); `tests/hw/test_launcher_boards.py`
+reads real boards, read-only. Board quirks (modem-line rest states, native-USB reset, settings
+carried between boards): [docs/HARDWARE.md](../../../../docs/HARDWARE.md).
 
 ## Known limits
 
