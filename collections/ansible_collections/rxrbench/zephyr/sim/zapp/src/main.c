@@ -14,6 +14,8 @@
 #include <zephyr/random/random.h>
 #include <zephyr/settings/settings.h>
 
+#include "zapp.h"
+
 #define KEY_BYTES 32
 
 static char device_key[KEY_BYTES * 2 + 1];
@@ -60,6 +62,9 @@ int main(void)
 		printk("zapp: a key was made\n");
 	}
 	settings_save_one("app/version", CONFIG_ZAPP_VERSION, strlen(CONFIG_ZAPP_VERSION));
+	if (IS_ENABLED(CONFIG_ZAPP_WIFI)) {
+		zapp_wifi_start();   /* the network the settings name, if any */
+	}
 	printk("zapp %s: up\n", CONFIG_ZAPP_VERSION);
 	return 0;
 }

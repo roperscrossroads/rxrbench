@@ -1,0 +1,15 @@
+/* zapp's settings: a 128 KB storage partition at the top of the Pico 2 W's 4 MB, taken from the
+ * code partition. */
+&code_partition {
+	reg = <0x0 (DT_SIZE_M(4) - DT_SIZE_K(128))>;
+};
+
+&flash0 {
+	partitions {
+		storage_partition: partition@3e0000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <(DT_SIZE_M(4) - DT_SIZE_K(128)) DT_SIZE_K(128)>;
+		};
+	};
+};

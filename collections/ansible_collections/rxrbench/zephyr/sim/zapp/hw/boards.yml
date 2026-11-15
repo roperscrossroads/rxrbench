@@ -1,0 +1,29 @@
+---
+# The real boards zapp is built for (`just zapp-build <board> <version>`, tools/zapp_build.py):
+# the Zephyr board target, the board type it is staged for (a site's registry policy.board_tag),
+# what it adds to hw.conf (confs), its devicetree overlays, and the Zephyr modules it needs
+# besides the workspace's (found under the workspace's modules/hal, else given with --module DIR).
+pico2w:
+  target: rpi_pico2/rp2350a/m33/w
+  board_tag: raspberrypi-pico2w
+  confs: [rp2350.conf, wifi.conf]
+  overlays: [storage-rp2350-4m.overlay]
+  modules: [hal_rpi_pico, hal_infineon]
+picow:
+  target: rpi_pico/rp2040/w
+  board_tag: raspberrypi-picow
+  confs: [rp2040.conf, temp.conf, wifi.conf]
+  overlays: [storage-rp2040-2m.overlay, rp2040-temp.overlay]
+  modules: [hal_rpi_pico, hal_infineon]
+kb2040:
+  target: adafruit_kb2040
+  board_tag: adafruit-kb2040
+  confs: [rp2040.conf, temp.conf, locate.conf]
+  overlays: [storage-rp2040-8m.overlay, rp2040-temp.overlay]
+  modules: [hal_rpi_pico]
+pro-micro-rp2040:
+  target: sparkfun_pro_micro_rp2040
+  board_tag: sparkfun-pro-micro-rp2040
+  confs: [rp2040.conf, temp.conf, locate.conf]
+  overlays: [storage-rp2040-16m.overlay, rp2040-temp.overlay]
+  modules: [hal_rpi_pico]

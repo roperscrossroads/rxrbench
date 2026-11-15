@@ -7,4 +7,52 @@ config ZAPP_VERSION
 	  Written to the setting app/version at every boot, so a bench can read which build a
 	  board runs; the image's identity is its hash, this is for the device tests.
 
+# What a build provides: each feature is a `zapp <command>` and a file of its own. The build
+# writes the list to zapp-features.txt, and `zapp features` prints it, so a catalog entry's
+# `features` come from the build, never typed.
+
+config ZAPP_DIGEST
+	bool "zapp digest: the SHA-256 of a stored setting"
+	default y
+	help
+	  A secret is compared by its digest, never crossing the console; a value longer than the
+	  settings shell reads back (256 bytes) is checked whole.
+
+config ZAPP_STATE
+	bool "zapp state: rxrbench's state line"
+	select CRC
+	select HWINFO
+	help
+	  One line, ~S{json}*crc16 (docs/PLUGINS.md "The state line"): the family, the app, its
+	  version, the board target and the chip's id.
+
+config ZAPP_LOCATE
+	bool "zapp locate: the board's LED, to find it on a bench"
+	depends on $(dt_alias_enabled,led0) || $(dt_alias_enabled,led-strip)
+	select LED_STRIP if $(dt_alias_enabled,led-strip)
+	select GPIO if $(dt_alias_enabled,led0)
+
+config ZAPP_SELFTEST
+	bool "zapp test: checks of the board's hardware"
+	help
+	  `zapp test <name>` prints `test <name> pass <detail>` or `test <name> fail <why>`:
+	  settings on flash (write, read back, delete), the entropy source, the die temperature
+	  where the chip has a sensor, WiFi when the build has it. A layout binds them as device
+	  tests (`bench_tests`).
+
+config ZAPP_BOOTSEL
+	bool "rp2 bootsel: into the RP2040's or RP2350's ROM bootloader"
+	depends on SOC_FAMILY_RPI_PICO
+	help
+	  So a bench can write the next image with no button: the picoboot flasher asks for it
+	  (`shell:rp2 bootsel`).
+
+config ZAPP_WIFI
+	bool "WiFi from settings: wifi/ssid, wifi/psk"
+	depends on WIFI && NET_DHCPV4
+	help
+	  At boot, and on `zapp wifi connect`, joins the network the settings name (a PSK network
+	  when wifi/psk is set, an open one otherwise) and takes an address by DHCP. `zapp wifi
+	  status` says where it is. The PSK is a secret the layout declares.
+
 source "Kconfig.zephyr"

@@ -4,7 +4,7 @@ file built elsewhere) into the image store.
 
     tools/stage_raw.py <image.bin|.uf2|.hex|.elf> --name <key> --board-tag <tag> [--target <board>]
                        [--family bare] [--version <v>] [--build <id>] [--flash-map <build dir>]
-                       [--part <label>=<file>]...
+                       [--part <label>=<file>]... [--features a,b]
 
 The result is <store>/<family>/<name>/ holding the file and a manifest.json, which is what a
 layout's `bench_image` names. A raw image carries no version or build id of its own (give the
@@ -145,6 +145,8 @@ def main():
                     "devicetree's partitions go beside the image as flash.json")
     ap.add_argument("--part", action="append", default=[], metavar="LABEL=FILE",
                     help="an image of one of the merged .bin's partitions, laid in at its offset")
+    ap.add_argument("--features", default="", help="what the image provides, comma-separated (a "
+                    "catalog entry's `features`; the board exercise's second image must have them)")
     ap.add_argument("--store", default=os.path.join(REPO, ".build", "store"))
     a = ap.parse_args()
     if not os.path.isfile(a.image):
@@ -212,6 +214,8 @@ def main():
     if a.flash_map and console_of(a.flash_map):
         # what the picoboot flasher checks before it writes a board reached by its console
         manifest["console"] = console_of(a.flash_map)
+    if a.features:
+        manifest["features"] = sorted(f for f in a.features.split(",") if f)
     with open(os.path.join(out, "manifest.json"), "w") as f:
         json.dump(manifest, f, indent=1)
     if a.flash_map:

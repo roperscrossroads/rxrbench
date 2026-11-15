@@ -1,0 +1,15 @@
+/* zapp's settings: a 128 KB storage partition at the top of the board's 16 MB, taken from the
+ * code partition (which starts at 0x100, after the RP2040's second-stage bootloader). */
+&code_partition {
+	reg = <0x100 (DT_SIZE_M(16) - 0x100 - DT_SIZE_K(128))>;
+};
+
+&flash0 {
+	partitions {
+		storage_partition: partition@fe0000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <(DT_SIZE_M(16) - DT_SIZE_K(128)) DT_SIZE_K(128)>;
+		};
+	};
+};

@@ -145,8 +145,5 @@ static int cmd_digest(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(zapp_cmds,
-	SHELL_CMD_ARG(digest, NULL, "<name>: the SHA-256 and length of a stored setting",
-		      cmd_digest, 2, 0),
-	SHELL_SUBCMD_SET_END);
-SHELL_CMD_REGISTER(zapp, &zapp_cmds, "zapp's own commands", NULL);
+SHELL_SUBCMD_ADD((zapp), digest, NULL, "<name>: the SHA-256 and length of a stored setting",
+		 cmd_digest, 2, 0);

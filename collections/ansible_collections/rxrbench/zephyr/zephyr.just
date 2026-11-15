@@ -11,3 +11,11 @@ sim-zapp-build *args:
     for v in 1.0 1.1 2.0; do
         ./venv/bin/python tools/zephyr_sim.py build --name zapp-$v --app $z/zapp --conf $z/zephyr/zapp-$v.conf {{args}}
     done
+
+# the example application for a real board (sim/zapp/hw/boards.yml: pico2w, picow, kb2040,
+# pro-micro-rp2040) at a version (3.0, 3.1), staged with the features it was built with; prints
+# its catalog entry (RXRBENCH_ZEPHYR_WORKSPACE; a module the workspace lacks with --module DIR)
+[group("plan and apply")]
+[doc("the `rxrbench.zephyr` example application for a real board (`sim/zapp/hw/boards.yml`) at a version, staged with its features; prints its catalog entry")]
+zapp-build board version *args:
+    ./venv/bin/python tools/zapp_build.py {{board}} {{version}} --stage {{args}}

@@ -4,6 +4,10 @@
 
 ### New
 
+- **zapp 3.x for real boards**: the zephyr plugin's example application chooses its features by
+  Kconfig (digest, reboot, bootsel, state line, locate, self-tests, WiFi from settings) and lists
+  them; `just zapp-build <board> <version>` builds it for a Pico 2 W, Pico W, KB2040 or Pro Micro
+  RP2040 and stages it with its features (`tools/stage_raw.py --features`).
 - **Boards a CI job may exercise**: a layout marks a board `bench_ci: {run: true}` (and
   `destructive: true` for its erases and family switch); `tools/ci_boards.py <layout>` lists the
   boards so marked, and `tools/exercise.py <layout> <board> confirm=apply --ci` refuses any other
