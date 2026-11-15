@@ -19,7 +19,16 @@ zephyr:
     net/name: zb3
   secrets: {psk: app/psk, cert: tls/cert}   # which settings are secrets, by kind
   facts: [app/version, net/name]        # what `just facts` reads (default: app/version)
+  state_command: zapp state             # an app that prints rxrbench's state line: `just facts`
+                                        # reads and checks it, its version against the image's
+  locate_command: zapp locate           # an app that lights an LED (the default with bench_locate)
+bench_locate: shell                     # `just locate` blinks it: `<locate_command> blink <s>`
 ```
+
+What an application offers beyond the settings shell is the layout's to say, board by board:
+the family cannot assume it (most Zephyr applications print no state line and light no LED).
+The state line is read in `just facts`, not used as the board's identity: core still knows a
+`zephyr_settings` board by the bytes of its image.
 
 The settings step (`roles/board/tasks/settings.yml`, module `zephyr_settings`) reads each
 declared setting and writes the ones that differ. Zephyr's settings shell reads back at most

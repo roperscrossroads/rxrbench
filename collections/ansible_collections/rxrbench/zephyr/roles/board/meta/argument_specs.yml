@@ -8,7 +8,9 @@ argument_specs:
     description:
       - >-
         C(just facts) on a zephyr_settings board: the settings the board's declaration names under
-        C(zephyr.facts) (plain ones: a version, a name), read and said.
+        C(zephyr.facts) (plain ones: a version, a name), read and said; and for an application
+        that prints rxrbench's state line (C(zephyr.state_command)), that line, checked, its
+        version held against the declared image's.
     options:
       bench_board: &bench_board
         type: str
@@ -23,7 +25,33 @@ argument_specs:
         type: dict
         description: >-
           The board's declared Zephyr state: C(settings) to write, C(device_key), C(secrets),
-          C(digest_command), what C(facts) reads (C(rxrbench.zephyr)'s README).
+          C(digest_command), what C(facts) reads, C(state_command) and C(locate_command) for an
+          application that has them (C(rxrbench.zephyr)'s README).
+      bench_image:
+        type: str
+        description: >-
+          The directory of a board's staged image (C(manifest.json) beside the image): its
+          C(version) is what the state line must say.
+      firmware:
+        type: dict
+        description: >-
+          The board's declared firmware: C(family) and C(image) (a catalog name), and what its
+          plugin reads beside them.
+  locate_shell:
+    short_description: "Show which board it is (its LED, through its shell)"
+    description:
+      - >-
+        C(just locate) on a zephyr_settings board whose application lights an LED from its shell
+        (zapp's C(zapp locate)): its layout says so with C(bench_locate: shell), and names another
+        command with C(zephyr.locate_command). Changes nothing kept; 0 seconds turns it off.
+    options:
+      locate_seconds:
+        type: int
+        description: >-
+          How long to blink, in seconds (C(just locate <layout> <board> <seconds>)); default 60.
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
   secret_cert_read:
     short_description: "Read a board's cert secret"
     description:

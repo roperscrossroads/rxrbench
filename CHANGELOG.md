@@ -4,6 +4,10 @@
 
 ### New
 
+- **Zephyr boards whose application has them: `just locate` and the state line**: a layout says
+  `bench_locate: shell` (and `zephyr.locate_command`, zapp's `zapp locate` by default) to blink a
+  board's LED, and `zephyr.state_command` to have `just facts` read the board's state line,
+  checked by core's parser, its version held against the declared image's.
 - **A WiFi key as a Zephyr secret**: the zephyr plugin's secret kind `wifi_psk` (a network key the
   device joins with), declared and compared by digest as `psk` is, kept out of every log.
 - **zapp 3.x for real boards**: the zephyr plugin's example application chooses its features by

@@ -46,6 +46,11 @@ options:
     type: list
     elements: str
     default: []
+  state_command:
+    description: The application's command that prints rxrbench's state line (zapp's
+      C(zapp state)), as the layout's C(zephyr.state_command) names it. Its line is read and
+      checked (the checksum, the JSON) and returned as C(state). Only reads.
+    type: str
   apply_allowed:
     description: The layout's go-ahead for writing (C(bench_apply_allowed)).
     type: bool
@@ -74,6 +79,10 @@ found:
   description: The settings asked for with I(read), name to value (null when the board has none).
   type: dict
   returned: always
+state:
+  description: The state line's JSON (C(v), C(family), C(fw), C(target), C(id) as zapp prints them).
+  type: dict
+  returned: when O(state_command) is given
 """
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
@@ -91,13 +100,14 @@ def main():
             "secrets": {"type": "list", "elements": "str", "default": []},
             "read": {"type": "list", "elements": "str", "default": []},
             "digest_command": {"type": "str"},
+            "state_command": {"type": "str"},
             **gate.ARGS,
         },
         supports_check_mode=True,
     )
     p = module.params
     secret = set(p["secrets"])
-    steps, found = [], {}
+    steps, found, state = [], {}, None
     # A declared value the shell could never read back whole is refused before the board is
     # asked anything, in a plan too.
     long = [why for name, want in p["settings"].items()
@@ -120,9 +130,14 @@ def main():
                                 digest_command=p["digest_command"])
             for name in p["read"]:
                 found[name] = zsettings.read(b, name, secret=p["settings"].get(name) if name in secret else None)
+            if p["state_command"]:
+                state = zsettings.state(b, p["state_command"])
     except (broker_client.BrokerError, zsettings.SettingsError) as e:
         module.fail_json(msg=str(e), steps=steps)
-    module.exit_json(changed=bool(steps), steps=steps, found=found)
+    result = {"changed": bool(steps), "steps": steps, "found": found}
+    if state is not None:
+        result["state"] = state
+    module.exit_json(**result)
 
 
 if __name__ == "__main__":

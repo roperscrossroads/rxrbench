@@ -1,0 +1,16 @@
+---
+# `just locate` on a zephyr_settings board whose application lights an LED from its shell (zapp's
+# `zapp locate`): its layout says so with `bench_locate: shell`, and names another command with
+# `zephyr.locate_command`. Blinks for `locate_seconds`; 0 turns it off. Changes nothing kept.
+- name: Blink, or stop
+  rxrbench.core.device_run:
+    board: "{{ bench_board }}"
+    socket: "{{ bench_socket | default(omit) }}"
+    read_only: true
+    commands:
+      - name: locate
+        cmd: >-
+          {{ (zephyr | default({})).locate_command | default('zapp locate') }}
+          {{ 'off' if (locate_seconds | default(60) | int) == 0
+             else 'blink ' ~ (locate_seconds | default(60) | int) }}
+        expect: "^locate (off|blink)"

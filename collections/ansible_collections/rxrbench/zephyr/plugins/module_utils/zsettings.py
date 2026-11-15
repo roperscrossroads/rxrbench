@@ -3,7 +3,7 @@ strings. Runs on the bench host (a module's helper)."""
 import hashlib
 import re
 
-from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
+from ansible_collections.rxrbench.core.plugins.module_utils import broker_client, stateline
 
 # `settings write string <name> <value>`: the value is the secret when the setting is one;
 # an error quotes the command by its words and the value's length, never the value
@@ -115,3 +115,17 @@ def write(board, name, value, secret=False, deadline=8.0, digest_command=None):
 def fingerprint(value):
     """A short, safe name for a secret's value (a quarter of its hash)."""
     return hashlib.sha256(value.encode()).hexdigest()[:16]
+
+
+def state(board, command, deadline=8.0):
+    """The board's state line (docs/PLUGINS.md), asked with `command` (zapp's `zapp state`) and
+    checked by core's parser: its JSON. An answer with no state line, or a damaged one, is a
+    SettingsError: a board whose layout names the command is expected to print one."""
+    out = board.exec(command, deadline=deadline)
+    try:
+        found = stateline.parse_line(out)
+    except stateline.StateError as e:
+        raise SettingsError(f"{board.board}: `{command}`: {e}") from e
+    if found is None:
+        raise SettingsError(f"{board.board}: `{command}` printed no state line")
+    return found

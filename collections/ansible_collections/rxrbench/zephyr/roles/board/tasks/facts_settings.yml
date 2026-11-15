@@ -1,11 +1,14 @@
 ---
 # `just facts` on a zephyr_settings board: the settings the board's declaration names under
-# `zephyr.facts` (plain ones: a version, a name), read and said.
+# `zephyr.facts` (plain ones: a version, a name), read and said; and, for an application that
+# prints rxrbench's state line (`zephyr.state_command`: zapp's `zapp state`), that line, checked,
+# and its version held against the declared image's.
 - name: Read the settings worth knowing
   rxrbench.zephyr.zephyr_settings:
     board: "{{ bench_board }}"
     socket: "{{ bench_socket | default(omit) }}"
     read: "{{ zephyr.facts | default(['app/version']) }}"
+    state_command: "{{ zephyr.state_command | default(omit) }}"
   register: board_read
   check_mode: false
 
@@ -13,4 +16,23 @@
   ansible.builtin.debug:
     msg: >-
       {{ bench_board }}: {{ board_read.found | dict2items | map(attribute='key')
-         | zip(board_read.found.values()) | map('join', '=') | join(', ') }}
+         | zip(board_read.found.values()) | map('join', '=') | join(', ') }}{{
+         ('; state: ' ~ board_read.state.fw ~ ' on ' ~ board_read.state.target ~ ', chip ' ~ board_read.state.id)
+         if board_read.state is defined else '' }}
+
+- name: The version it runs is the declared image's
+  vars:
+    board_manifest: >-
+      {{ lookup('ansible.builtin.file', bench_image ~ '/manifest.json', errors='ignore')
+         | default('{}', true) | from_json }}
+  ansible.builtin.assert:
+    that: board_read.state.fw == board_manifest.version
+    fail_msg: >-
+      {{ bench_board }} runs {{ board_read.state.fw }}, its state line says, not
+      {{ board_manifest.version }} ({{ firmware.image }})
+    quiet: true
+  when:
+    - board_read.state is defined
+    - bench_image is defined
+    - (lookup('ansible.builtin.file', bench_image ~ '/manifest.json', errors='ignore')
+       | default('{}', true) | from_json).version is defined

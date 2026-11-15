@@ -121,3 +121,32 @@ def test_a_wifi_key_is_a_declared_secret_of_its_own_kind():
     hv = {"zephyr": {"device_key": "app/key", "secrets": {"psk": "app/psk", "wifi_psk": "wifi/psk"}}}
     kinds = {s["kind"]: s["origin"] for s in fam.board_secrets(hv)}
     assert kinds == {"device_key": "device", "psk": "declared", "wifi_psk": "declared"}
+
+
+class Answers:
+    """A board that answers one command with a fixed text."""
+    board = "zb1"
+
+    def __init__(self, text):
+        self.text = text
+
+    def exec(self, cmd, deadline=8.0, secret=None):
+        return self.text
+
+
+def _line(body):
+    import binascii
+    return f"~S{body}*{binascii.crc_hqx(body.encode(), 0):04x}\n"
+
+
+def test_a_state_line_is_read_and_checked_by_cores_parser():
+    body = '{"v":1,"family":"zephyr_settings","app":"zapp","fw":"3.0","target":"rpi_pico/rp2040/w","id":"0123456789abcdef"}'
+    assert zsettings.state(Answers(_line(body)), "zapp state")["fw"] == "3.0"
+
+
+def test_no_state_line_or_a_damaged_one_is_an_error_not_a_blank():
+    with pytest.raises(zsettings.SettingsError, match="printed no state line"):
+        zsettings.state(Answers("zapp: unknown parameter: state\n"), "zapp state")
+    damaged = _line('{"v":1,"fw":"3.0"}').replace("3.0", "3.1")
+    with pytest.raises(zsettings.SettingsError, match="checksum"):
+        zsettings.state(Answers(damaged), "zapp state")
