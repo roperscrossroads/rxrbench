@@ -129,6 +129,13 @@ timing:
   returned: success
   type: list
   elements: dict
+flash_id:
+  description: >-
+    The chip's flash id, read after the write, for a board the registry knew only by its ROM
+    bootloader's serial (a blank RP2040). Its applications give it as their USB serial; the
+    registry should match the board by it.
+  returned: when the board was selected by its ROM serial and its flash id could be read
+  type: str
 checked:
   description: The depth of the checks before the write (C(full) or C(spot)) and why (docs/ARCHITECTURE.md#checking-depth).
   returned: success
@@ -206,6 +213,12 @@ def main():
     result["timing"] = r.get("timing", [])
     result["checked"] = r.get("checked")
     result["identity_checked"] = r.get("identity_checked")
+    if flasher.rom_serial and flasher.flash_id:
+        # known by its ROM serial until now: the id its applications will give as their USB serial
+        result["flash_id"] = flasher.flash_id
+        result["msg"] = (f"{p['board']}: written, selected by its ROM serial {flasher.rom_serial}; "
+                         f"its flash id is {flasher.flash_id}: record it in the registry as the "
+                         f"board's match.usb_serial (the ROM serial under match_also)")
     if r["changed"]:
         result["why"] = r["why"]
         result["diff"] = {"before": {k: v for k, v in r["before"].items() if v is not None},

@@ -34,6 +34,9 @@ st = os.environ["FAKE_PT"]
 state = json.load(open(st))
 args = sys.argv[1:]
 ser = args[args.index("--ser") + 1] if "--ser" in args else None
+if "--bus" in args:   # selected where it is on USB: the chip there, if bus and address are its
+    at = (args[args.index("--bus") + 1], args[args.index("--address") + 1])
+    ser = state["chip"] if at == (str(state.get("bus")), str(state.get("address"))) else None
 log = open(st + ".log", "a"); log.write(" ".join(args) + "\n")
 flash = bytearray(open(state["flash"], "rb").read())
 def save(): open(state["flash"], "wb").write(flash); json.dump(state, open(st, "w"))
@@ -356,3 +359,60 @@ def test_an_application_that_never_comes_back_is_absent_once_the_wait_is_over(ch
     with pytest.raises(common.FlashError, match="NOT PRESENT"):
         f._app_port(wait=0)
     assert len(calls) == 1
+
+
+# ---- a board known only by its ROM bootloader's serial (a blank RP2040: no flash id to select by) --
+
+ROM = "0A0B0C0D0E0F"
+
+
+def usb_tree(root, *devices):
+    """A host's USB device list: each (dir, vendor, serial, bus, address)."""
+    for d, vendor, serial, bus, address in devices:
+        p = root / d
+        p.mkdir(parents=True)
+        for f, v in (("idVendor", vendor), ("serial", serial), ("busnum", bus), ("devnum", address)):
+            (p / f).write_text(v + "\n")
+    return str(root)
+
+
+def test_a_board_known_by_its_rom_serial_is_selected_where_that_serial_is_on_usb(chip):
+    tmp, tool, set_state, log, flash = chip
+    set_state(boot=True, bus="1", address="82")
+    root = usb_tree(tmp / "usb", ("1-1.2", "239a", "DF00000000000001", "1", "83"),
+                    ("1-1.4", "2e8a", ROM, "1", "82"))
+    manifest, file = image(tmp, b"y" * 300)
+    f = picoboot.PicobootFlasher("picow1", manifest, file, ROM, SPEC, board_tag="pro-micro", picotool=tool,
+                                 enter_wait=1.0, usb_root=root)
+    assert f.in_bootloader(), "the device carrying its ROM serial is in its bootloader"
+    assert log()[-1].endswith("--bus 1 --address 82") and "--ser" not in log()[-1]
+
+
+def test_a_rom_serial_not_on_usb_is_not_in_its_bootloader_and_two_are_refused(chip):
+    tmp, tool, set_state, _, _ = chip
+    set_state(boot=True, bus="1", address="82")
+    manifest, file = image(tmp, b"y" * 300)
+    mk = lambda root: picoboot.PicobootFlasher("picow1", manifest, file, ROM, SPEC, board_tag="pro-micro",  # noqa: E731
+                                               picotool=tool, enter_wait=1.0, usb_root=root)
+    assert not mk(usb_tree(tmp / "none", ("1-1.2", "2e8a", "0F0E0D0C0B0A", "1", "82"))).in_bootloader()
+    two = usb_tree(tmp / "two", ("1-1.2", "2e8a", ROM, "1", "82"), ("1-1.3", "2e8a", ROM, "1", "84"))
+    with pytest.raises(common.FlashError, match="REFUSING: 2 USB devices"):
+        mk(two).in_bootloader()
+
+
+def test_a_board_known_by_its_rom_serial_is_written_and_says_the_flash_id_it_then_shows(chip):
+    """A first flash of a blank RP2040 known by its ROM serial: written through the bootloader
+    found where the serial is, and the flash id picotool prints once it holds an image is given,
+    for the registry."""
+    tmp, tool, set_state, _, flash = chip
+    set_state(boot=True, bus="1", address="82")
+    root = usb_tree(tmp / "usb", ("1-1.4", "2e8a", ROM, "1", "82"))
+    manifest, file = image(tmp, b"z" * 300)
+    f = picoboot.PicobootFlasher("picow1", manifest, file, ROM, SPEC, board_tag="pro-micro", picotool=tool,
+                                 enter_wait=1.0, usb_root=root)
+    try:
+        common.drive(f, manifest)
+    finally:
+        f.leave()
+    assert flash.read_bytes()[:300] == b"z" * 300
+    assert f.flash_id == CHIP, "the flash id picotool printed after the write"
