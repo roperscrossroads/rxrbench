@@ -17,6 +17,11 @@ limited to the one board. `--list` prints what would run and stops.
 
 The record is `runs/<time>/exercise/<board>.json`; each verb's play writes under
 `runs/<time>/exercise/<board>/<nn>-<verb>/`.
+
+`--ci` is the run a CI job makes: only a board its layout marks `bench_ci: {run: true}` is
+exercised (any other is refused, nothing run), and the destructive verbs run only where it also
+says `destructive: true`; `--destructive` is not taken with it. `tools/ci_boards.py` lists the
+marked boards of a layout.
 """
 import argparse
 import datetime
@@ -299,6 +304,20 @@ VERBS = [v["verb"] for v in applicable({"bench_routes": {}, "bench_families": {}
 TEMPLATED = ("bench_tests",)
 
 
+def ci_policy(hv):
+    """(run, destructive, why not) for a CI run of the board: what its `bench_ci` declares, and
+    why it may not be run when it may not. A board with no `bench_ci` is never run by CI."""
+    ci = hv.get("bench_ci")
+    if ci is None:
+        return False, False, "the layout does not mark it for CI (bench_ci: {run: true})"
+    if not isinstance(ci, dict) or set(ci) - {"run", "destructive"} or \
+            not all(isinstance(v, bool) for v in ci.values()):
+        return False, False, f"bench_ci must be {{run: <bool>, destructive: <bool>}}, not {ci!r}"
+    if not ci.get("run"):
+        return False, False, "its bench_ci says run: false"
+    return True, bool(ci.get("destructive")), ""
+
+
 def hostvars(layout_dir, board):
     """What the inventory publishes for one board of a layout, the templated declarations rendered."""
     inv = subprocess.run([os.path.join(VENV, "ansible-inventory"), "-i", layout_dir, "--host", board],
@@ -436,6 +455,7 @@ class Exercise:
         self.entries = entries or []
         self._feats = feats
         self.fresh = {}             # verb -> why it is left out as fresh
+        self.ci = False             # a CI run (--ci): the board's bench_ci decided what runs
 
     # -- what each step depends on (tools/ledger.py) ------------------------------------------
 
@@ -875,6 +895,7 @@ class Exercise:
                           msg, time.monotonic() - t)
         rec = {
             "v": 2, "run": self.run, "layout": self.layout, "board": self.board, "destructive": self.destructive,
+            "ci": self.ci,
             "board_tag": self.board_tag(), "firmware": self.firmware(),
             "selected": {"only": sorted(self.only), "stale_only": self.stale_only, "left_out": sorted(self.fresh)},
             "family": self.hv.get("bench_family"), "flasher": self.hv.get("bench_flasher"),
@@ -933,11 +954,16 @@ def main(argv=None):
     ap.add_argument("--stale-only", action="store_true",
                     help="leave out every verb that passed last time against the same code, board type and "
                          "firmware (the site's ledger); the start plan and came-back always run")
+    ap.add_argument("--ci", action="store_true",
+                    help="a CI run: only a board marked bench_ci: {run: true}; destructive verbs only "
+                         "where it says destructive: true")
     ap.add_argument("--max-age", type=int, default=None, metavar="DAYS",
                     help="with --stale-only: a pass older than this is stale too")
     a = ap.parse_args(argv)
     if a.confirm not in ("", "confirm=apply"):
         ap.error(f"unknown argument {a.confirm!r}: the one word taken here is confirm=apply")
+    if a.ci and a.destructive:
+        ap.error("--ci takes the destructive verbs from the board's bench_ci, not from --destructive")
     site.load_env()
     entries = None
     if a.stale_only:
@@ -946,6 +972,12 @@ def main(argv=None):
     ex = Exercise(a.layout, a.board, destructive=a.destructive, skip=[s for s in a.skip.split(",") if s],
                   only=[s for s in a.only.split(",") if s], stale_only=a.stale_only, entries=entries,
                   max_age=a.max_age)
+    if a.ci:
+        run, destructive, why = ci_policy(ex.hv)
+        if not run:
+            print(f"exercise {a.board}: not run by CI: {why}")
+            return 2
+        ex.ci, ex.destructive = True, destructive
     if a.list or a.confirm != "confirm=apply":
         ex.choose()
         # The exercise writes to the board (an apply, a region restore, a snapshot and the switch

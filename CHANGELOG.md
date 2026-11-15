@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Boards a CI job may exercise**: a layout marks a board `bench_ci: {run: true}` (and
+  `destructive: true` for its erases and family switch); `tools/ci_boards.py <layout>` lists the
+  boards so marked, and `tools/exercise.py <layout> <board> confirm=apply --ci` refuses any other
+  and takes the destructive verbs from the board, never from the command line.
+
+### Fixed
+
+- **The exercise found no region backup on a real board**: a region backup is named for its time
+  and the build it was read from; the exercise looked for the time alone, failed backup-regions
+  and skipped every write. It now takes the whole name.
+
 ## 0.2.0 (2026-11-15), alpha
 
 ### New

@@ -12,6 +12,13 @@ tables:
         without it a layout can only be planned. Every writing play passes one gate
         (`playbooks/tasks/gate.yml`) and hands the go-ahead to each writing module
         (`apply_allowed`), which refuses without it
+    - name: bench_ci
+      type: dict
+      text: >-
+        per board: `{run: true}` lets a CI job exercise it (`tools/exercise.py <layout> <board> confirm=apply
+        --ci`; `tools/ci_boards.py <layout>` lists the boards so marked), and `destructive:
+        true` lets that run erase it and switch its family too, each undone within the run. A board
+        without it is never touched by CI. Writing still needs `bench_apply_allowed`
     - name: bench_first_flash
       type: bool
       text: >-

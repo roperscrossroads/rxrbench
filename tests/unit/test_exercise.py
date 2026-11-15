@@ -593,3 +593,62 @@ def test_without_confirm_apply_the_exercise_says_what_would_run_and_runs_nothing
     assert exercise.main(["lay", "b1", "confirm=apply"]) == 0 and ran == [True]
     with pytest.raises(SystemExit):
         exercise.main(["lay", "b1", "confirm=yes"])
+
+
+# ---- a CI run: the layout picks the boards, and the destructive verbs per board -----------------
+
+@pytest.mark.parametrize("ci, want", [
+    (None, (False, False)), ({"run": False}, (False, False)), ({"run": True}, (True, False)),
+    ({"run": True, "destructive": True}, (True, True)), ({"run": "yes"}, (False, False)),
+    ({"run": True, "erase": True}, (False, False)), ("true", (False, False))])
+def test_ci_runs_only_a_board_its_layout_marks_and_destructive_only_where_it_says(ci, want):
+    hv = {} if ci is None else {"bench_ci": ci}
+    run, destructive, why = exercise.ci_policy(hv)
+    assert (run, destructive) == want and (bool(why) != run)
+
+
+def ci_stub(monkeypatch, hv):
+    made = []
+
+    class Stub:
+        def __init__(self, *a, **kw):
+            self.hv, self.verbs, self.fresh = hv, exercise.applicable(FULL, IMAGES), {}
+            self.ci, self.destructive = False, kw.get("destructive", False)
+            made.append(self)
+
+        def choose(self):
+            pass
+
+        def go(self):
+            return {"steps": [{"verb": "plan", "kind": "read", "result": "pass", "reason": "r", "msg": ""}],
+                    "passed": True, "came_back": True, "seconds": 0, "path": "x"}
+    monkeypatch.setattr(exercise, "Exercise", Stub)
+    monkeypatch.setattr(exercise.site, "load_env", lambda: None)
+    return made
+
+
+def test_a_ci_run_of_an_unmarked_board_runs_nothing(monkeypatch, capsys):
+    made = ci_stub(monkeypatch, {})
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == 2
+    assert "not run by CI" in capsys.readouterr().out and not made[0].ci
+
+
+def test_a_ci_run_takes_the_destructive_verbs_from_the_board_not_the_command_line(monkeypatch):
+    made = ci_stub(monkeypatch, {"bench_ci": {"run": True, "destructive": True}})
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == 0
+    assert made[0].ci and made[0].destructive
+    made = ci_stub(monkeypatch, {"bench_ci": {"run": True}})
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == 0
+    assert made[0].ci and not made[0].destructive
+    with pytest.raises(SystemExit):
+        exercise.main(["lay", "b1", "confirm=apply", "--ci", "--destructive"])
+
+
+def test_ci_boards_lists_the_marked_boards_and_refuses_a_malformed_mark():
+    import ci_boards  # pylint: disable=import-outside-toplevel
+    inv = {"_meta": {"hostvars": {"a": {"bench_ci": {"run": True}}, "b": {},
+                                  "c": {"bench_ci": {"run": True, "destructive": True}},
+                                  "d": {"bench_ci": {"run": False}}}}}
+    assert ci_boards.boards(inv) == [("a", False), ("c", True)]
+    with pytest.raises(ValueError, match="e: bench_ci must be"):
+        ci_boards.boards({"_meta": {"hostvars": {"e": {"bench_ci": {"run": 1}}}}})
