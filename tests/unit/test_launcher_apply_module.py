@@ -7,6 +7,7 @@ import json
 
 import pytest
 
+from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
 from ansible_collections.rxrbench.core.plugins.module_utils.flash import common
 from ansible_collections.rxrbench.launcher.plugins.modules import launcher_apply
 from tests.support import fake_module
@@ -223,3 +224,91 @@ def test_a_self_update_not_seen_to_finish_leaves_the_port_released_and_the_board
     st = json.loads(s.makefile().readline())
     s.close()
     assert st["open"] is False and st["released_for"] > 0, "the broker has not taken the port back"
+
+
+def resets_into_the_app(monkeypatch, node):
+    """A native-USB board (the T-Embed): the broker's reset is not a power-on, so the board boots
+    its app with no window, and Launcher's console never answers after it."""
+    real = broker_client.Board.request
+
+    def request(self, **req):
+        if req.get("op") == "reset":
+            if node.copying_until is not None:
+                node.resets_mid_copy += 1
+            node.state = "app"
+            return {"ok": True, "port": node.path}
+        return real(self, **req)
+    monkeypatch.setattr(broker_client.Board, "request", request)
+
+
+def flash_reads(monkeypatch, params, data=None):
+    """esptool on the board: the partition table names Launcher at 0x10000, and its partition
+    holds `data` (the image's app part when None)."""
+    mgr = params["images"]["manager"]
+    with open(mgr["path"], "rb") as f:
+        image = f.read()[mgr["app_offset"]:mgr["app_offset"] + mgr["app_size"]]
+    reads = []
+    monkeypatch.setattr(common, "esp_port", lambda devreg, name, esptool, chip: ("/dev/ttyFAKE", None))
+    monkeypatch.setattr(common, "read_manager", lambda esptool, chip, port: {"offset": 0x10000, "size": 0x180000})
+
+    def read_flash(esptool, chip, port, offset, length, after="no-reset", timeout=120):
+        reads.append((offset, length, after))
+        return (image if data is None else data)[:length]
+    monkeypatch.setattr(common, "read_flash", read_flash)
+    return reads
+
+
+def test_a_self_update_on_a_board_that_does_not_come_back_into_launcher_is_checked_by_its_bytes(
+        rig, declared, tmp_path, monkeypatch):
+    """Launcher 3.0.0 on the T-Embed (2026-11-15): the update copied itself, then a reset boots
+    the app, so its partition is read back and compared with the image; nothing else was to do."""
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=1.0, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    params = manager_params(tmp_path, declared)
+    reads = flash_reads(monkeypatch, params)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**params, "socket": sock, "apply_allowed": True,
+                                                           "wait": 3, "self_update_wait": 20,
+                                                           "chip": "esp32s3"})
+    assert how == "exit", r
+    assert node.resets_mid_copy == 0 and node.version == "3.0.0"
+    assert r["read_back"]["version"] == "3.0.0" and r["launcher"]["version"] == "3.0.0"
+    assert reads == [(0x10000, params["images"]["manager"]["app_size"], "hard-reset")]
+
+
+def test_a_self_update_whose_partition_reads_back_different_fails(rig, declared, tmp_path, monkeypatch):
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=1.0, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    params = manager_params(tmp_path, declared)
+    flash_reads(monkeypatch, params, data=b"\xff" * 10000)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**params, "socket": sock, "apply_allowed": True,
+                                                           "wait": 3, "self_update_wait": 20,
+                                                           "chip": "esp32s3"})
+    assert how == "fail" and "read back differs from the image" in r["msg"]
+
+
+def test_a_self_update_with_no_chip_name_cannot_be_checked_and_says_so(rig, declared, tmp_path, monkeypatch):
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=1.0, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**manager_params(tmp_path, declared), "socket": sock,
+                                                           "apply_allowed": True, "wait": 3,
+                                                           "self_update_wait": 20})
+    assert how == "fail" and "bench_mcu" in r["msg"] and "copied itself" in r["msg"]
+
+
+def test_steps_after_a_self_update_checked_by_its_bytes_are_named_for_the_next_apply(
+        rig, declared, tmp_path, monkeypatch):
+    node, sock = rig.make(tick=0.05, version="2.9.9", self_update=1.0, update_to="3.0.0")
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (node.path, None))
+    resets_into_the_app(monkeypatch, node)
+    params = {**manager_params(tmp_path, declared), "images": {**manager_params(tmp_path, declared)["images"],
+                                                               "apps": declared["params"]["images"]["apps"]},
+              "launcher": declared["params"]["launcher"]}
+    flash_reads(monkeypatch, params)
+    how, r = fake_module.run(launcher_apply, monkeypatch, {**params, "socket": sock, "apply_allowed": True,
+                                                           "wait": 3, "self_update_wait": 20,
+                                                           "chip": "esp32s3"})
+    assert how == "fail" and "matches the image" in r["msg"] and "put it in Launcher" in r["msg"]
+    assert "cam-stream" in r["msg"] and r["read_back"]["version"] == "3.0.0"

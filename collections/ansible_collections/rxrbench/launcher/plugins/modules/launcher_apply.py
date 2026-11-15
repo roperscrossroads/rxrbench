@@ -50,7 +50,7 @@ options:
     type: dict
     default: {}
   tools:
-    description: Where the bench host keeps its tools. Keys C(devreg), C(serial_tool).
+    description: Where the bench host keeps its tools. Keys C(devreg), C(serial_tool), C(esptool).
     type: dict
     default: {}
   deadline:
@@ -84,6 +84,11 @@ options:
       mid-copy leaves a half-written Launcher.
     type: float
     default: 300.0
+  chip:
+    description: The chip as esptool names it (C(bench_mcu)). When Launcher does not answer after
+      its own update (a native-USB board boots its app after any reset but a power-on), its
+      partition is read back through esptool and compared with the image instead.
+    type: str
   apply_allowed:
     description: The layout's go-ahead to write (C(bench_apply_allowed)).
     type: bool
@@ -121,12 +126,18 @@ launcher:
   description: What the board holds after (before, in a plan), without passwords.
   returned: always
   type: dict
+read_back:
+  description: Launcher's partition read back and compared with the image, when Launcher did not
+    answer after its own update ({version, offset, size, sha256}).
+  returned: when it was read back
+  type: dict
 diff:
   description: C(before) and C(after).
   returned: when something differs
   type: dict
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -150,6 +161,9 @@ class Runner:
         self.tool = os.path.expanduser(p["tools"].get("serial_tool") or "~/rxrbench/bin/launcher_serial.py")
         self.installed = {}
         self.entered = False
+        # Launcher's own update, checked by reading its partition back when Launcher did not
+        # answer after it: the board is then in its app, and no later step can reach the console
+        self.read_back = None
 
     def ok(self, out, what):
         if not str(out).startswith("OK"):
@@ -182,7 +196,12 @@ class Runner:
             # resets the board before (a reset mid-copy leaves a half-written Launcher)
             self.install("launch", img["path"], img["app_offset"], img["app_size"], overwrite=False,
                          self_update=True)
-            self.reenter()
+            try:
+                self.reenter()
+            except console.ConsoleError as e:
+                # the copy said it was done; a board that comes into Launcher only on a power-on
+                # (native USB: a reset boots the app) is checked by its bytes instead
+                self.read_back_manager(img, str(e))
         elif k == "install":
             if step.get("replace"):
                 self.ok(console.exec_line(b, f"partition delete {step['label']}", self.p["deadline"]),
@@ -250,6 +269,41 @@ class Runner:
             if give_back:
                 self.b.reacquire()
 
+    def read_back_manager(self, img, why):
+        """Launcher's partition, read back through esptool and compared with the image's app part:
+        the proof the update went in when Launcher's console is out of reach after it."""
+        board, chip = self.p["board"], self.p.get("chip")
+        if not chip:
+            raise console.ConsoleError(f"{board}: Launcher's update said it had copied itself, but Launcher "
+                                       f"did not answer after it ({why}), and with no chip name (bench_mcu) "
+                                       f"its partition cannot be read back to check it")
+        esptool = os.path.expanduser(self.p["tools"].get("esptool") or "~/.venv-esp/bin/esptool")
+        with open(img["path"], "rb") as f:
+            f.seek(img["app_offset"])
+            want = f.read(img["app_size"])
+        self.b.release(ttl=900)
+        try:
+            port, refusal = common.esp_port(self.devreg, board, esptool, chip)
+            if refusal:
+                raise common.FlashError(refusal)
+            mgr = common.read_manager(esptool, chip, port)
+            if not mgr:
+                raise common.FlashError(f"{board}: no app manager in the partition table read back "
+                                        f"after Launcher's update")
+            got = common.read_flash(esptool, chip, port, mgr["offset"], len(want), after="hard-reset",
+                                    timeout=600)
+        finally:
+            self.b.reacquire()
+        if got != want:
+            at = next(i for i in range(min(len(got), len(want))) if got[i] != want[i]) \
+                if len(got) == len(want) else min(len(got), len(want))
+            raise common.FlashError(f"{board}: Launcher did not answer after its update ({why}), and its "
+                                    f"partition at {mgr['offset']:#x} read back differs from the image "
+                                    f"from byte {at:#x}")
+        self.read_back = {"version": img.get("version"), "offset": mgr["offset"], "size": len(want),
+                          "sha256": hashlib.sha256(got).hexdigest()}
+        self.entered = False
+
     def reenter(self):
         """Launcher's console again after a step that rebooted the board."""
         console.enter(self.b, wait=self.p["wait"], entry=self.p.get("entry", "selpress"))
@@ -273,6 +327,7 @@ def main():
             "entry": {"type": "str", "choices": list(console.ENTRIES), "default": "selpress"},
             "modem_rest": {"type": "str", "choices": ["asserted", "deasserted"], "default": "asserted"},
             "self_update_wait": {"type": "float", "default": 300.0},
+            "chip": {"type": "str"},
             **gate.ARGS,
         },
         supports_check_mode=True,
@@ -307,8 +362,23 @@ def main():
                     console.leave(b)
                 module.exit_json(**result)
             runner = Runner(module, b, p)
-            for step in pl["steps"]:
+            for i, step in enumerate(pl["steps"]):
+                if runner.read_back:
+                    rest = pl["steps"][i:]
+                    module.fail_json(msg=f"{p['board']}: Launcher {runner.read_back['version']} is on the board "
+                                         f"(its partition read back matches the image), but the board does not "
+                                         f"come back into Launcher by itself after a reset; put it in Launcher "
+                                         f"and apply again for what is left: "
+                                         + "; ".join(plan.shown(s) for s in rest),
+                                     read_back=runner.read_back, **result)
                 runner.run(step)
+            if runner.read_back:
+                # Launcher's own update was the last step and its bytes are proven: the rest of
+                # what was read before it stands
+                result.update(read_back=runner.read_back,
+                              launcher={**result["launcher"], "version": runner.read_back["version"]})
+                result["diff"] = {"before": pl["before"], "after": pl["after"]}
+                module.exit_json(**result)
             # read back: nothing may differ now, the boot slot apart
             after = console.read(b, p["deadline"])
             records = {**p["records"], **runner.installed}
