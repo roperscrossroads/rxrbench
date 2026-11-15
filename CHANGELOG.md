@@ -25,6 +25,10 @@
 
 ### Fixed
 
+- **picoboot gave up on a board still on its way back from the bootloader**: asking its
+  application for the bootloader again (a backup's chip read after its region read) looked the
+  board up once; one that starts slower (a Pico 2 W running zapp 3.0, about 4 s) was absent, and
+  every way in failed. An absent board is now waited for (15 s).
 - **The exercise could not read a layout with SOPS vars outside `just`**: its own inventory reads
   ran without the pinned tools on PATH (its plays had them), so a CI job, which calls it
   directly, failed on such a layout before it ran anything.

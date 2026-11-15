@@ -57,6 +57,10 @@ SAVE_PIECE_TIMEOUT = 60
 
 #: Seconds to wait for the bootloader after each way in (the board resetting and enumerating).
 ENTER_WAIT = 10.0
+#: Seconds a board's application may take to be on USB again when its port is wanted: one that
+#: left the bootloader a moment ago is not there yet (a Pico 2 W running zapp 3.0, which starts its
+#: WiFi chip first, takes about 4 s). Only an absent board is waited for; an ambiguous one is not.
+APP_WAIT = 15.0
 #: Seconds an ask may take (open the port, touch it or send the command, close it): under one on
 #: a board that works. A port can enumerate and still take no input (a firmware whose USB
 #: receive path is broken): a write, or the close after it, then blocks without end, so each ask
@@ -214,12 +218,17 @@ class Bootrom:
             time.sleep(0.5)
         return False
 
-    def _app_port(self):
-        """The application's serial port, through devreg (resolve, then guard)."""
-        port, why = common.guarded_port(self.devreg, self.name)
-        if why:
-            raise common.FlashError(why)
-        return port
+    def _app_port(self, wait=None):
+        """The application's serial port, through devreg (resolve, then guard). A board devreg
+        finds absent is waited for (APP_WAIT): it may be on its way back from the bootloader."""
+        end = time.monotonic() + (APP_WAIT if wait is None else wait)
+        while True:
+            port, why = common.guarded_port(self.devreg, self.name)
+            if not why:
+                return port
+            if not isinstance(why, common.Absent) or time.monotonic() >= end:
+                raise common.FlashError(why)
+            time.sleep(0.5)
 
     _ASK = """
 import sys, time

@@ -329,3 +329,30 @@ def test_a_piece_whose_save_exits_0_but_writes_nothing_is_not_the_last_piece_aga
     with pytest.raises(common.FlashError, match="wrote no file"):
         rom.save(BASE, BASE + 0x30000, str(out))
     assert not out.exists() and not list(tmp.glob("chip.bin*"))
+
+
+def test_an_application_on_its_way_back_from_the_bootloader_is_waited_for(chip, monkeypatch):
+    """A board that left its bootloader a moment ago is not on USB yet: absent is waited for
+    (a Pico 2 W on zapp 3.0 takes about 4 s), an ambiguous match is not."""
+    tmp, tool, _, _, _ = chip
+    manifest, file = image(tmp, b"y" * 300)
+    f = flasher(tool, manifest, file)
+    answers = [(None, common.Absent("devreg cannot resolve pog1: NOT PRESENT"))] * 2 + [("/dev/ttyACM0", None)]
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: answers.pop(0))
+    monkeypatch.setattr(picoboot.time, "sleep", lambda s: None)
+    assert f._app_port(wait=5) == "/dev/ttyACM0" and answers == []
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: (None, "devreg cannot resolve pog1: matched 2 devices"))
+    with pytest.raises(common.FlashError, match="matched 2"):
+        f._app_port(wait=5)
+
+
+def test_an_application_that_never_comes_back_is_absent_once_the_wait_is_over(chip, monkeypatch):
+    tmp, tool, _, _, _ = chip
+    manifest, file = image(tmp, b"y" * 300)
+    f = flasher(tool, manifest, file)
+    calls = []
+    monkeypatch.setattr(common, "guarded_port", lambda devreg, name: calls.append(1) or
+                        (None, common.Absent("devreg cannot resolve pog1: NOT PRESENT")))
+    with pytest.raises(common.FlashError, match="NOT PRESENT"):
+        f._app_port(wait=0)
+    assert len(calls) == 1
