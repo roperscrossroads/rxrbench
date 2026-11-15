@@ -73,6 +73,16 @@ argument_specs:
       bench_board: *bench_board
       bench_socket: *bench_socket
       zephyr: *zephyr
+  secret_wifi_psk_read:
+    short_description: "Read a board's wifi_psk secret"
+    description:
+      - >-
+        The declared wifi_psk, the key of the network the device joins (the setting
+        C(zephyr.secrets.wifi_psk) names), against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
   settings:
     short_description: "Write a Zephyr board's declared settings"
     description:
