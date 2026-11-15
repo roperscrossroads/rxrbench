@@ -8,7 +8,10 @@ Launcher's console (115200, no echo, newline-ended lines) takes `flash firmware 
 (`flash overwrite` reuses the slot of that name): it answers `READY <size>`, reads that many raw
 bytes, answers `ACK <written>/<size>` for every chunk and ends with `OK flashed, rebooting`,
 having created the slot, selected it in the otadata and rebooted into the app. Only the app
-image goes: `--offset/--length` cut it out of a merged file.
+image goes: `--offset/--length` cut it out of a merged file. Launcher 3.0.0 installing its own
+update (`launch`, with --self-update-wait) says no OK: it saves the slot and reboots into it, so
+there a reboot once every byte is acknowledged ends the install as well; whether the update then
+went in is the copy's own line (below), not the OK.
 
 The port is the caller's to resolve and guard by name (devreg); the broker that owns it has
 released it. The board must be in Launcher, or in its boot window: the banner is answered
@@ -53,6 +56,7 @@ def resets_after_ready(log):
 #: JSON `false`, not 0: Launcher's `is<bool>()` skips a number and answers OK all the same.
 ENTRIES = {"selpress": "nav SelPress", "settings": 'settings set {"bootToApp":false}'}
 MENU = "Type 'help'"
+DONE_WAIT = 60.0   # for the OK once every byte is acknowledged
 
 
 class Link:
@@ -171,7 +175,7 @@ def enter(link, wait, entry="selpress"):
     return False
 
 
-def install(link, name, data, overwrite=False, chunk=2048, ack_wait=5.0):
+def install(link, name, data, overwrite=False, chunk=2048, ack_wait=5.0, self_update=False):
     verb = "overwrite" if overwrite else "firmware"
     link.send(f"flash {verb} {name} {len(data)}")
     ready = link.wait(lambda l: l.startswith(("READY", "ERR")), 15.0)
@@ -215,9 +219,15 @@ def install(link, name, data, overwrite=False, chunk=2048, ack_wait=5.0):
                 acked = max(acked, int(ack.split()[1].split("/")[0]))
             except (IndexError, ValueError):
                 pass
-    done = link.wait(lambda l: l.startswith(("OK", "ERR")), 60.0)
-    return {"ok": bool(done and done.startswith("OK")), "sent": sent, "size": len(data),
-            "lost_acks": lost, "acked": acked, "reply": done or "no OK within 60 s",
+    # Launcher's own update in 3.0.0 reboots into `launch` with no OK once it has every byte
+    # (`App registry: save label=launch ... ok=1`, then the ROM's reset line): that is done too
+    rebooted = lambda l: self_update and acked >= len(data) and RESET.search(l)
+    done = link.wait(lambda l: l.startswith(("OK", "ERR")) or rebooted(l), DONE_WAIT)
+    ok = bool(done and (done.startswith("OK") or rebooted(done)))
+    if ok and not done.startswith("OK"):
+        done = "rebooted into the new Launcher with no OK (Launcher 3.0.0 says none for its own update)"
+    return {"ok": ok, "sent": sent, "size": len(data),
+            "lost_acks": lost, "acked": acked, "reply": done or f"no OK within {DONE_WAIT:.0f} s",
             "seconds": round(time.monotonic() - t0, 1)}
 
 
@@ -282,7 +292,7 @@ def main(argv=None):
                               "reply": f"no Launcher console within {a.wait:.0f} s",
                               "tail": link.log[-5:]}))
             return 1
-        r = install(link, a.name, data, a.overwrite, a.chunk, a.ack_wait)
+        r = install(link, a.name, data, a.overwrite, a.chunk, a.ack_wait, self_update=a.self_update_wait > 0)
         if not r["ok"]:
             # what the board said besides ACKs: a reboot banner, a panic, an ERR
             r["tail"] = [l for l in link.log if not l.startswith("ACK")][-8:]

@@ -43,7 +43,13 @@ class Device:
             if self.acks not in self.drop:
                 self.out += f"ACK {n}/{size}\r\n".encode()
             if len(self.got) >= size:
-                self.out += b"OK flashed, rebooting\r\n"
+                if getattr(self, "no_ok", False):     # Launcher 3.0.0 installing its own update
+                    self.out += (b"App registry: save label=launch name=launch fat= spiffs= ok=1\r\n"
+                                 b"Settings stored in NVS successfully\r\n"
+                                 b"ESP-ROM:esp32s3-20210327\r\nrst:0xc (RTC_SW_CPU_RST),boot:0x8 "
+                                 b"(SPI_FAST_FLASH_BOOT)\r\n")
+                else:
+                    self.out += b"OK flashed, rebooting\r\n"
                 self.raw = None
             return
         for line in data.decode().split("\n"):
@@ -263,3 +269,34 @@ def test_launchers_own_update_is_waited_for_on_the_port_the_tool_holds(tool, tmp
 def test_a_self_update_that_never_says_it_finished_is_reported_unseen(tool, tmp_path, capsys):
     rc, out = run(tool, SelfUpdating(finishes=False), tmp_path, capsys, b"\x33" * 5000, "--self-update-wait", "0.5")
     assert out["ok"] and out["self_update"]["seen"] is False
+
+
+def test_launcher_3_0_0s_own_update_with_no_ok_is_done_once_it_reboots_and_copies_itself(tool, tmp_path, capsys,
+                                                                                         monkeypatch):
+    """3.0.0 saves the `launch` slot and reboots into it without `OK flashed`; the copy's own
+    line then says the update went in (seen on the T-Embed, 2026-11-15)."""
+    dev = SelfUpdating()
+    dev.no_ok = True
+    real = FakeSerial.read
+
+    def read(self, n):
+        d = FakeSerial.device
+        chunk = real(self, n)
+        if b"RTC_SW_CPU_RST" in chunk and d.after == 0:
+            d.after = 1
+            d.out += b"Display Red Stripe: Launcher Update\r\nPartition table updated: boot_repair=0 removed_ota=1\r\n"
+        return chunk
+    monkeypatch.setattr(FakeSerial, "read", read)
+    rc, out = run(tool, dev, tmp_path, capsys, b"\x33" * 5000, "--self-update-wait", "5")
+    assert rc == 0 and out["ok"] and "no OK" in out["reply"]
+    assert out["self_update"]["seen"] and "removed_ota=1" in out["self_update"]["line"]
+
+
+def test_an_app_install_that_reboots_with_no_ok_still_fails(tool, tmp_path, capsys, monkeypatch):
+    """Only Launcher's own update may end without an OK: an app's install must say OK."""
+    monkeypatch.setattr(tool, "DONE_WAIT", 0.5)
+    dev = Device()
+    dev.no_ok = True
+    rc, out = run(tool, dev, tmp_path, capsys)
+    assert rc == 1 and not out["ok"] and out["reply"].startswith("no OK within")
+    assert out["resets"] == ["RTC_SW_CPU_RST"]
