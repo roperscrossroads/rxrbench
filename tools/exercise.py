@@ -357,8 +357,9 @@ def presence(board):
 
 def hostvars(layout_dir, board):
     """What the inventory publishes for one board of a layout, the templated declarations rendered."""
+    # the pinned tools on PATH as for a play: a layout's SOPS vars need sops to be read at all
     inv = subprocess.run([os.path.join(VENV, "ansible-inventory"), "-i", layout_dir, "--host", board],
-                         cwd=REPO, capture_output=True, text=True, check=False)
+                         cwd=REPO, env=play_env({}), capture_output=True, text=True, check=False)
     if inv.returncode:
         sys.exit(f"exercise: {board}: {inv.stderr.strip() or inv.stdout.strip()}")
     return rendered(json.loads(inv.stdout), lambda key: debug_var(layout_dir, board, key))
@@ -377,7 +378,7 @@ def rendered(hv, fetch, keys=TEMPLATED):
 def debug_var(layout_dir, board, key):
     """One variable of one board as Ansible renders it (`ansible -m debug -a var=<key>`)."""
     r = subprocess.run([os.path.join(VENV, "ansible"), "-i", layout_dir, "-m", "debug", "-a", f"var={key}", board],
-                       cwd=REPO, capture_output=True, text=True, check=False)
+                       cwd=REPO, env=play_env({}), capture_output=True, text=True, check=False)
     return parse_debug(r.stdout, key)
 
 

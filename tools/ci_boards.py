@@ -41,7 +41,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     site.load_env()
     inv = subprocess.run([os.path.join(exercise.VENV, "ansible-inventory"), "-i", site.layout_path(a.layout),
-                          "--list"], cwd=REPO, capture_output=True, text=True, check=False)
+                          "--list"], cwd=REPO, env=exercise.play_env({}), capture_output=True, text=True, check=False)
     if inv.returncode:
         sys.exit(f"ci_boards: {inv.stderr.strip() or inv.stdout.strip()}")
     try:

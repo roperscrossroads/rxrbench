@@ -21,6 +21,9 @@
 
 ### Fixed
 
+- **The exercise could not read a layout with SOPS vars outside `just`**: its own inventory reads
+  ran without the pinned tools on PATH (its plays had them), so a CI job, which calls it
+  directly, failed on such a layout before it ran anything.
 - **The exercise found no region backup on a real board**: a region backup is named for its time
   and the build it was read from; the exercise looked for the time alone, failed backup-regions
   and skipped every write. It now takes the whole name.

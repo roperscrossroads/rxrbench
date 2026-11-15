@@ -702,3 +702,23 @@ def test_the_update_verb_says_which_features_no_second_image_has():
     verbs = {v["verb"]: v for v in exercise.applicable(FULL, images)}
     assert not verbs["update-there-and-back"]["applies"]
     assert "with digest" in verbs["update-there-and-back"]["reason"]
+
+
+def test_the_inventory_is_read_with_the_pinned_tools_on_path_as_a_play_is(monkeypatch):
+    """A layout's SOPS vars need sops, which the recipes put on PATH and a CI job calling the tool
+    directly does not: the exercise's own inventory reads get it as its plays do."""
+    seen = []
+
+    def run(cmd, **kw):
+        seen.append(kw.get("env") or {})
+
+        class R:
+            returncode, stdout, stderr = 0, "{}", ""
+        return R()
+    monkeypatch.setattr(exercise.subprocess, "run", run)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("HOME", "/home/bench")
+    exercise.hostvars("/lay", "b1")
+    exercise.debug_var("/lay", "b1", "x")
+    assert len(seen) == 2
+    assert all("/home/bench/.local/share/rxrbench/bin" in e.get("PATH", "").split(":") for e in seen)
