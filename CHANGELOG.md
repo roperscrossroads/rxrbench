@@ -8,6 +8,8 @@
   `destructive: true` for its erases and family switch); `tools/ci_boards.py <layout>` lists the
   boards so marked, and `tools/exercise.py <layout> <board> confirm=apply --ci` refuses any other
   and takes the destructive verbs from the board, never from the command line.
+  A marked board that is not plugged in to the host is reported as not present (exit code 3),
+  not run and not recorded, so unplugging a board does not read as a failure.
 
 - **A CI image**: `ghcr.io/roperscrossroads/rxrbench-ci`, a Wolfi base assembled by apko with
   the tool's pinned Python environment on it (`ci/image/`). The unit job runs in it when one was

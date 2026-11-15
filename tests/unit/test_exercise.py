@@ -624,6 +624,7 @@ def ci_stub(monkeypatch, hv):
                     "passed": True, "came_back": True, "seconds": 0, "path": "x"}
     monkeypatch.setattr(exercise, "Exercise", Stub)
     monkeypatch.setattr(exercise.site, "load_env", lambda: None)
+    monkeypatch.setattr(exercise, "presence", lambda board: (0, "/dev/ttyACM0"))   # plugged in
     return made
 
 
@@ -652,3 +653,23 @@ def test_ci_boards_lists_the_marked_boards_and_refuses_a_malformed_mark():
     assert ci_boards.boards(inv) == [("a", False), ("c", True)]
     with pytest.raises(ValueError, match="e: bench_ci must be"):
         ci_boards.boards({"_meta": {"hostvars": {"e": {"bench_ci": {"run": 1}}}}})
+
+
+def test_a_ci_run_of_a_marked_board_that_is_not_plugged_in_is_not_present_not_failed(monkeypatch, capsys):
+    made = ci_stub(monkeypatch, {"bench_ci": {"run": True}})
+    monkeypatch.setattr(exercise, "presence", lambda board: (1, "devreg: 'b1' is NOT PRESENT"))
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == exercise.NOT_PRESENT
+    assert "not present on this host" in capsys.readouterr().out and not made[0].ci
+
+
+def test_a_ci_run_of_a_board_devreg_finds_twice_is_a_failure(monkeypatch, capsys):
+    ci_stub(monkeypatch, {"bench_ci": {"run": True}})
+    monkeypatch.setattr(exercise, "presence", lambda board: (2, "devreg: 'b1' matched 2 devices"))
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == 1
+    assert "cannot resolve" in capsys.readouterr().out
+
+
+def test_a_ci_list_does_not_ask_whether_the_board_is_there(monkeypatch):
+    ci_stub(monkeypatch, {"bench_ci": {"run": True}})
+    monkeypatch.setattr(exercise, "presence", lambda board: pytest.fail("a list asked devreg"))
+    assert exercise.main(["lay", "b1", "--ci", "--list"]) == 0

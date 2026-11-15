@@ -21,7 +21,9 @@ The record is `runs/<time>/exercise/<board>.json`; each verb's play writes under
 `--ci` is the run a CI job makes: only a board its layout marks `bench_ci: {run: true}` is
 exercised (any other is refused, nothing run), and the destructive verbs run only where it also
 says `destructive: true`; `--destructive` is not taken with it. `tools/ci_boards.py` lists the
-marked boards of a layout.
+marked boards of a layout. A marked board that is not plugged in to this host (devreg finds it
+absent) is not run and not recorded, and the exit code is 3 (NOT_PRESENT), so a job can tell a
+board unplugged from one that failed; one devreg cannot tell apart from another is a failure.
 """
 import argparse
 import datetime
@@ -41,6 +43,10 @@ from ansible_collections.rxrbench.core.plugins.module_utils import site  # noqa:
 VENV = os.path.join(REPO, "venv", "bin")
 RUNS = os.path.join(REPO, "runs")
 PLAYBOOKS = os.path.join("collections", "ansible_collections", "rxrbench", "core", "playbooks")
+#: The exit code of a CI run whose board is not plugged in to this host: nothing ran.
+NOT_PRESENT = 3
+#: The registry's own tool, run against the site's registry.
+DEVREG = os.path.join(REPO, "devreg", "devreg.py")
 #: Kinds, in the order the exercise runs them.
 READ, REVERSIBLE, DESTRUCTIVE, NOT_RUN = "read", "reversible", "destructive", "not run"
 #: Results.
@@ -316,6 +322,15 @@ def ci_policy(hv):
     if not ci.get("run"):
         return False, False, "its bench_ci says run: false"
     return True, bool(ci.get("destructive")), ""
+
+
+def presence(board):
+    """(present, what devreg said) for a board on this host's bus: `resolve` exits 0 when it is
+    there, 1 when it is absent, 2 when it matches more than one device."""
+    r = subprocess.run([sys.executable, DEVREG, "resolve", board], capture_output=True, text=True, check=False,
+                       env={**os.environ, "DEVREG_REGISTRY": site.registry_path()})
+    said = (r.stdout.strip() or r.stderr.strip()).splitlines()
+    return r.returncode, (said[0] if said else "")
 
 
 def hostvars(layout_dir, board):
@@ -977,6 +992,14 @@ def main(argv=None):
         if not run:
             print(f"exercise {a.board}: not run by CI: {why}")
             return 2
+        if a.confirm == "confirm=apply" and not a.list:
+            rc, said = presence(a.board)
+            if rc == 1:
+                print(f"exercise {a.board}: not present on this host ({said}): not run, nothing recorded")
+                return NOT_PRESENT
+            if rc:
+                print(f"exercise {a.board}: devreg cannot resolve it ({said}): not run")
+                return 1
         ex.ci, ex.destructive = True, destructive
     if a.list or a.confirm != "confirm=apply":
         ex.choose()
