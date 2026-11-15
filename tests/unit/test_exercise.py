@@ -673,3 +673,32 @@ def test_a_ci_list_does_not_ask_whether_the_board_is_there(monkeypatch):
     ci_stub(monkeypatch, {"bench_ci": {"run": True}})
     monkeypatch.setattr(exercise, "presence", lambda board: pytest.fail("a list asked devreg"))
     assert exercise.main(["lay", "b1", "--ci", "--list"]) == 0
+
+
+# ---- the second image provides what the board's image provides (catalog features) --------------
+
+def test_a_second_image_must_provide_every_feature_the_boards_image_declares():
+    images = {"zapp-1.0": {"family": "fam", "board_tag": "sim-type"},
+              "zapp-1.2d": {"family": "fam", "board_tag": "sim-type", "features": ["digest", "reboot"]},
+              "zapp-1.1r": {"family": "fam", "board_tag": "sim-type", "features": ["reboot"]}}
+    hv = {**SIM, "bench_family": "fam", "firmware": {"family": "fam", "image": "zapp-1.2d"}}
+    assert exercise.other_image(hv, images) is None, "zapp-1.0 and 1.1r lack digest"
+    assert exercise.second_image_gap(hv, images) == "no second image of the family for this board type with digest"
+    images["zapp-3.0"] = {"family": "fam", "board_tag": "sim-type", "features": ["digest", "reboot", "state"]}
+    assert exercise.other_image(hv, images) == {"family": "fam", "image": "zapp-3.0"}, "more than it needs is fine"
+    assert exercise.second_image_gap(hv, images) == ""
+
+
+def test_an_image_without_features_keeps_the_first_other_image():
+    images = {"a-1": {"family": "fam", "board_tag": "sim-type"},
+              "a-2": {"family": "fam", "board_tag": "sim-type", "features": ["x"]}}
+    hv = {**SIM, "bench_family": "fam", "firmware": {"family": "fam", "image": "a-1"}}
+    assert exercise.other_image(hv, images) == {"family": "fam", "image": "a-2"}
+    assert exercise.second_image_gap(hv, images) == ""
+
+
+def test_the_update_verb_says_which_features_no_second_image_has():
+    images = {**IMAGES, "fam-a": {**IMAGES["fam-a"], "features": ["digest"]}}
+    verbs = {v["verb"]: v for v in exercise.applicable(FULL, images)}
+    assert not verbs["update-there-and-back"]["applies"]
+    assert "with digest" in verbs["update-there-and-back"]["reason"]

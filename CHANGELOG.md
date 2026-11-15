@@ -15,6 +15,10 @@
   the tool's pinned Python environment on it (`ci/image/`). The unit job runs in it when one was
   built from the same requirements, and installs them itself otherwise.
 
+- **Images say what they provide**: a catalog entry may list `features`; the board exercise's
+  second image for `update-there-and-back` must provide all the board's image lists, and the
+  verb says which features no other image has when none does.
+
 ### Fixed
 
 - **The exercise found no region backup on a real board**: a region backup is named for its time

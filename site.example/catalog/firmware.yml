@@ -20,6 +20,10 @@
 #   rf           managed: the tool can set this firmware's power and frequency after a flash
 #                unmanaged: it cannot (yet). The board runs at that firmware's own defaults.
 #                none: the device has no radio the RF rules are about
+#   features     what the image provides that a layout may use (a command, a capability:
+#                `[digest, reboot]`). The board exercise's second image for update-there-and-back
+#                must provide every feature the board's image lists; an image with none listed
+#                takes any other image of its family and type
 #
 # A site's own images go in <site>/catalog/firmware.yml (layered over this one).
 

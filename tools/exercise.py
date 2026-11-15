@@ -153,7 +153,9 @@ def other_image(hv, images, accept=None):
     with the same features. An image counts when the board's family takes the declaration
     (`accept(fw)`, the layout's own rule, `Family.image`), when it records the board's family, or
     when it is a build staged from the same application as the board's image (the same firmware
-    at another version, whatever family name the build recorded)."""
+    at another version, whatever family name the build recorded). When the board's image says what
+    it provides (`features` in its catalog entry), a second image must provide all of it: a layout
+    that checks its secrets with a command one image has fails on an image without it."""
     fw = hv.get("firmware") or {}
     by_family = _images_for(hv, images)
     family = hv.get("bench_family")
@@ -179,12 +181,31 @@ def other_image(hv, images, accept=None):
                 if ok(fw2, entry):
                     return fw2
         return None
-    pool = [(n, e) for entries in by_family.values() for n, e in entries.items() if n != fw.get("image")]
+    need = set(current.get("features") or [])
+    pool = [(n, e) for entries in by_family.values() for n, e in entries.items()
+            if n != fw.get("image") and need <= set(e.get("features") or [])]
     for staged in (False, True):
         for name, entry in pool:
             if bool(entry.get("staged")) == staged and ok({**fw, "image": name}, entry):
                 return {**fw, "image": name}
     return None
+
+
+def second_image_gap(hv, images, accept=None):
+    """Why no second image qualifies, when the board's image declares features no other image of
+    its family and type has all of: the features missing (`no second image with digest`); else ""."""
+    fw = hv.get("firmware") or {}
+    need = set(((images or {}).get(fw.get("image")) or {}).get("features") or [])
+    if not need or fw.get("class") is not None or other_image(hv, images, accept):
+        return ""
+    family = hv.get("bench_family")
+    others = [e for f, entries in _images_for(hv, images).items() for n, e in entries.items()
+              if n != fw.get("image") and (e.get("family") == family or f == family)]
+    if not others:
+        return ""
+    best = min(others, key=lambda e: len(need - set(e.get("features") or [])))
+    return "no second image of the family for this board type with " + ", ".join(
+        sorted(need - set(best.get("features") or [])))
 
 
 def alternatives(site_dir, board):
@@ -287,7 +308,8 @@ def applicable(hv, images=None, accept=None, alts=()):
         write("restore-regions", REVERSIBLE, regions, "no region backup to write back",
               "the backup just taken, expected to leave the board as it is"),
         write("snapshot-switch", REVERSIBLE, chip, "no whole-chip route", "a named snapshot, then switch back to it"),
-        write("update-there-and-back", REVERSIBLE, bool(second), "no second image of the family for this board type", second_why),
+        write("update-there-and-back", REVERSIBLE, bool(second),
+              second_image_gap(hv, images, accept) or "no second image of the family for this board type", second_why),
         write("keys-restore", REVERSIBLE, device_secret and any(k.get("escrow") for k in device_secret),
               "no escrowed device secret to give back", "the escrowed secret, planned; given back after an erase"),
         write("erase-region", DESTRUCTIVE, regions, "no config region to erase", "one config region erased, then apply and keys-restore"),
