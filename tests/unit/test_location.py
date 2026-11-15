@@ -137,3 +137,13 @@ def test_the_live_read_takes_the_watchers_answer_for_the_same_enumeration(tmp_pa
                                              "chip_id": "0A0B0C0D0E0F1011"}]}))
     idx = location.seen_here({"pi1"}, sysfs=str(sysfs), snapshot=str(snap))
     assert "0A0B0C0D0E0F1011" not in idx and location.locate(POG, None, idx) == (None, "hint")
+
+
+def test_a_twelve_digit_serial_with_its_vid_and_pid_is_also_known_as_the_relay_files_it():
+    """An RP2040's ROM bootloader has a twelve-hex-digit serial, which is no MAC: the relay files
+    it VID:PID:serial, so a board registered by it is seen; an ESP32's MAC serial still matches."""
+    rp = {"match": {"usb_vid": "2e8a", "usb_pid": "0003", "usb_serial": "1A1B1C1D1E1F"}}
+    assert location.identity(rp) == {"1A:1B:1C:1D:1E:1F", "2E8A:0003:1A1B1C1D1E1F"}
+    assert location.locate(rp, None, index={"2E8A:0003:1A1B1C1D1E1F": "pi1"}) == ("pi1", "seen")
+    esp = {"match": {"usb_serial": "020000000010"}}
+    assert location.identity(esp) == {"02:00:00:00:00:10"}

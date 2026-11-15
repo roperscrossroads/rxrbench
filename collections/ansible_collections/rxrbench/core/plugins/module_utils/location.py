@@ -107,6 +107,10 @@ def identity(entry):
             out.add(serial.upper())
         elif re.fullmatch(r"[0-9A-Fa-f]{12}", serial):
             out.add(":".join(serial[i:i + 2] for i in range(0, 12, 2)).upper())
+            # twelve hex digits are not always a MAC: an RP2040's ROM bootloader has such a
+            # serial, and the relay files it VID:PID:serial
+            if m.get("usb_vid") and m.get("usb_pid"):
+                out.add(f"{m['usb_vid']}:{m['usb_pid']}:{serial}".upper())
         by_id = str(m.get("serial_by_id") or "")
         found = MAC.search(by_id)
         if found:

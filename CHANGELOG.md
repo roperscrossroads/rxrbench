@@ -27,6 +27,9 @@
 
 ### Fixed
 
+- **A board registered by its RP2040 bootloader serial was never seen as plugged in**: twelve hex
+  digits were read as a MAC, but the relay files such a serial as VID:PID:serial; a match that
+  gives the VID and PID is now known both ways.
 - **picoboot gave up on a board still on its way back from the bootloader**: asking its
   application for the bootloader again (a backup's chip read after its region read) looked the
   board up once; one that starts slower (a Pico 2 W running zapp 3.0, about 4 s) was absent, and
