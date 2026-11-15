@@ -247,8 +247,9 @@ def enter(board, wait=25.0, poll=1.0, entry="selpress"):
             return v, "entered"
     board.request(op="attend", dialect=DIALECT, ttl=0)
     raise ConsoleError(f"{board.board}: no Launcher console answered within {wait:.0f} s of a reset: "
-                       "the board boots its app with no window (a key-boot build), or Launcher is "
-                       "not on it")
+                       "the board booted its app (Launcher shows only after a power-on, which a "
+                       "reset on native USB is not; a key-boot build also needs its key held), or "
+                       "Launcher is not on it")
 
 
 def leave(board):

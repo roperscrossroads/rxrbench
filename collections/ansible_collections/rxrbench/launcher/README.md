@@ -94,14 +94,15 @@ Launcher's default password before the device is on a shared network.
 
 ## On hardware
 
-**Plans only.** Two boards on Launcher 2.9.1, a LilyGo T-Embed CC1101 Plus and a CYD 2432S028,
-have been read whole through their brokers (`tests/fixtures/launcher/` holds what each
-printed), and the CYD's whole chip backed up through esptool and restored over another
-firmware. No apply has completed on hardware: the one attempted failed when the board restarted
-partway through the serial install. The modules are proven against a fake console behind a real
-broker (`tests/unit/test_launcher_*`); `tests/hw/test_launcher_boards.py` reads real boards,
-read-only. Board quirks (modem-line rest states, native-USB reset, settings carried between
-boards): [docs/HARDWARE.md](../../../../docs/HARDWARE.md).
+Applies have completed on three boards: Launcher's own update to 3.0.0 on a CYD 2432S028, a
+ThinkNode M9 and a LilyGo T-Embed CC1101 Plus (2026-11-14), and on the T-Embed a round trip
+3.0.0 → 2.9.1 → 3.0.0 with its apps reinstalled (2026-11-15). Both boards on 2.9.1 were first
+read whole through their brokers (`tests/fixtures/launcher/` holds what each printed), and the
+CYD's whole chip backed up through esptool and restored over another firmware. The modules are
+proven against a fake console behind a real broker (`tests/unit/test_launcher_*`);
+`tests/hw/test_launcher_boards.py` reads real boards, read-only. Board quirks (modem-line rest
+states, native-USB reset, settings carried between boards):
+[docs/HARDWARE.md](../../../../docs/HARDWARE.md).
 
 ## Known limits
 
@@ -110,7 +111,11 @@ boards): [docs/HARDWARE.md](../../../../docs/HARDWARE.md).
   WebUI.
 - A serial install carries the app image only, not a data partition the app needs.
 - Entering Launcher by reset needs a power-on the bootloader can see: a native-USB chip's USB
-  reset is not one, and a key-boot build needs its key held.
+  reset is not one, and a key-boot build needs its key held. On such a board (the T-Embed) each
+  step that reboots, an install or Launcher's own update, is the last of its apply: what it did
+  is recorded (Launcher's own update proven by reading its partition back through esptool, which
+  needs the board's `bench_mcu`), and the apply fails naming the steps left, for the next apply
+  once someone has put the board in Launcher.
 
 ## Recipes
 
