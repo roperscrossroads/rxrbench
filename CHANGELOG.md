@@ -1,21 +1,90 @@
 # Changelog
 
-## Unreleased
+## Unreleased (proposed 0.2.0)
+
+### New
 
 - **The board exercise**: `just exercise <layout> <board> confirm=apply` takes one board through every verb of the
   tool that applies to it and records what happened (`runs/<time>/exercise/<board>.json`). What
   applies is derived from what the inventory publishes for the board (the flasher's capabilities,
   the family's spec, its routes, secrets, tests and go-ahead) and from the images catalogued or
-  staged for its board type, never from a list per board; without `confirm=apply` it says that,
-  with a reason per verb, and runs nothing. The verbs run read-only first, then the writes undone within the run (each after the
-  backup that undoes it: a reboot, a no-op apply, the region backup written back, a snapshot and
-  the switch back, an update to a second image and back, the key restore planned), then only
-  with `--destructive` the destructive ones each followed by its restore (a config region erased
-  then apply and keys-restore; the chip erased then restore-chip). The board is planned at the
-  start and the end and the record says whether it came back as it was; a start that is not
-  clean or a failed write skips the writes after it, and a board its layout does not let the tool
-  write gets the reads alone. The same exercise runs as `tests/hw/test_exercise.py` (one test per
-  verb, boards named in `RXRBENCH_HW_BOARDS`) and, on the simulated bench, in the sim tests.
+  staged for its board type, never from a list per board; without `confirm=apply` it says what
+  would run, with a reason per verb, and runs nothing. The reads run first, then the writes undone
+  within the run (each after the backup that undoes it: a reboot, a no-op apply, the region backup
+  written back, a snapshot and the switch back, an update to a second image and back, the family
+  switch and back, the key restore planned), then only with `--destructive` the destructive ones
+  each followed by its restore (a config region erased then apply and keys-restore; the chip
+  erased then restore-chip). Every restore writes back the backup this run took; an update or a
+  switch that fails comes back by apply, or by restore-chip from this run's backup. The board is
+  planned at the start and the end and the record says whether it came back as it was; a start
+  that is not clean or a failed write skips the writes after it, and a board its layout does not
+  let the tool write gets the reads alone. The same exercise runs as `tests/hw/test_exercise.py`
+  (one test per verb, boards named in `RXRBENCH_HW_BOARDS`) and on the simulated bench.
+- **Re-test only what changed**: each exercise step records the features it exercises on the
+  board and a fingerprint of their code and the board's own inputs; `--record` appends every step
+  to the site's ledger (`exercise/ledger.jsonl`), with the board type and firmware.
+  `--stale-only` leaves out a verb that passed last time against the same code, board type and
+  firmware (`--max-age DAYS` makes an old pass stale; a firmware with no identity is never fresh);
+  `--only` runs the verbs named.
+- **The capability matrix from the records**: `just matrix` writes the site's
+  `CAPABILITY-MATRIX.md` table from the newest exercise record per board (verbs by boards, what
+  each record says and no more), and `--ledger` a table by board type and firmware; `--public`
+  writes one with no board, image or build names, past the privacy check.
+- **The feature index**: each collection keeps `features.yml`: its verbs, families, flashers,
+  routes and capabilities, the code each depends on and the tests that prove it.
+  `just features` checks it against the code (a family, verb, flasher or route it lacks, a missing
+  path or test, a feature with neither a test nor a stated gap); `--gaps` lists what is unproven
+  on hardware.
+- **Launcher 3.0.0**: the launcher plugin enters and drives Launcher 3.0.0 as well as 2.9.1:
+  the boot window is answered until it closes, a CYD's Launcher is entered through its settings
+  (3.0.0 drops the serial key press), and its flags are sent as JSON booleans.
+
+### Fixed
+
+- **Launcher's flags were ignored**: Launcher skips a flag sent as 0 or 1 and still answers
+  "settings loaded" (every release from 2.9.1 to 3.0.0); the settings entry, its restore and the
+  plan now send `false` and `true`.
+- **RP2040 and RP2350 flash reads were slow, and a failed read could leave a partial backup**:
+  reads through the ROM bootloader now go in 128 KB pieces (about four times faster over a whole
+  8 MB chip), each piece checked, and a read is renamed into place only when whole.
+- **snapshot and switch failed on an SWD board**: they now hand the chip module the board's
+  flash route, as backup, restore and erase do.
+- **Launcher's own update could be left half-written**: after Launcher installs its own update
+  the board copies it over Launcher's partition; the apply took the port back and reset the board
+  at once. The port is now held until Launcher says its partition table is updated, and an update
+  not seen within `self_update_wait` fails with the board left alone, not reset.
+- **Whole-chip reads of a large ESP32 timed out behind a UART bridge**: the ROM loader's 115200
+  baud read a nearly full 16 MB chip in longer than the session allowed. Reads and writes move to
+  921600 after the stub loads, unless the port is the chip's own USB (`RXRBENCH_ESP_BAUD`
+  overrides it), and a session may take 30 min.
+- **An apply that changed Launcher's version reported a failure after the update succeeded**:
+  Launcher 3.0.0 reboots into the new copy without saying `OK flashed`; the reboot after the
+  whole image was acknowledged now counts as done. On a board that does not come back into
+  Launcher after a reset (native USB, such as the T-Embed), the new Launcher's partition is read
+  back through esptool and compared with the image instead of asking its console (the board's
+  `bench_mcu` names the chip).
+- **On a native-USB board an install was done again on every apply**: after an install the
+  board boots its app and the apply cannot get back into Launcher; it failed without recording
+  the install, so Launcher 2.9.1 (which keeps no record of its slots) was given the same install
+  next time. What was done is now recorded, an install as the last step stands, and the apply
+  fails naming the steps left for the next one, once someone has put the board in Launcher.
+
+### Known issues
+
+- **A native-USB board takes one rebooting step per apply**: Launcher shows only after a
+  power-on, and the bench cannot power-cycle a native-USB board, so each install or Launcher
+  update on the T-Embed needs the board put in Launcher by hand (its button held at power-on)
+  before the next apply. Boards behind a UART bridge (CH340, CP210x) are not affected.
+
+### Tests and CI
+
+- `just test-changed` runs the tests a change needs, chosen from the feature index; a pull
+  request runs that selection and only the simulated benches it touches, a push everything.
+- The tests run in parallel, one worker per core (pytest-xdist): the unit tests in about 2.5 min
+  on four cores instead of 25, the simulated benches in about 23 min instead of 44.
+- The Zephyr and NuttX sim jobs run in a CI image with the Zephyr SDK's Arm toolchain
+  (`ghcr.io/roperscrossroads/zephyr-arm`), and the built sim images are cached between runs:
+  job setup on GitHub went from about 7 min to 1.
 
 ## 0.1.0 (2026-11-02), alpha
 
