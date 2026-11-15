@@ -1,7 +1,7 @@
 ---
 namespace: rxrbench
 name: launcher
-version: 0.1.0
+version: 0.2.0
 readme: README.md
 authors:
   - Adam Roper
@@ -12,6 +12,6 @@ tags:
   - tools
   - infrastructure
 dependencies:
-  rxrbench.core: ">=0.1.0"
+  rxrbench.core: ">=0.2.0"
 repository: https://github.com/roperscrossroads/rxrbench
 issues: https://github.com/roperscrossroads/rxrbench/issues
