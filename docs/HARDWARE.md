@@ -6,7 +6,9 @@ will meet, each as a rule and the reason for it. The code states each rule where
 ## Proven on hardware, and not yet
 
 "Proven" means run on a real board with this tree, the device's own answer checked afterwards.
-"Sim" means proven only on a simulated bench ([`SIMULATED.md`](SIMULATED.md)).
+"Sim" means proven only on a simulated bench ([`SIMULATED.md`](SIMULATED.md)). The board
+exercise's newest result per verb, board type and firmware, kept up by the hardware CI, is at
+[rxrbench-results](https://roperscrossroads.github.io/rxrbench-results/).
 
 ### Core: identity, flashing, backups
 

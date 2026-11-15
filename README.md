@@ -72,6 +72,11 @@ What has run on real boards, what only on a simulated bench, and the hardware qu
 will hit: [`docs/HARDWARE.md`](docs/HARDWARE.md). Each plugin's README says what is proven for
 its families.
 
+A hardware CI runs the board exercise on a bench's real boards when `main` moves, and publishes
+the newest result of each verb by board type and firmware (no board names) at
+[rxrbench-results](https://roperscrossroads.github.io/rxrbench-results/); each commit it tested
+carries the status `rxrbench/hardware`.
+
 ## Quick start, with no hardware
 
 Install `just` 1.45.0, git, Python 3.12+ and PyYAML for the system `python3` first

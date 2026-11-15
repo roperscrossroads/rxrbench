@@ -182,8 +182,8 @@ has the detail.
 - **Guarded:** a first install of Launcher needs `bench_first_flash: true`; writing over it needs
   `bench_app_manager_overwrite`; the whole chip is erased only by `just erase-chip`.
 
-No install has completed on real hardware yet; a site declares such boards with
-`bench_apply_allowed: false` until one has.
+Installs and Launcher's own update have completed on real boards (a CYD, a ThinkNode M9, a
+T-Embed); the plugin's README says what is proven and its limits.
 
 ## Where to read next
 
