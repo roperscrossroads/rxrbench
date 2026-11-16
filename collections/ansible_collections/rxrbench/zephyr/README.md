@@ -84,6 +84,15 @@ pair, stages it with its flash map and features, and prints its catalog entry. I
 workspace with Zephyr 4.5 (`RXRBENCH_ZEPHYR_WORKSPACE`), and each module it lacks given with
 `--module DIR` (`hal_rpi_pico`, and `hal_infineon` with its blobs for WiFi).
 
+`--mcuboot` (the Pico 2 W) builds it under MCUboot with sysbuild: MCUboot signed with ECDSA P-256
+(`--key PEM`; without it MCUboot's development key, public, for the example only) and zapp signed
+for it, with MCUmgr over the shell's serial port and over UDP on WiFi (features `mcuboot`,
+`smp-serial`, `smp-udp`), its version the full x.y.0 MCUboot reports. It is staged three ways:
+`zapp-<v>-<board>-mcuboot` (MCUboot and the signed app in one UF2, family `bare`, the first flash
+through picoboot), `zapp-<v>-<board>-signed` (family `zephyr_settings`, flasher `smp`: an update
+over MCUmgr, the board's settings and secrets still the family's) and `mcuboot-<board>` (the
+bootloader, for `just boot`).
+
 ## On hardware
 
 `zapp` on an RP2040 and an RP2350 board, flashed by core's `picoboot` route: settings and

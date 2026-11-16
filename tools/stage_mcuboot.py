@@ -4,6 +4,7 @@ store, for an update over MCUmgr (family zephyr_mcumgr, flasher smp).
 
     tools/stage_mcuboot.py <zephyr.signed.bin> --config <the app's .config> --name <key>
                            --board-tag <tag> [--family zephyr_mcumgr] [--store DIR]
+                           [--flash-map <the app's build dir>] [--features a,b]
 
 What the image is comes from the image and its build, never from an argument:
 
@@ -14,6 +15,10 @@ What the image is comes from the image and its build, never from an argument:
   target   CONFIG_BOARD
   mcumgr   the transports the build has (serial: the shell or a UART; ble; udp): the smp
            flasher refuses a route the image could never answer on
+
+--flash-map writes the build's partitions beside the image (flash.json, as tools/stage_raw.py
+does), so a family that keeps its configuration in a partition (zephyr_settings: `storage`) finds
+it; --features is what the image provides (a catalog entry's `features`).
 
 The result is <store>/<family>/<name>/ with app.signed.bin and manifest.json, which is what a
 layout's image names. The bootloader is not staged here: it is written once, through a debug
@@ -66,6 +71,8 @@ def main(argv=None):
     ap.add_argument("--board-tag", required=True)
     ap.add_argument("--family", default="zephyr_mcumgr")
     ap.add_argument("--store", default=os.path.join(REPO, ".build", "store"))
+    ap.add_argument("--flash-map", help="the application's build directory: its partitions as flash.json")
+    ap.add_argument("--features", default="", help="what the image provides, comma-separated")
     a = ap.parse_args(argv)
     for path in (a.image, a.config):
         if not os.path.isfile(path):
@@ -76,10 +83,16 @@ def main(argv=None):
     manifest = {"family": a.family, "format": "mcuboot-bin", "file": "app.signed.bin",
                 "board_tag": a.board_tag, "target": config_value(cfg, "CONFIG_BOARD"),
                 "hash": mcuboot_hash(a.image), "version": version, "mcumgr": transports(cfg)}
+    if a.features:
+        manifest["features"] = sorted(f for f in a.features.split(",") if f)
     out = os.path.join(a.store, a.family, a.name)
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
     shutil.copy2(a.image, os.path.join(out, "app.signed.bin"))
+    if a.flash_map:
+        import stage_raw  # noqa: E402  pylint: disable=import-outside-toplevel  (tools/: one devicetree reader)
+        with open(os.path.join(out, "flash.json"), "w") as f:
+            json.dump({"map": stage_raw.flash_map(a.flash_map), "from": "zephyr.dts"}, f, indent=1)
     with open(os.path.join(out, "manifest.json"), "w") as f:
         json.dump(manifest, f)
         f.write("\n")

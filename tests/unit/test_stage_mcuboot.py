@@ -53,3 +53,19 @@ def test_the_build_counter_shows_when_set_and_a_plain_image_is_refused(tmp_path)
     (tmp_path / "plain.bin").write_bytes(b"\0" * 64)
     rc, out = run(tmp_path, tmp_path / "plain.bin", tmp_path / ".config")
     assert rc != 0 and "not an MCUboot image" in out
+
+
+def test_a_family_with_its_settings_in_a_partition_gets_the_builds_map_and_the_features(tmp_path):
+    data, _ = signed((3, 0, 0, 0))
+    (tmp_path / "zephyr.signed.bin").write_bytes(data)
+    (tmp_path / ".config").write_text('CONFIG_BOARD="rpi_pico2"\nCONFIG_MCUMGR_TRANSPORT_SHELL=y\n')
+    (tmp_path / "build" / "zephyr").mkdir(parents=True)
+    (tmp_path / "build" / "zephyr" / "zephyr.dts").write_text(
+        "partitions {\n storage_partition: partition@1b0000 {\n label = \"storage\";\n"
+        " reg = < 0x1b0000 0x250000 >;\n };\n};\n")
+    rc, out = run(tmp_path, tmp_path / "zephyr.signed.bin", tmp_path / ".config", "--family", "zephyr_settings",
+                  "--flash-map", str(tmp_path / "build"), "--features", "smp-serial,digest")
+    assert rc == 0, out
+    d = tmp_path / "store" / "zephyr_settings" / "app"
+    assert json.loads((d / "manifest.json").read_text())["features"] == ["digest", "smp-serial"]
+    assert json.loads((d / "flash.json").read_text())["map"] == {"STORAGE": "0x1b0000", "STORAGE_SIZE": "0x250000"}

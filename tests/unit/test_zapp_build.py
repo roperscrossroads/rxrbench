@@ -77,3 +77,50 @@ def test_a_staged_image_carries_its_features_in_its_manifest(tmp_path):
     assert r.returncode == 0, r.stderr
     with open(tmp_path / "store" / "bare" / "x" / "manifest.json") as f:
         assert json.load(f)["features"] == ["digest", "wifi"]
+
+
+# ---- under MCUboot (--mcuboot) ---------------------------------------------------------------
+
+def test_a_build_under_mcuboot_signs_p256_names_the_key_and_gives_mcumgr_to_a_wifi_board():
+    row = zapp_build.boards()["pico2w"]
+    cmd = zapp_build.command_mcuboot("/ws/.venv/bin/west", row, "3.1", "/b", ["/m/hal_rpi_pico"], key="/k/site.pem")
+    assert cmd[cmd.index("-b") + 1] == row["mcuboot"]["target"] and "--sysbuild" in cmd
+    assert "-DSB_CONFIG_BOOTLOADER_MCUBOOT=y" in cmd and "-DSB_CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256=y" in cmd
+    assert '-DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE="/k/site.pem"' in cmd
+    confs = next(c for c in cmd if c.startswith("-Dzapp_EXTRA_CONF_FILE=")).split("=", 1)[1].split(";")
+    assert confs[0].endswith("hw/hw.conf") and confs[-1].endswith("zephyr/zapp-3.1.conf")
+    assert any(c.endswith("hw/mcuboot.conf") for c in confs) and any(c.endswith("hw/mcuboot-udp.conf") for c in confs)
+    assert '-Dzapp_CONFIG_ZAPP_VERSION="3.1.0"' in cmd and '-Dzapp_CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION="3.1.0"' in cmd
+    no_key = zapp_build.command_mcuboot("/w", row, "3.0", "/b", [])
+    assert not any("SIGNATURE_KEY_FILE" in c for c in no_key), "MCUboot's development key, by default"
+
+
+def test_mcumgr_over_udp_only_with_wifi():
+    row = {**zapp_build.boards()["kb2040"], "mcuboot": {"target": "adafruit_kb2040/rp2040/mcuboot"}}
+    cmd = zapp_build.command_mcuboot("/w", row, "3.0", "/b", [])
+    assert not any("mcuboot-udp.conf" in c for c in cmd)
+
+
+def test_the_merged_image_carries_mcuboot_and_the_signed_app_where_their_hex_files_put_them(tmp_path):
+    from intelhex import IntelHex
+    from ansible_collections.rxrbench.core.plugins.module_utils.flash import picoboot
+    boot, app = IntelHex(), IntelHex()
+    boot.frombytes(b"\x11" * 300, offset=0x10000000)
+    app.frombytes(b"\x22" * 600, offset=0x10010000)
+    boot.write_hex_file(str(tmp_path / "boot.hex"))
+    app.write_hex_file(str(tmp_path / "app.hex"))
+    n = zapp_build.merged_uf2([str(tmp_path / "boot.hex"), str(tmp_path / "app.hex")], str(tmp_path / "m.uf2"),
+                              0xE48BFF57)
+    blocks, fams = picoboot.uf2_blocks(str(tmp_path / "m.uf2"))
+    assert n == len(blocks) == 5 and fams == {0xE48BFF57}
+    assert blocks[0x10000000] == b"\x11" * 256 and blocks[0x10000100][:44] == b"\x11" * 44
+    assert blocks[0x10000100][44:] == b"\xff" * 212, "the rest of a block is erased flash"
+    assert blocks[0x10010000] == b"\x22" * 256 and 0x10008000 not in blocks, "no blocks for the gap"
+
+
+def test_a_build_under_mcuboot_lists_mcuboot_and_its_transports(tmp_path):
+    (tmp_path / "zapp" / "zephyr").mkdir(parents=True)
+    (tmp_path / "zapp" / "zapp-features.txt").write_text("digest state\n")
+    (tmp_path / "zapp" / "zephyr" / ".config").write_text("CONFIG_MCUMGR_TRANSPORT_SHELL=y\n")
+    assert zapp_build.mcuboot_features(str(tmp_path)) == ["digest", "mcuboot", "smp-serial", "state"]
+    assert zapp_build.full_version("3.1") == "3.1.0" and zapp_build.full_version("3.1.2") == "3.1.2"

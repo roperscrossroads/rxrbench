@@ -1,6 +1,7 @@
 ---
 # The real boards zapp is built for (`just zapp-build <board> <version>`, tools/zapp_build.py):
 # the Zephyr board target, the board type it is staged for (a site's registry policy.board_tag),
+# its target under MCUboot when it has one (mcuboot.target, for --mcuboot),
 # what it adds to hw.conf (confs), its devicetree overlays, and the Zephyr modules it needs
 # besides the workspace's (found under the workspace's modules/hal, else given with --module DIR).
 pico2w:
@@ -9,6 +10,9 @@ pico2w:
   confs: [rp2350.conf, wifi.conf]
   overlays: [storage-rp2350-4m.overlay]
   modules: [hal_rpi_pico, hal_infineon]
+  # under MCUboot (--mcuboot): Zephyr's variant, whose partitions (mcuboot, two slots, storage)
+  # come from the board's own sysbuild layout
+  mcuboot: {target: rpi_pico2/rp2350a/m33/w/mcuboot}
 picow:
   target: rpi_pico/rp2040/w
   board_tag: raspberrypi-picow

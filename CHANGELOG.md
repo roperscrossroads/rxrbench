@@ -4,6 +4,10 @@
 
 ### New
 
+- **zapp under MCUboot**: `just zapp-build pico2w <version> --mcuboot` builds MCUboot (ECDSA
+  P-256) and zapp signed for it with MCUmgr over serial and UDP, and stages the first-flash image
+  (one UF2), the signed app for updates over MCUmgr and the bootloader; `tools/stage_mcuboot.py`
+  takes `--flash-map` and `--features`.
 - **Zephyr boards whose application has them: `just locate` and the state line**: a layout says
   `bench_locate: shell` (and `zephyr.locate_command`, zapp's `zapp locate` by default) to blink a
   board's LED, and `zephyr.state_command` to have `just facts` read the board's state line,
