@@ -9,6 +9,10 @@ description:
     signing key, build, exact hash), compares it with the staged one under a policy, and
     writes it only when the policy says so. Then reads it back and requires the identity to
     match, and requires a board that was running its app to run it again."
+  - "C(RP2040 and RP2350 boards) (C(picoboot_mcuboot)): MCUboot at the start of flash, read and
+    written through the chip's ROM bootloader (picotool, as the picoboot flasher reaches it), the
+    read as long as the staged MCUboot so its hash compares; a write is whole 4 KB sectors, erased
+    flash after the image. The board's app must answer again through it: back on USB as itself."
   - "C(ESP32 boards) reads and writes the bootloader partition with esptool
     over the wired route, the board's broker releasing the console. The header is written
     as built (C(--flash-mode keep)), so the board's bytes equal the file and a second run
@@ -35,7 +39,7 @@ options:
   flasher:
     description: How the bootloader is read and written.
     type: str
-    choices: [esp_mcuboot]
+    choices: [esp_mcuboot, picoboot_mcuboot]
     default: esp_mcuboot
   policy:
     description: C(key) writes when the board has no MCUboot or one with another signing key;
@@ -70,6 +74,26 @@ options:
       board. A run that writes always reads.
     type: bool
     default: false
+  chip_id:
+    description: >-
+      C(picoboot_mcuboot). The board's chip id (an RP2350's own, or an RP2040's flash id), as the
+      registry gives it (C(bench_usb_serial)), by which picotool finds it in its ROM bootloader.
+    type: str
+  uf2:
+    description: C(picoboot_mcuboot). The board type's C(uf2) block (C(catalog/boards.yml)).
+    type: dict
+  enter:
+    description: C(picoboot_mcuboot). The ways into the ROM bootloader (C(bench_picoboot_enter)).
+    type: list
+    elements: str
+  manual_wait:
+    description: C(picoboot_mcuboot). Seconds to wait for someone to hold BOOTSEL, when C(manual) is a way in.
+    type: float
+    default: 0
+  picotool:
+    description: C(picoboot_mcuboot). The picotool on this host.
+    type: path
+    default: picotool
   socket:
     description: The broker socket. Default is C($XDG_RUNTIME_DIR/rxrbench/<board>.sock).
     type: path
@@ -115,20 +139,21 @@ why:
 read:
   description: whether the board's bootloader was read in this run (C(before) is
     then what the board holds, not a record).
-  returned: esp_mcuboot
+  returned: always
   type: bool
 """
 
 import json
 import os
 import tempfile
+import time
 
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.rxrbench.core.plugins.module_utils import familyspec
 from ansible_collections.rxrbench.core.plugins.module_utils import bootid, broker_client, esppart
 from ansible_collections.rxrbench.core.plugins.module_utils import gate
-from ansible_collections.rxrbench.core.plugins.module_utils.flash import common
+from ansible_collections.rxrbench.core.plugins.module_utils.flash import common, picoboot, picochip
 
 REQUIRED_TAGS = ("secure-boot:off", "flash-encryption:off", "rom-download:on")
 
@@ -224,6 +249,96 @@ class EspMcuboot:
             self.b.reacquire()
 
 
+class PicobootMcuboot:
+    """MCUboot at the start of an RP2040's or RP2350's flash, through its ROM bootloader."""
+    manager = None
+
+    def __init__(self, b, p):
+        self.b, self.p = b, p
+        self.name = p["board"]
+        image = p["image"]
+        with open(os.path.join(image, "manifest.json")) as f:
+            self.manifest = json.load(f)
+        with open(os.path.join(image, "flash.json")) as f:
+            fmap = json.load(f).get("map") or {}
+        self.file = os.path.join(image, self.manifest.get("file") or "mcuboot.bin")
+        self.offset = int(self.manifest.get("offset") or "0x0", 16)
+        self.size = int(fmap.get("BOOT_SIZE") or "0x10000", 16)
+        with open(self.file, "rb") as f:
+            self.data = f.read()
+        self.want = bootid.identify(self.data, family="raw")
+        self.rom = picoboot.Bootrom(self.name, p["chip_id"], p["uf2"] or {}, enter=p["enter"],
+                                    manual_wait=p["manual_wait"], picotool=p["picotool"], devreg=p["devreg"])
+
+    def refusals(self):
+        out = []
+        if self.offset != 0:
+            out.append(f"the bootloader goes at {self.offset:#x}, not 0x0: not a layout this module knows")
+        if len(self.data) > self.size:
+            out.append(f"the bootloader ({len(self.data)} B) does not fit its partition ({self.size} B)")
+        tag = self.manifest.get("board_tag")
+        if self.p["board_tag"] and tag != self.p["board_tag"]:
+            out.append(f"the image is for {tag}, the registry says {self.p['board_tag']}")
+        if not self.p["chip_id"]:
+            out.append("the board's chip id is not known (bench_usb_serial): picotool could not find it")
+        if self.want.get("kind") != "mcuboot" or not self.want.get("key"):
+            out.append("the staged file is not an MCUboot whose signing key bootid can read (ECDSA P-256)")
+        return out
+
+    def _rom(self):
+        self.b.release(ttl=600)
+        self.rom.enter()
+
+    def _leave(self):
+        try:
+            self.rom.leave()
+        finally:
+            self.b.reacquire()
+
+    def _read_bytes(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "boot.bin")
+            self.rom.save(picochip.XIP + self.offset, picochip.XIP + self.offset + len(self.data), out)
+            with open(out, "rb") as f:
+                return f.read()
+
+    def read(self):
+        """The bootloader the board holds, over the staged one's length."""
+        self._rom()
+        try:
+            return bootid.identify(self._read_bytes(), family="raw")
+        finally:
+            self._leave()
+
+    def write(self):
+        padded = self.data + b"\xff" * (-len(self.data) % picochip.SECTOR)
+        with tempfile.TemporaryDirectory() as d:
+            image = os.path.join(d, "mcuboot.uf2")
+            picochip.sectors_uf2(padded, range(0, len(padded), picochip.SECTOR), picochip.XIP + self.offset,
+                                 picochip.uf2_family(self.p["uf2"]), image)
+            self._rom()
+            try:
+                self.rom.wrote = True
+                rc, out = self.rom._pt("load", "-v", image, timeout=300)  # pylint: disable=protected-access
+                if rc != 0:
+                    raise common.FlashError(f"picotool load of MCUboot failed (rc {rc}): {out.strip()[-300:]}")
+            finally:
+                self._leave()
+
+    def app_running(self):
+        """The board's app on USB as itself (devreg)."""
+        return common.guarded_port(self.p["devreg"], self.name)[1] is None
+
+    def came_back(self, settle):
+        """The app back on USB as itself within `settle` seconds, after the bootloader was left."""
+        end = time.monotonic() + settle
+        while time.monotonic() < end:
+            if self.app_running():
+                return True
+            time.sleep(1.0)
+        return False
+
+
 def plan_from_record(want, known, policy):
     """(write?, why) for a plan that does not read the board: from the bootloader identity last
     read from it, or, with no record, a write that applying will decide once it has read."""
@@ -237,7 +352,11 @@ def plan_from_record(want, known, policy):
 
 
 def esp_mcuboot(module, b, p):
-    f = EspMcuboot(b, p)
+    run(module, b, p, EspMcuboot(b, p))
+
+
+def run(module, b, p, f):
+    """Read, decide, write, read back, and the app answers again, for either flasher."""
     refused = f.refusals()
     if refused:
         module.fail_json(msg="refused: " + "; ".join(refused), want=f.want)
@@ -251,11 +370,13 @@ def esp_mcuboot(module, b, p):
             result["diff"] = {"before": {"bootloader": p["known"] or "not read (applying reads it first and writes only if it differs)"},
                               "after": {"bootloader": f.want}}
         module.exit_json(**result)
-    was_running = common.app_running(b, p["family"])
+    running = getattr(f, "app_running", None) or (lambda: common.app_running(b, p["family"]))
+    back = getattr(f, "came_back", None) or (lambda settle: common.came_back(b, p["family"], settle))
+    was_running = running()
     before = f.read()
     write, why = bootid.decide(f.want, before, p["policy"])
     result = {"changed": write, "before": before, "want": f.want, "why": why, "read": True}
-    if was_running and not common.came_back(b, p["family"], p["settle"]):
+    if was_running and not back(p["settle"]):
         module.fail_json(msg="the app did not come back after the bootloader was "
                              "read (left in ROM download mode?)", **result)
     if write:
@@ -272,7 +393,7 @@ def esp_mcuboot(module, b, p):
     result["after"] = after
     if after.get("sha256") != f.want["sha256"]:
         module.fail_json(msg="the bootloader read back is not the one written", **result)
-    if was_running and not common.came_back(b, p["family"], p["settle"]):
+    if was_running and not back(p["settle"]):
         module.fail_json(msg="bootloader written and verified, but the app did not "
                              "come back through it: write the app (just apply), or "
                              "recover in ROM download mode", **result)
@@ -286,8 +407,13 @@ def main():
             "board": {"type": "str", "required": True},
             "family": {"type": "str", "required": True},
             "image": {"type": "path"},
-            "flasher": {"type": "str", "choices": ["esp_mcuboot"],
+            "flasher": {"type": "str", "choices": ["esp_mcuboot", "picoboot_mcuboot"],
                         "default": "esp_mcuboot"},
+            "chip_id": {"type": "str"},
+            "uf2": {"type": "dict"},
+            "enter": {"type": "list", "elements": "str"},
+            "manual_wait": {"type": "float", "default": 0},
+            "picotool": {"type": "path", "default": "picotool"},
             "known": {"type": "dict"},
             "read": {"type": "bool", "default": False},
             "policy": {"type": "str", "choices": list(bootid.POLICIES), "default": "key"},
@@ -308,7 +434,10 @@ def main():
     familyspec.load(p["families"])
     try:
         with broker_client.Board(p["board"], path=p["socket"]) as b:
-            esp_mcuboot(module, b, p)
+            if p["flasher"] == "picoboot_mcuboot":
+                run(module, b, p, PicobootMcuboot(b, p))
+            else:
+                esp_mcuboot(module, b, p)
     except (broker_client.BrokerError, common.FlashError, bootid.BootIdError, OSError,
             ValueError, KeyError) as e:
         module.fail_json(msg=str(e))

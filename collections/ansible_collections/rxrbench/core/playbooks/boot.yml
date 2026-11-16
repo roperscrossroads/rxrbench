@@ -4,8 +4,9 @@
 # which resets nothing: it decides from the bootloader last read from each board (kept in the
 # board's facts by any run that read it). `-e boot_read=true` makes a plan read the boards.
 #
-# The bootloader is the one staged beside the board's declared image (same build), and the
-# layout's bench_bootloader_policy decides when it is written: `key` (default) when the board
+# The bootloader is the one staged beside the board's declared image (same build), or for an
+# RP2040 / RP2350 the one its layout names (bench_bootloader.name: <store>/bootloader/<name>), and
+# the layout's bench_bootloader_policy decides when it is written: `key` (default) when the board
 # has no MCUboot or one that verifies another key, `exact` also for another build.
 - name: Bootloaders
   hosts: boards
@@ -44,6 +45,36 @@
       check_mode: false
       when: bench_flasher | default('') in ['esptool', 'smp', 'uf2']
 
+    - name: Stage the declared bootloader on the bench host (RP2040 / RP2350)
+      ansible.builtin.copy:
+        src: "{{ bench_store }}/bootloader/{{ bench_bootloader.name }}/"
+        dest: "{{ board_host_store | default('~/rxrbench/store') }}/bootloader/{{ bench_bootloader.name }}/"
+        mode: preserve
+      check_mode: false
+      when: &boot_rp2
+        - bench_mcu | default('') is match('rp2')
+        - (bench_bootloader | default({})).name is defined
+
+    - name: The bootloader, RP2040 / RP2350 (MCUboot through the ROM bootloader)
+      rxrbench.core.bootloader_flash:
+        families: "{{ bench_families }}"
+        apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+        board: "{{ bench_board }}"
+        family: "{{ bench_family }}"
+        socket: "{{ bench_socket | default(omit) }}"
+        image: "{{ board_host_store | default('~/rxrbench/store') }}/bootloader/{{ bench_bootloader.name }}"
+        flasher: picoboot_mcuboot
+        policy: "{{ bench_bootloader_policy | default('key') }}"
+        board_tag: "{{ bench_board_tag | default(omit) }}"
+        chip_id: "{{ bench_usb_serial | default(omit, true) }}"
+        uf2: "{{ (bench_board_type | default({})).uf2 | default(omit) }}"
+        enter: "{{ bench_picoboot_enter | default(omit) }}"
+        manual_wait: "{{ bench_picoboot_manual_wait | default(0) }}"
+        known: "{{ boot_facts.get('probes', {}).get('bootloader') | default(omit, true) }}"
+        read: "{{ boot_read | default(false) | bool }}"
+      register: boot_pico
+      when: *boot_rp2
+
     - name: The bootloader, ESP32 (MCUboot over esptool)
       rxrbench.core.bootloader_flash:
         families: "{{ bench_families }}"
@@ -63,6 +94,10 @@
       register: boot_esp
       when: bench_flasher | default('') in ['esptool', 'smp'] and bench_mcu | default('') is match('esp32')
 
+    - name: What core's bootloader step did, whichever chip
+      ansible.builtin.set_fact:
+        boot_core: "{{ boot_pico if boot_pico is not skipped else boot_esp }}"
+
     # A bootloader this tool has no flasher for is a plugin's: the task file its family names
     # for the board's flasher (`bench_bootloader_tasks`), in its board role. It is handed what
     # is known of the board (boot_known_version, boot_registry, boot_tags) and registers
@@ -75,11 +110,11 @@
 
     - name: Why
       ansible.builtin.debug:
-        msg: "{{ bench_board }}: {{ (boot_esp if boot_esp is not skipped else board_bootloader).why }}"
+        msg: "{{ bench_board }}: {{ (boot_core if boot_core is not skipped else board_bootloader).why }}"
       when: >-
-        ((boot_esp is defined and boot_esp is not skipped) or
+        ((boot_core is defined and boot_core is not skipped) or
          (board_bootloader is defined and board_bootloader is not skipped))
-        and (boot_esp if (boot_esp is defined and boot_esp is not skipped) else board_bootloader).why is defined
+        and (boot_core if (boot_core is defined and boot_core is not skipped) else board_bootloader).why is defined
 
     # Where a bootloader can only be read from inside it, keep what a run saw, so the next
     # plan need not go in again.
@@ -103,9 +138,9 @@
         - board_bootloader.after is defined
         - not ansible_check_mode
 
-    # Reading an ESP32's bootloader resets the board: keep what a run read, so the next plan
-    # decides from it and resets nothing.
-    - name: Record the ESP32 bootloader the run read
+    # Reading a bootloader resets the board (an ESP32, or an RP2040 / RP2350 into its ROM loader):
+    # keep what a run read, so the next plan decides from it and resets nothing.
+    - name: Record the bootloader the run read
       ansible.builtin.command:
         argv:
           - "{{ bench_repo }}/venv/bin/python"
@@ -116,13 +151,13 @@
           - "{{ bench_board }}"
           - --probe
           - bootloader
-        stdin: "{{ boot_esp.after | default(boot_esp.before) | to_json }}"
+        stdin: "{{ boot_core.after | default(boot_core.before) | to_json }}"
       delegate_to: localhost
       changed_when: false
       check_mode: false
       when:
-        - boot_esp is not skipped
-        - boot_esp.read | default(false)
+        - boot_core is not skipped
+        - boot_core.read | default(false)
 
     # MCUboot written where the board had none, or one that verifies another key: the app the
     # board ran does not boot under it (MCUboot finds no image it accepts and its console stays
@@ -141,18 +176,18 @@
           - --probe
           - boot_switch
         stdin: >-
-          {{ {'family': bench_family, 'replaced': boot_esp.before.kind | default('unknown'),
-              'replaced_key': boot_esp.before.key | default(none)} | to_json }}
+          {{ {'family': bench_family, 'replaced': boot_core.before.kind | default('unknown'),
+              'replaced_key': boot_core.before.key | default(none)} | to_json }}
       delegate_to: localhost
       changed_when: false
       check_mode: false
       when:
         - not ansible_check_mode
-        - boot_esp is not skipped
-        - boot_esp is changed
+        - boot_core is not skipped
+        - boot_core is changed
         - >-
-          (boot_esp.before.kind | default('')) != 'mcuboot'
-          or (boot_esp.before.key | default(none)) != (boot_esp.after.key | default(none))
+          (boot_core.before.kind | default('')) != 'mcuboot'
+          or (boot_core.before.key | default(none)) != (boot_core.after.key | default(none))
 
     - name: Commit the facts, when the site asked for that
       ansible.builtin.command:

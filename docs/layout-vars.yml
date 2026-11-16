@@ -162,8 +162,10 @@ tables:
     - name: bench_bootloader
       type: dict
       text: >-
-        the UF2 bootloader a layout wants (`name`, `version`, pinned by `sha256`): `just boot`, the
-        mesh plugin's step
+        the bootloader a layout wants (`name`, `version`, pinned by `sha256`), for `just boot`: a UF2
+        bootloader (the mesh plugin's step), or for an RP2040 / RP2350 an MCUboot staged under
+        `<store>/bootloader/<name>` (`tools/zapp_build.py --mcuboot` stages `mcuboot-<board>`), read and
+        written through the chip's ROM bootloader
     - name: bench_bootloader_policy
       type: str
       text: >-

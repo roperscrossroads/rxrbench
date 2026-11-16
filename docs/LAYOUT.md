@@ -174,7 +174,7 @@ Images and how they are written:
 | `bench_ble_rebond` | str | `smp` over BLE, what to do with a bond the host holds when the first exchange fails: `auto` (default) removes it only when the board, asked on its console, no longer holds it; `force` removes it without asking; `never` leaves it |
 | `bench_sim_run` | str | the simulated bench's run directory (sockets, logs) |
 | `bench_socket` | str | a board's broker socket path; the sim layer sets it, a real bench host's brokers are found by name |
-| `bench_bootloader` | dict | the UF2 bootloader a layout wants (`name`, `version`, pinned by `sha256`): `just boot`, the mesh plugin's step |
+| `bench_bootloader` | dict | the bootloader a layout wants (`name`, `version`, pinned by `sha256`), for `just boot`: a UF2 bootloader (the mesh plugin's step), or for an RP2040 / RP2350 an MCUboot staged under `<store>/bootloader/<name>` (`tools/zapp_build.py --mcuboot` stages `mcuboot-<board>`), read and written through the chip's ROM bootloader |
 | `bench_bootloader_policy` | str | when an ESP32 bootloader is rewritten: `key` (its signing key differs, the default) or `exact` (its bytes differ) |
 | `bench_bootloader_carrier` | str | a staged image directory (like `bench_image`) small enough to carry a UF2 board through a bootloader update; a board whose installed image reaches the bootloader's staging area is refused without one |
 | `bench_devreg_tool` | str | the devreg script on the host that reaches a Linux device, when it is not the deployed `~/.devreg/devreg.py` (a layout whose modules run on the controller names the repository's own) |

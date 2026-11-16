@@ -4,6 +4,9 @@
 
 ### New
 
+- **`just boot` on an RP2040 / RP2350**: MCUboot at the start of flash, read and identified (its
+  signing key, its hash) and written when the policy says, through the chip's ROM bootloader
+  (`bootloader_flash` flasher `picoboot_mcuboot`); a layout names it with `bench_bootloader.name`.
 - **zapp under MCUboot**: `just zapp-build pico2w <version> --mcuboot` builds MCUboot (ECDSA
   P-256) and zapp signed for it with MCUmgr over serial and UDP, and stages the first-flash image
   (one UF2), the signed app for updates over MCUmgr and the bootloader; `tools/stage_mcuboot.py`
