@@ -108,7 +108,8 @@ def run_twice(tmp_path, second_entries_edit=None, destructive=False):
     plays = tx.Plays()
     second = tx.exercise.Exercise("lay", "b1", destructive=destructive, runs=str(tmp_path), now="T2", plays=plays,
                                   hv=tx.FULL, images=tx.IMAGES, layout_dir=str(tmp_path / "lay"),
-                                  hosts_dir=str(tmp_path / "hosts"), alts=(), stale_only=True, entries=lines)
+                                  hosts_dir=str(tmp_path / "hosts"), alts=(), stale_only=True, entries=lines,
+                                  present=lambda: True)
     second.v_update_there_and_back = lambda: (tx.exercise.PASS, {}, "")
     return second.go(), plays.names()
 

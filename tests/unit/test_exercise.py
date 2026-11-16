@@ -7,6 +7,8 @@ import importlib.util
 import json
 import os
 
+import time
+
 import pytest
 
 REPO = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -211,7 +213,8 @@ class Plays:
 def make(tmp_path, plays, destructive=False, hv=None, skip=(), images=None, alts=()):
     return exercise.Exercise("lay", "b1", destructive=destructive, skip=skip, runs=str(tmp_path), now="T",
                              plays=plays, hv=hv or FULL, images=IMAGES if images is None else images,
-                             layout_dir=str(tmp_path / "lay"), hosts_dir=str(tmp_path / "hosts"), alts=alts)
+                             layout_dir=str(tmp_path / "lay"), hosts_dir=str(tmp_path / "hosts"), alts=alts,
+                             present=lambda: True)
 
 
 def states_in_place(monkeypatch):
@@ -722,3 +725,73 @@ def test_the_inventory_is_read_with_the_pinned_tools_on_path_as_a_play_is(monkey
     exercise.debug_var("/lay", "b1", "x")
     assert len(seen) == 2
     assert all("/home/bench/.local/share/rxrbench/bin" in e.get("PATH", "").split(":") for e in seen)
+
+
+# ---- a board that leaves the bus part way, and a play that does not end -------------------------
+
+def gone_after(plays, verb):
+    """present(): True until the play named `verb` has run, False after (the board unplugged)."""
+    return lambda: not any(s["run"].rsplit("/", 1)[1][3:] == verb for s in plays.specs)
+
+
+def test_a_board_unplugged_during_a_step_is_interrupted_not_failed_and_nothing_after_runs(tmp_path):
+    (tmp_path / "lay").mkdir()
+    plays = Plays(fail={"apply"})
+    ex = exercise.Exercise("lay", "b1", destructive=True, runs=str(tmp_path), now="T", plays=plays, hv=FULL,
+                           images=IMAGES, layout_dir=str(tmp_path / "lay"), hosts_dir=str(tmp_path / "hosts"),
+                           alts=(), gone_grace=0)
+    ex.present = gone_after(plays, "apply")
+    rec = ex.go()
+    steps = {s["verb"]: s for s in rec["steps"]}
+    assert steps["apply"]["result"] == exercise.INTERRUPTED and "left this host's USB" in steps["apply"]["msg"]
+    after = [s for s in rec["steps"][rec["steps"].index(steps["apply"]) + 1:] if s["verb"] != "came-back"]
+    assert after and all(s["result"] == exercise.SKIP and "left this host's USB during apply" in s["msg"]
+                         for s in after if s["applies"])
+    assert steps["came-back"]["result"] == exercise.SKIP and rec["came_back"] is None
+    assert "plan-end" not in plays.names(), "no final plan of a board that is not there"
+    assert rec["interrupted"] and not rec["passed"]
+    import ledger  # pylint: disable=import-outside-toplevel
+    assert all(line["verb"] != "apply" for line in ledger.lines_of(rec)), "an interruption is no verdict"
+
+
+def test_a_board_away_for_a_moment_is_waited_for_and_a_real_failure_stays_one(tmp_path, monkeypatch):
+    (tmp_path / "lay").mkdir()
+    plays = Plays(fail={"apply"})
+    answers = iter([False, True] * 50)           # away at each first look, back at the second
+    ex = exercise.Exercise("lay", "b1", runs=str(tmp_path), now="T", plays=plays, hv=FULL, images=IMAGES,
+                           layout_dir=str(tmp_path / "lay"), hosts_dir=str(tmp_path / "hosts"), alts=(),
+                           present=lambda: next(answers), gone_grace=5)
+    monkeypatch.setattr(exercise.time, "sleep", lambda s: None)
+    rec = ex.go()
+    assert {s["verb"]: s["result"] for s in rec["steps"]}["apply"] == exercise.FAIL
+    assert not rec.get("interrupted") and "plan-end" in plays.names()
+
+
+def test_a_board_not_reached_by_usb_is_not_asked_whether_it_is_there(tmp_path):
+    hv = {**FULL, "bench_routes": {"shell": {"bearer": "ssh"}}}
+    ex = exercise.Exercise("lay", "b1", runs=str(tmp_path), now="T", plays=Plays(), hv=hv, images=IMAGES,
+                           layout_dir=str(tmp_path / "lay"), hosts_dir=str(tmp_path / "hosts"), alts=())
+    assert ex.present is None and ex._still_here()
+
+
+def test_a_play_that_does_not_end_is_stopped_at_its_limit(tmp_path, monkeypatch):
+    venv = tmp_path / "venv"
+    venv.mkdir()
+    fake = venv / "ansible-playbook"
+    fake.write_text("#!/bin/sh\nsleep 30\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(exercise, "VENV", str(venv))
+    t = time.monotonic()
+    r = exercise.run_play({"playbook": "apply.yml", "inventory": "lay", "board": "b1", "args": [], "extra": {},
+                           "env": {}, "run": "T/exercise/b1/01-plan", "runs": str(tmp_path), "state": False,
+                           "timeout": 1})
+    assert time.monotonic() - t < 10 and r["rc"] == 124 and "stopped after 1 s" in r["out"]
+
+
+def test_an_interrupted_run_exits_disconnected(monkeypatch, capsys):
+    ci_stub(monkeypatch, {"bench_ci": {"run": True}})   # exercise.Exercise is the stub now
+    rec = {"steps": [{"verb": "plan", "kind": "read", "result": "pass", "reason": "r", "msg": ""}], "passed": False,
+           "came_back": None, "seconds": 0, "path": "x", "interrupted": "the board left this host's USB during apply"}
+    monkeypatch.setattr(exercise.Exercise, "go", lambda self: rec)
+    assert exercise.main(["lay", "b1", "confirm=apply", "--ci"]) == exercise.DISCONNECTED
+    assert "INTERRUPTED: the board left" in capsys.readouterr().out

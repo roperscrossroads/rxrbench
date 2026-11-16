@@ -24,6 +24,11 @@ says `destructive: true`; `--destructive` is not taken with it. `tools/ci_boards
 marked boards of a layout. A marked board that is not plugged in to this host (devreg finds it
 absent) is not run and not recorded, and the exit code is 3 (NOT_PRESENT), so a job can tell a
 board unplugged from one that failed; one devreg cannot tell apart from another is a failure.
+
+A board reached by USB that leaves the bus part way (unplugged, or its USB lost), and stays away
+past GONE_GRACE, ends the run: the step it left during is `interrupted`, the rest are not run, the
+final plan is skipped, and the exit code is 4 (DISCONNECTED). Nothing of it is a verdict, so none
+of it goes to the ledger; what passed before it does. Each play is stopped at PLAY_TIMEOUT.
 """
 import argparse
 import datetime
@@ -31,6 +36,7 @@ import glob
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -45,6 +51,17 @@ RUNS = os.path.join(REPO, "runs")
 PLAYBOOKS = os.path.join("collections", "ansible_collections", "rxrbench", "core", "playbooks")
 #: The exit code of a CI run whose board is not plugged in to this host: nothing ran.
 NOT_PRESENT = 3
+#: The exit code of a run whose board left this host's USB part way: what ran is recorded, the
+#: rest is not run, and nothing of it is a verdict on the board or the tool.
+DISCONNECTED = 4
+#: Seconds one play may take before it is stopped (its whole process group) and its step fails:
+#: the longest real one, a destructive step on a 16 MB chip, takes under 10 minutes.
+PLAY_TIMEOUT = 1800
+#: Seconds a USB board may be off the bus before it counts as gone: a board that reboots (an
+#: update, the way back from its bootloader) is away for a few seconds.
+GONE_GRACE = 20.0
+#: A step's result when its board left the bus while it ran: neither a pass nor a failure.
+INTERRUPTED = "interrupted"
 #: The registry's own tool, run against the site's registry.
 DEVREG = os.path.join(REPO, "devreg", "devreg.py")
 #: Kinds, in the order the exercise runs them.
@@ -450,7 +467,22 @@ def run_play(spec):
     extra = {"bench_run": spec["run"], **(spec.get("extra") or {})}
     cmd = [os.path.join(VENV, "ansible-playbook"), "-i", spec["inventory"], os.path.join(PLAYBOOKS, spec["playbook"]),
            "-e", json.dumps(extra), *spec.get("args", [])]
-    r = subprocess.run(cmd, cwd=REPO, env=play_env(spec), capture_output=True, text=True, check=False)
+    timeout = spec.get("timeout") or PLAY_TIMEOUT
+    # its own process group, so a play stopped at its limit takes its children with it
+    proc = subprocess.Popen(cmd, cwd=REPO, env=play_env(spec), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, start_new_session=True)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+        rc = proc.returncode
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        stdout, stderr = proc.communicate()
+        rc = 124
+        stderr = (stderr or "") + f"\nexercise: the play was stopped after {timeout:.0f} s (its time limit)\n"
+    r = subprocess.CompletedProcess(cmd, rc, stdout or "", stderr or "")
     out = r.stdout + r.stderr
     with open(os.path.join(run_dir, "play.log"), "a") as fh:
         fh.write("$ " + " ".join(cmd) + "\n" + out)
@@ -470,7 +502,8 @@ class Exercise:
 
     def __init__(self, layout, board, destructive=False, skip=(), env=None, runs=RUNS, now=None,
                  plays=run_play, hv=None, images=None, layout_dir=None, hosts_dir=None, alts=None,
-                 only=(), stale_only=False, entries=None, max_age=None, feats=None):
+                 only=(), stale_only=False, entries=None, max_age=None, feats=None, present=None,
+                 gone_grace=GONE_GRACE):
         self.layout, self.board, self.destructive = layout, board, destructive
         self.skip, self.env, self.runs, self.plays = set(skip), env or {}, runs, plays
         self.layout_dir = layout_dir or site.layout_path(layout)
@@ -494,6 +527,12 @@ class Exercise:
         self._feats = feats
         self.fresh = {}             # verb -> why it is left out as fresh
         self.ci = False             # a CI run (--ci): the board's bench_ci decided what runs
+        # whether the board is on this host's USB now (devreg), for a board reached by USB: one
+        # that leaves the bus part way ends the run as interrupted, not failed
+        if present is None and "usb" in _bearers(self.hv) and self.hv.get("bench_kind") != "sim":
+            present = lambda: presence(self.board)[0] != 1   # noqa: E731  (only absent counts as gone)
+        self.present, self.gone_grace = present, gone_grace
+        self.gone = None            # the verb during which the board left the bus, once it did
 
     # -- what each step depends on (tools/ledger.py) ------------------------------------------
 
@@ -904,14 +943,33 @@ class Exercise:
             return "destructive verbs run only with --destructive"
         return None
 
+    def _still_here(self):
+        """Whether the board is on the bus, given GONE_GRACE to come back (a reboot); True for a
+        board this cannot be asked of (not reached by USB)."""
+        if self.present is None:
+            return True
+        end = time.monotonic() + self.gone_grace
+        while True:
+            if self.present():
+                return True
+            if time.monotonic() >= end:
+                return False
+            time.sleep(1.0)
+
     def go(self):
         """Run every step and return the record."""
         start = time.monotonic()
         self.choose()
         for v in self.verbs:
             why = self._why_skipped(v)
+            if self.gone and not why:
+                why = f"the board left this host's USB during {self.gone}: not run"
             if why:
                 self._record_step(v, SKIP, {}, why, 0)
+                continue
+            if not self._still_here():
+                self.gone = f"the step before {v['verb']}"
+                self._record_step(v, SKIP, {}, f"the board left this host's USB before {v['verb']}: not run", 0)
                 continue
             fn = getattr(self, "v_" + v["verb"].replace("-", "_"))
             t = time.monotonic()
@@ -919,12 +977,20 @@ class Exercise:
                 result, evidence, msg = fn()
             except Exception as e:  # pylint: disable=broad-except  (one verb's error must not lose the record)
                 result, evidence, msg = FAIL, {}, f"{type(e).__name__}: {e}"
+            if result == FAIL and not self._still_here():
+                # not a verdict on the board or the tool: it was unplugged, or lost its USB
+                self.gone = v["verb"]
+                result, msg = INTERRUPTED, f"the board left this host's USB during it ({msg or 'failed'})"
             self._record_step(v, result, evidence, msg, time.monotonic() - t)
             if result == FAIL and v["kind"] in (REVERSIBLE, DESTRUCTIVE) and not self.halted:
                 self.halted = f"{v['verb']}: {msg or 'failed'}"
         t = time.monotonic()
-        r, self.after = self._plan("plan-end")
-        came_back, result, msg = self._came_back()
+        if self.gone:
+            r, self.after = {"run_dir": None}, None
+            came_back, result, msg = None, SKIP, f"not tested: the board left this host's USB during {self.gone}"
+        else:
+            r, self.after = self._plan("plan-end")
+            came_back, result, msg = self._came_back()
         self._record_step({"verb": "came-back", "kind": READ, "applies": True,
                            "reason": "the final plan is clean and the board reports what it reported at the start"},
                           result,
@@ -940,7 +1006,8 @@ class Exercise:
             "routes": sorted(_bearers(self.hv) - {None}), "tool_commit": _commit(REPO),
             "site_commit": _commit(self.hv.get("bench_site_dir")),
             "seconds": round(time.monotonic() - start, 1), "came_back": came_back,
-            "passed": all(s["result"] != FAIL for s in self.steps), "steps": self.steps,
+            "passed": all(s["result"] != FAIL for s in self.steps) and not self.gone, "steps": self.steps,
+            "interrupted": (f"the board left this host's USB during {self.gone}" if self.gone else None),
         }
         path = os.path.join(self.runs, self.run, "exercise", f"{self.board}.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1042,8 +1109,12 @@ def main(argv=None):
         print(json.dumps(rec, indent=1))
     else:
         print(table(rec["steps"]))
-        print(f"exercise {a.board}: {'passed' if rec['passed'] else 'FAILED'}, came back: {'not tested' if rec['came_back'] is None else rec['came_back']}, "
+        verdict = ("INTERRUPTED: " + rec["interrupted"]) if rec.get("interrupted") else \
+            ("passed" if rec["passed"] else "FAILED")
+        print(f"exercise {a.board}: {verdict}, came back: {'not tested' if rec['came_back'] is None else rec['came_back']}, "
               f"{rec['seconds']} s, record {rec['path']}" + (f", kept as {rec['kept']}" if a.record else ""))
+    if rec.get("interrupted"):
+        return DISCONNECTED
     return 0 if rec["passed"] else 1
 
 

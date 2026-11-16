@@ -31,6 +31,12 @@
 
 ### Fixed
 
+- **A board unplugged part way through the board exercise read as a failed board, and a play
+  could run without end**: a board reached by USB that leaves the bus (and stays away past a 20 s
+  grace, so a reboot is not mistaken for it) now ends the run as interrupted: the step it left
+  during is `interrupted`, the rest are not run, the final plan is skipped, nothing of it goes to
+  the ledger, and the exit code is 4 (DISCONNECTED). Each play is stopped at 30 minutes (its whole
+  process group) and its step fails as timed out.
 - **A board registered by its RP2040 bootloader serial was never seen as plugged in**: twelve hex
   digits were read as a MAC, but the relay files such a serial as VID:PID:serial; a match that
   gives the VID and PID is now known both ways.
