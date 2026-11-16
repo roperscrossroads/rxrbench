@@ -57,13 +57,6 @@ SAVE_PIECE_TIMEOUT = 60
 
 #: Seconds to wait for the bootloader after each way in (the board resetting and enumerating).
 ENTER_WAIT = 10.0
-#: Where the host lists its USB devices: a board known by its ROM serial is found there.
-USB_ROOT = "/sys/bus/usb/devices"
-#: An RP2040's ROM bootloader gives a USB serial of twelve hex digits, which is not its flash id
-#: (sixteen): picotool cannot select the chip by it.
-ROM_SERIAL = re.compile(r"[0-9A-F]{12}")
-#: The ROM bootloaders' USB vendor (Raspberry Pi).
-ROM_VENDOR = "2e8a"
 #: Seconds a board's application may take to be on USB again when its port is wanted: one that
 #: left the bootloader a moment ago is not there yet (a Pico 2 W running zapp 3.0, which starts its
 #: WiFi chip first, takes about 4 s). Only an absent board is waited for; an ambiguous one is not.
@@ -160,41 +153,15 @@ def refusals(blocks, fams, uf2_spec):
     return out
 
 
-def usb_location(serial, root=USB_ROOT):
-    """[(bus, address)] of each USB device of the ROM bootloaders' vendor whose serial is
-    `serial`, from the host's USB device list."""
-    out = []
-    try:
-        names = sorted(os.listdir(root))
-    except OSError:
-        return out
-
-    def read(d, f):
-        try:
-            with open(os.path.join(root, d, f)) as fh:
-                return fh.read().strip()
-        except OSError:
-            return ""
-    for d in names:
-        if read(d, "idVendor").lower() == ROM_VENDOR and read(d, "serial").upper() == serial.upper():
-            out.append((read(d, "busnum"), read(d, "devnum")))
-    return out
-
-
 class Bootrom:
     """One chip's ROM bootloader, through picotool: found by its id, reached by the board's ways
     in, read, and left again. The flasher (PicobootFlasher) and the whole-chip backup, restore
     and erase (picochip.py) are both this."""
 
     def __init__(self, name, chip_id, uf2_spec, enter=None, manual_wait=0, picotool="picotool",
-                 devreg="~/.devreg/devreg.py", enter_wait=None, ask_timeout=None, usb_root=USB_ROOT):
+                 devreg="~/.devreg/devreg.py", enter_wait=None, ask_timeout=None):
         self.name = name
         self.chip_id = (chip_id or "").upper()
-        # A board known only by its ROM bootloader's USB serial (a blank RP2040 shows picotool no
-        # flash id, and `--ser` wants one) is selected where that serial is on USB right now
-        self.rom_serial = self.chip_id if ROM_SERIAL.fullmatch(self.chip_id) else None
-        self.usb_root = usb_root
-        self.flash_id = None         # the flash id picotool printed, when the board is known by its ROM serial
         self.uf2_spec = uf2_spec or {}
         self.enter_ways = list(enter or self.uf2_spec.get("enter") or ENTER_DEFAULT)
         self.manual_wait = float(manual_wait or 0)
@@ -212,23 +179,8 @@ class Bootrom:
     #: what picotool says, exiting 0 (v2.1), when no device in BOOTSEL mode has the serial asked for
     NOT_FOUND = "No accessible RP-series devices"
 
-    def _select(self):
-        """picotool's arguments that pick this chip, or None when it is not to be found: `--ser`
-        and its flash id, or for a board known by its ROM serial, `--bus`/`--address` where a
-        device with that serial is now (its address changes each time it enumerates)."""
-        if not self.rom_serial:
-            return ["--ser", self.chip_id]
-        found = usb_location(self.rom_serial, self.usb_root)
-        if len(found) > 1:
-            raise common.FlashError(f"REFUSING: {len(found)} USB devices carry {self.name}'s ROM serial "
-                                    f"{self.rom_serial}")
-        return ["--bus", found[0][0], "--address", found[0][1]] if found else None
-
     def _pt(self, *args, timeout=60):
-        select = self._select()
-        if select is None:
-            return 1, f"{self.NOT_FOUND} in BOOTSEL mode were found with ROM serial {self.rom_serial}"
-        rc, out = common.tool([self.picotool, *args, *select], timeout)
+        rc, out = common.tool([self.picotool, *args, "--ser", self.chip_id], timeout)
         if self.NOT_FOUND in out:
             rc = rc or 1     # picotool exits 0 having found nothing: a failure, not a success
         return rc, out
@@ -246,14 +198,7 @@ class Bootrom:
         # information): the selection is then the proof. An RP2350's OTP id is always printed.
         m = re.search(r"(?:chipid|flash id):\s*0x([0-9A-Fa-f]+)", out)
         blank_rp2040 = m is None and re.search(r"type:\s*RP2040", out) is not None
-        if self.rom_serial:
-            # selected by its ROM serial where it is on USB: that is the proof; a flash id it
-            # prints (once it holds an image) is what the registry should know it by
-            self.flash_id = m.group(1).upper() if m else None
-            m = None if self.flash_id is None else m
-            if m is None and not blank_rp2040 and re.search(r"type:\s*RP2040", out) is None:
-                raise common.FlashError(f"REFUSING: the device at {self.name}'s ROM serial is no RP2040")
-        elif (m is None and not blank_rp2040) or (m and m.group(1).upper() != self.chip_id):
+        if (m is None and not blank_rp2040) or (m and m.group(1).upper() != self.chip_id):
             raise common.FlashError(f"REFUSING: the bootloader picotool found says chip "
                                     f"{m.group(1) if m else '?'}, not {self.name} ({self.chip_id})")
         facts = {"chip_id": m.group(1).upper() if m else self.chip_id}
@@ -408,10 +353,10 @@ class PicobootFlasher(Bootrom, common.Flasher):
     def __init__(self, name, manifest, image_file, chip_id, uf2_spec, board_tag=None,
                  declared=None, enter=None, manual_wait=0, picotool="picotool",
                  devreg="~/.devreg/devreg.py", enter_wait=None, ask_timeout=None,
-                 console_expected=False, console_elsewhere=False, usb_root=USB_ROOT):
+                 console_expected=False, console_elsewhere=False):
         super().__init__(name, chip_id, uf2_spec, enter=enter, manual_wait=manual_wait,
                          picotool=picotool, devreg=devreg, enter_wait=enter_wait,
-                         ask_timeout=ask_timeout, usb_root=usb_root)
+                         ask_timeout=ask_timeout)
         self.manifest, self.image = manifest, image_file
         self.board_tag, self.declared = board_tag, declared
         self.blocks, self.fams = uf2_blocks(image_file)
@@ -426,12 +371,9 @@ class PicobootFlasher(Bootrom, common.Flasher):
 
     def preflight(self):
         out = common.common_refusals(self.manifest, FORMATS, self.board_tag, self.declared)
-        # the proof of which chip picotool writes: its flash id (16 hex), which picotool selects
-        # by, or its ROM bootloader's serial (12 hex), which the one device written must carry
-        if not (re.fullmatch(r"[0-9A-F]{16}", self.chip_id) or self.rom_serial):
-            out.append("the registry holds no flash unique id (match.usb_serial, 16 hex) or ROM "
-                       "bootloader serial (12 hex) for this chip: nothing proves which chip "
-                       "picotool would write")
+        if not re.fullmatch(r"[0-9A-F]{16}", self.chip_id):
+            out.append("the registry holds no flash unique id for this chip (match.usb_serial, "
+                       "16 hex): nothing proves which chip picotool would write")
         if subprocess.run(["sh", "-c", f"command -v {self.picotool}"], capture_output=True).returncode:
             out.append(f"no {self.picotool} on this host")
         out += refusals(self.blocks, self.fams, self.uf2_spec)

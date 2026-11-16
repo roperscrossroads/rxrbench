@@ -31,10 +31,6 @@
 
 ### Fixed
 
-- **A blank RP2040 known only by its ROM bootloader's serial could not be flashed**: picotool
-  selects a chip by its flash id, which a blank one does not show. Such a board is now selected
-  where its ROM serial is on USB (`--bus`/`--address`), written, and its flash id given for the
-  registry.
 - **A board registered by its RP2040 bootloader serial was never seen as plugged in**: twelve hex
   digits were read as a MAC, but the relay files such a serial as VID:PID:serial; a match that
   gives the VID and PID is now known both ways.
