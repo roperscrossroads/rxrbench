@@ -556,3 +556,28 @@ def test_udp_takes_the_first_reply_when_it_is_its_own():
 
     assert asyncio.run(smp._reply_to(send, receive, _frame(5))) == _frame(5)
     assert replies == [_frame(6)]
+
+
+def test_udp_sends_the_request_again_when_its_reply_is_lost():
+    import asyncio
+    sent = []
+    replies = asyncio.Queue()
+
+    async def send(data):
+        sent.append(data)
+        if len(sent) == 2:          # the first request (or its reply) was lost
+            await replies.put(_frame(9))
+
+    async def receive():
+        return await replies.get()
+
+    got = asyncio.run(smp._reply_to(send, receive, _frame(9), resend_s=0.05))
+    assert got == _frame(9) and sent == [_frame(9), _frame(9)]
+
+
+def test_an_upload_start_is_never_sent_twice():
+    start = bytes([2, 0, 0, 12, 0, 1, 3, 1]) + b"\xa2clen\x1a\x00\x08\x99\xa0coff\x00"
+    chunk = bytes([2, 0, 0, 12, 0, 1, 4, 1]) + b"\xa2coff\x1a\x00\x00\x02\x00ddata"
+    assert smp._upload_start(start)
+    assert not smp._upload_start(chunk)
+    assert not smp._upload_start(_frame(1))

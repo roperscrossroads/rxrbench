@@ -85,26 +85,48 @@ def _smp_session_errors():
 
 
 
+#: over UDP, a request is sent again when no reply has come in this long (a datagram lost on
+#: the way there or back); the client's request timeout still bounds the whole wait
+UDP_RESEND_S = 2.0
+
+
 def _sequence(frame):
     """An SMP frame's sequence number: its header's seventh byte."""
     return frame[6]
 
 
-async def _reply_to(send, receive, request):
-    """Send `request` and return the reply that carries its sequence number. Over UDP a reply
-    to an earlier request can arrive after it was answered (a datagram the network delivered
-    twice, or late), and taken as this one's it ends the session with a bad sequence: such a
-    reply is dropped and the wait goes on, bounded by the client's request timeout."""
+def _upload_start(frame):
+    """The first request of an image upload (image group, upload, a body carrying `len`):
+    the device erases the spare slot before it answers, and the same request again would
+    start the erase again, so it is never sent twice."""
+    return len(frame) > 8 and frame[4:6] == b"\x00\x01" and frame[7] == 1 and b"clen" in frame[8:]
+
+
+async def _reply_to(send, receive, request, resend_s=None):
+    """Send `request` and return the reply that carries its sequence number. Over UDP a
+    datagram can be lost, delivered twice or late: with `resend_s`, the same request (same
+    sequence) goes again each time that long passes with no reply, which is safe for every
+    request but an upload's first (see `_upload_start`); a reply to an earlier request, or a
+    second reply to this one after it was answered, is dropped and the wait goes on. The
+    client's request timeout bounds it all."""
     await send(request)
     while True:
-        frame = await receive()
+        try:
+            if resend_s:
+                frame = await asyncio.wait_for(receive(), resend_s)
+            else:
+                frame = await receive()
+        except asyncio.TimeoutError:
+            await send(request)
+            continue
         if len(frame) < 8 or len(request) < 8 or _sequence(frame) == _sequence(request):
             return frame
 
 
 def _udp_transport(port):
     """smpclient's UDP transport, connecting to `port` (its connect takes the port, the
-    client does not pass one), and waiting past a stale reply (`_reply_to`)."""
+    client does not pass one), sending a request again when its reply is lost and waiting
+    past a stale one (`_reply_to`)."""
     from smpclient.transport.udp import SMPUDPTransport  # pylint: disable=import-outside-toplevel,import-error
 
     class AtPort(SMPUDPTransport):
@@ -112,7 +134,8 @@ def _udp_transport(port):
             return await super().connect(address, timeout_s, port=_port)
 
         async def send_and_receive(self, data):
-            return await _reply_to(self.send, self.receive, data)
+            return await _reply_to(self.send, self.receive, data,
+                                   None if _upload_start(data) else UDP_RESEND_S)
 
     _port = port
     return AtPort()
