@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/random/random.h>
 #include <zephyr/settings/settings.h>
@@ -42,8 +44,26 @@ static int app_set(const char *name, size_t len, settings_read_cb read_cb, void 
 
 SETTINGS_STATIC_HANDLER_DEFINE(zapp, "app", NULL, app_set, NULL, NULL);
 
+/* Kconfig ZAPP_CONSOLE_FLOW_CONTROL: on now that the USB stack is up, never before it. */
+static void console_flow_control(void)
+{
+#if defined(CONFIG_ZAPP_CONSOLE_FLOW_CONTROL) && DT_HAS_CHOSEN(zephyr_shell_uart)
+	const struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
+	struct uart_config cfg;
+
+	if (uart_config_get(dev, &cfg) == 0) {
+		cfg.flow_ctrl = UART_CFG_FLOW_CTRL_RTS_CTS;
+		if (uart_configure(dev, &cfg) != 0) {
+			printk("zapp: no flow control on the console\n");
+		}
+	}
+#endif
+}
+
 int main(void)
 {
+	console_flow_control();
+
 	int rc = settings_subsys_init();
 
 	if (rc) {

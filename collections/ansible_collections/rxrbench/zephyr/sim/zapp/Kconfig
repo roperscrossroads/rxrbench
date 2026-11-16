@@ -55,4 +55,18 @@ config ZAPP_WIFI
 	  when wifi/psk is set, an open one otherwise) and takes an address by DHCP. `zapp wifi
 	  status` says where it is. The PSK is a secret the layout declares.
 
+config ZAPP_CONSOLE_FLOW_CONTROL
+	bool "Flow control on the shell's serial port, turned on once zapp is up"
+	depends on SERIAL
+	select UART_USE_RUNTIME_CONFIGURE
+	help
+	  For MCUmgr over the shell on a USB CDC ACM port. The shell transport writes a response a
+	  byte at a time with uart_poll_out, faster than a USB packet (64 bytes) leaves, and
+	  without flow control the port drops what does not fit: a response longer than one
+	  packet (image state, an upload's reply) never arrives. With it, uart_poll_out waits
+	  for room. Turned on from main, not in the devicetree: anything printed before the USB
+	  stack is enabled (the boot banner, the WiFi driver's firmware line) would wait for a
+	  host that cannot connect yet, and the board would never enumerate. Once on, a write to
+	  the console waits while no host reads the port; on a bench the board's broker holds it.
+
 source "Kconfig.zephyr"
