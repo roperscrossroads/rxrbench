@@ -522,3 +522,37 @@ def test_udp_goes_over_a_network_route_and_needs_the_images_udp_transport(tmp_pa
     why = " ".join(f.preflight())
     assert "network route (eth, wifi), not swd" in why
     assert "no MCUmgr over udp (it has serial)" in why
+
+
+def _frame(seq, body=b"\xa0"):
+    """An SMP frame: an 8-byte header (sequence in the seventh byte) and a body."""
+    return bytes([1, 0, 0, len(body), 0, 1, seq, 0]) + body
+
+
+def test_udp_drops_a_reply_to_an_earlier_request_and_waits_for_its_own():
+    import asyncio
+    sent, replies = [], [_frame(106, b"\xa1old"), _frame(107, b"\xa1new")]
+
+    async def send(data):
+        sent.append(data)
+
+    async def receive():
+        return replies.pop(0)
+
+    got = asyncio.run(smp._reply_to(send, receive, _frame(107)))
+    assert got == _frame(107, b"\xa1new")
+    assert sent == [_frame(107)] and not replies
+
+
+def test_udp_takes_the_first_reply_when_it_is_its_own():
+    import asyncio
+    replies = [_frame(5), _frame(6)]
+
+    async def send(_data):
+        return None
+
+    async def receive():
+        return replies.pop(0)
+
+    assert asyncio.run(smp._reply_to(send, receive, _frame(5))) == _frame(5)
+    assert replies == [_frame(6)]

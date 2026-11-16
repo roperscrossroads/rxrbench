@@ -85,14 +85,34 @@ def _smp_session_errors():
 
 
 
+def _sequence(frame):
+    """An SMP frame's sequence number: its header's seventh byte."""
+    return frame[6]
+
+
+async def _reply_to(send, receive, request):
+    """Send `request` and return the reply that carries its sequence number. Over UDP a reply
+    to an earlier request can arrive after it was answered (a datagram the network delivered
+    twice, or late), and taken as this one's it ends the session with a bad sequence: such a
+    reply is dropped and the wait goes on, bounded by the client's request timeout."""
+    await send(request)
+    while True:
+        frame = await receive()
+        if len(frame) < 8 or len(request) < 8 or _sequence(frame) == _sequence(request):
+            return frame
+
+
 def _udp_transport(port):
     """smpclient's UDP transport, connecting to `port` (its connect takes the port, the
-    client does not pass one)."""
+    client does not pass one), and waiting past a stale reply (`_reply_to`)."""
     from smpclient.transport.udp import SMPUDPTransport  # pylint: disable=import-outside-toplevel,import-error
 
     class AtPort(SMPUDPTransport):
         async def connect(self, address, timeout_s, port=None):  # pylint: disable=arguments-differ,unused-argument
             return await super().connect(address, timeout_s, port=_port)
+
+        async def send_and_receive(self, data):
+            return await _reply_to(self.send, self.receive, data)
 
     _port = port
     return AtPort()
