@@ -3,6 +3,12 @@
  * declares; no key means an open network). At boot, after the settings load, and on
  * `zapp wifi connect`, zapp joins it and takes an address by DHCP.
  *
+ * A network that goes away is joined again without anyone asking: a thread looks every
+ * WATCH_S seconds, and a link that has had no address for REJOIN_S (a join that never ended,
+ * an access point that left without a word, a lease that ran out) is left and joined anew.
+ * A board that takes its updates over this link gets none while it is down, so nothing here
+ * waits for a person. `zapp wifi drop` leaves the network, to show that.
+ *
  *     zapp wifi status   ->  wifi up <ssid> <address> | wifi joining <ssid> | wifi down <ssid> <why> | wifi none
  */
 #include <errno.h>
@@ -22,6 +28,11 @@ static char ssid[33];
 static char psk[65];
 static enum { NONE, JOINING, JOINED, DOWN } link;
 static int last_error;
+static int64_t no_address_since;   /* uptime in ms when the link was first seen without one, or 0 */
+static uint32_t rejoins;
+
+#define WATCH_S  10
+#define REJOIN_S 45   /* a join and a DHCP lease take a few seconds; this is neither */
 static struct net_mgmt_event_callback wifi_cb, ip_cb;
 
 static int wifi_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
@@ -102,12 +113,52 @@ int zapp_wifi_connect(void)
 	link = JOINING;
 	int rc = net_mgmt(NET_REQUEST_WIFI_CONNECT, iface, &p, sizeof(p));
 
+	if (rc == -EALREADY) {
+		/* the driver still holds a join that leads nowhere: end it and ask again */
+		(void)net_mgmt(NET_REQUEST_WIFI_DISCONNECT, iface, NULL, 0);
+		k_sleep(K_SECONDS(1));
+		link = JOINING;
+		rc = net_mgmt(NET_REQUEST_WIFI_CONNECT, iface, &p, sizeof(p));
+	}
 	if (rc) {
 		link = DOWN;
 		last_error = rc;
 	}
 	return rc;
 }
+
+/* The link looked at every WATCH_S: one with no address for REJOIN_S is left and joined anew. */
+static void watch(void *a, void *b, void *c)
+{
+	for (;;) {
+		struct net_if *iface = net_if_get_wifi_sta();
+
+		k_sleep(K_SECONDS(WATCH_S));
+		if (!ssid[0] || !iface) {
+			continue;
+		}
+		if (net_if_ipv4_get_global_addr(iface, NET_ADDR_PREFERRED) != NULL) {
+			no_address_since = 0;
+			link = JOINED;
+			continue;
+		}
+		if (no_address_since == 0) {
+			no_address_since = k_uptime_get();
+			continue;
+		}
+		if (k_uptime_get() - no_address_since < REJOIN_S * MSEC_PER_SEC) {
+			continue;
+		}
+		no_address_since = k_uptime_get();
+		rejoins++;
+		printk("zapp: wifi: no address for %d s: joining %s again (%u)\n", REJOIN_S, ssid, rejoins);
+		(void)net_mgmt(NET_REQUEST_WIFI_DISCONNECT, iface, NULL, 0);
+		k_sleep(K_SECONDS(1));
+		(void)zapp_wifi_connect();
+	}
+}
+
+K_THREAD_DEFINE(zapp_wifi_watch, 4096, watch, NULL, NULL, NULL, 13, 0, 5000);
 
 bool zapp_wifi_up(char *addr, size_t len)
 {
@@ -147,6 +198,15 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+static int cmd_drop(const struct shell *sh, size_t argc, char **argv)
+{
+	struct net_if *iface = net_if_get_wifi_sta();
+	int rc = iface ? net_mgmt(NET_REQUEST_WIFI_DISCONNECT, iface, NULL, 0) : -ENODEV;
+
+	shell_print(sh, "wifi dropped %d", rc);
+	return 0;
+}
+
 static int cmd_connect(const struct shell *sh, size_t argc, char **argv)
 {
 	settings_load_subtree("wifi");   /* settings written since boot */
@@ -163,5 +223,6 @@ static int cmd_connect(const struct shell *sh, size_t argc, char **argv)
 SHELL_STATIC_SUBCMD_SET_CREATE(wifi_cmds,
 	SHELL_CMD(status, NULL, "where the link is", cmd_status),
 	SHELL_CMD(connect, NULL, "join the network the settings name", cmd_connect),
+	SHELL_CMD(drop, NULL, "leave the network (it is joined again within a minute)", cmd_drop),
 	SHELL_SUBCMD_SET_END);
 SHELL_SUBCMD_ADD((zapp), wifi, &wifi_cmds, "WiFi from the settings wifi/ssid, wifi/psk", NULL, 1, 0);
