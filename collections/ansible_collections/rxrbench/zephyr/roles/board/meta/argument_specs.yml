@@ -111,6 +111,16 @@ argument_specs:
       bench_board: *bench_board
       bench_socket: *bench_socket
       zephyr: *zephyr
+  secret_token_read:
+    short_description: "Read a board's token secret"
+    description:
+      - >-
+        The declared token, what the device shows a server it asks (the setting
+        C(zephyr.secrets.token) names), against what the board holds.
+    options:
+      bench_board: *bench_board
+      bench_socket: *bench_socket
+      zephyr: *zephyr
   settings:
     short_description: "Write a Zephyr board's declared settings"
     description:

@@ -123,6 +123,13 @@ def test_a_wifi_key_is_a_declared_secret_of_its_own_kind():
     assert kinds == {"device_key": "device", "psk": "declared", "wifi_psk": "declared"}
 
 
+def test_a_server_token_is_a_declared_secret_of_its_own_kind():
+    from ansible_collections.rxrbench.zephyr.plugins.plugin_utils.families import zephyr_settings
+    fam = zephyr_settings.Family()
+    hv = {"zephyr": {"settings": {"zhb/token": "made-up"}, "secrets": {"token": "zhb/token"}}}
+    assert fam.board_secrets(hv) == [{"kind": "token", "origin": "declared"}]
+
+
 class Answers:
     """A board that answers one command with a fixed text."""
     board = "zb1"
