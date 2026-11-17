@@ -26,12 +26,14 @@ Everything it needs and makes is under ~/.cache/rxrbench/simvm/:
     id_ed25519, known_hosts, ca.*   the keys (vm/make-keys.sh)
 """
 import argparse
+import fcntl
 import os
 import re
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -42,6 +44,9 @@ STATE = os.path.expanduser("~/.cache/rxrbench/simvm")
 HARNESS, SANDBOX, IMAGE = (os.path.join(STATE, d) for d in ("harness", "sandbox", "image"))
 RUN = os.path.join(STATE, "run")
 KEY, KNOWN = os.path.join(STATE, "id_ed25519"), os.path.join(STATE, "known_hosts")
+# The devices are a registry's entries with an ssh route on a loopback port: this plugin's
+# own, or the registry `--registry` names (another plugin's simulated device on the same
+# machine image, run beside this one's).
 REGISTRY = os.path.join(HERE, "vm", "registry.yaml")
 HARNESS_URL = "https://github.com/roperscrossroads/meta-slotguard"
 HARNESS_REV = "9521b44725d4f039b79f1edef67cd25b88a2f120"   # the commit vm/kas pins
@@ -205,11 +210,7 @@ def pin(names):
     """Pin the devices' host keys where their routes say: asked of the loopback port each is
     forwarded on. (There is no way into a machine but its network; the port is this host's.)"""
     ports = devices()
-    kept = []
-    if os.path.exists(KNOWN):
-        with open(KNOWN) as fh:
-            kept = [ln for ln in fh.read().splitlines()
-                    if ln and not any(ln.startswith(f"[127.0.0.1]:{ports[n]} ") for n in names)]
+    scanned = []
     for name in names:
         end = time.monotonic() + 240
         while True:
@@ -221,9 +222,21 @@ def pin(names):
             if time.monotonic() > end:
                 sys.exit(f"{name}: no ssh server on 127.0.0.1:{ports[name]} after 240 s")
             time.sleep(2)
-        kept += lines
-    with open(KNOWN, "w") as fh:
-        fh.write("\n".join(kept) + "\n")
+        scanned += lines
+    # The file is every simulated device's, and two may be pinned at once (two tests, two
+    # devices): it is read and written back under a lock, so neither pin undoes the other's.
+    os.makedirs(os.path.dirname(KNOWN), exist_ok=True)
+    with open(KNOWN + ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        kept = []
+        if os.path.exists(KNOWN):
+            with open(KNOWN) as fh:
+                kept = [ln for ln in fh.read().splitlines()
+                        if ln and not any(ln.startswith(f"[127.0.0.1]:{ports[n]} ") for n in names)]
+        tmp = f"{KNOWN}.{os.getpid()}"
+        with open(tmp, "w") as fh:
+            fh.write("\n".join(kept + scanned) + "\n")
+        os.replace(tmp, KNOWN)
 
 
 # What makes a validly signed bundle not work, as paths removed from its root filesystem:
@@ -257,9 +270,11 @@ def bundle(version, foreign=False, out=None, compatible=None, broken=None):
     kind = "foreign" if foreign else "other" if compatible else f"broken-{broken}" if broken else "update"
     out = out or os.path.join(bundles, f"{kind}-{version}.raucb")
     cert, key = os.path.join(STATE, "ca.cert.pem"), os.path.join(STATE, "ca.key.pem")
-    work = os.path.join(bundles, ".work")
-    shutil.rmtree(work, ignore_errors=True)
+    # Two bundles may be made at once (two tests, two devices): each has a work directory of
+    # its own, and a bundle appears under its name whole or not at all.
+    work = tempfile.mkdtemp(prefix=".work-", dir=bundles)
     os.makedirs(os.path.join(work, "content"))
+    made = os.path.join(work, "bundle.raucb")
     try:
         if foreign:
             cert, key = os.path.join(work, "foreign.cert.pem"), os.path.join(work, "foreign.key.pem")
@@ -277,13 +292,12 @@ def bundle(version, foreign=False, out=None, compatible=None, broken=None):
         with open(os.path.join(work, "content", "manifest.raucm"), "w") as fh:
             fh.write(f"[update]\ncompatible={compatible or m.group(1)}\nversion={version}\n\n[bundle]\nformat=verity\n\n"
                      "[image.rootfs]\nfilename=rootfs.img\n")
-        if os.path.exists(out):
-            os.unlink(out)
         r = subprocess.run(["rauc", "bundle", "--mksquashfs-args=-comp zstd", f"--cert={cert}",
-                            f"--key={key}", os.path.join(work, "content"), out],
+                            f"--key={key}", os.path.join(work, "content"), made],
                            capture_output=True, text=True, check=False)
         if r.returncode != 0:
             raise SimError(f"rauc bundle: {(r.stdout + r.stderr).strip()[-300:]}")
+        os.replace(made, out)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return out
@@ -364,10 +378,18 @@ def main(argv=None):
     ap.add_argument("--foreign", action="store_true", help="(bundle) sign with a key the device does not trust")
     ap.add_argument("--compatible", help="(bundle) make it a bundle for another device")
     ap.add_argument("--broken", choices=sorted(BROKEN), help="(bundle) signed, accepted, and does not work")
+    ap.add_argument("--registry", help="the registry the devices are read from, in place of this plugin's "
+                                       "own: another plugin's device on the same machine image")
     a = ap.parse_args(argv)
     if a.action == "setup":
         return setup(a.sandbox, a.image, a.unverified)
     pidfile = os.path.join(STATE, "simvm.pid")
+    if a.registry:
+        # another registry's devices run beside this plugin's, each set with its own `up`
+        import hashlib  # pylint: disable=import-outside-toplevel
+        global REGISTRY  # pylint: disable=global-statement
+        REGISTRY = os.path.abspath(a.registry)
+        pidfile = os.path.join(STATE, f"simvm-{hashlib.sha256(REGISTRY.encode()).hexdigest()[:8]}.pid")
     if a.action == "down":
         try:
             with open(pidfile) as fh:
