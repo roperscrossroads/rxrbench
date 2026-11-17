@@ -1,0 +1,29 @@
+---
+# The images of the hawkBit route's simulated Zephyr device (zh1): zapp, the zephyr plugin's
+# example application, with Zephyr's hawkBit client, under MCUboot on an emulated MCU with a
+# network (`just sim-zapp-qemu-build`). MCUboot there runs the highest version it holds.
+images:
+  zqh:
+    family: zephyr_settings
+    features: [digest, hawkbit, reboot, state]
+    summary: zapp 3.2.0 with the hawkBit client on the MPS2 AN385 under QEMU, MCUboot in RAM-load mode with revert
+    board_tags: [mps2-an385]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zqh}
+    rf: none
+  zqh-b:
+    family: zephyr_settings
+    features: [digest, hawkbit, reboot, state]
+    summary: the same at version 3.3.0, for the server to hand out
+    board_tags: [mps2-an385]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zqh-b}
+    rf: none
+  zqh-bad:
+    family: zephyr_settings
+    features: [digest, hawkbit, reboot, state]
+    summary: the same at version 3.4.0, made to fail (it faults on its test boot; MCUboot returns to the one before)
+    board_tags: [mps2-an385]
+    flasher: smp
+    source: {type: path, path: .build/store/zephyr/zqh-bad}
+    rf: none

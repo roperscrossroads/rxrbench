@@ -4,6 +4,11 @@ the PC bench (docs/SIMULATED.md.
 
     zephyr_qemu.py build --name NAME --app APP [--workspace W] [--conf F ...]
                          [--board mps2/an385] [--overlay O ...] [--mcuboot-conf F]
+                         [--network NET]
+
+`--network 192.0.2.0/24` gives the machine its Ethernet on QEMU's user network with that
+range: the guest is .15 and this machine is its gateway, .2, so an application with a network
+stack can reach a server on this machine (a simulated device that fetches its own updates).
 
 `west build --sysbuild` with MCUboot in RAM-load mode with revert and ECDSA signing, the
 overlay that gives the board a simulated flash (core/sim/zephyr/mps2-ramload.overlay) on both
@@ -34,6 +39,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zephyr_sim import SIM, STORE, BUILDS, mcuboot_hash, west_of, zephyr_commit, zephyr_version  # noqa: E402
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 BOARDS = {
     # board: (QEMU machine arguments, the simulated flash's slot 0 address, the overlay both
@@ -101,6 +108,8 @@ def build(a):
             sys.exit(f"the build made no {needed}")
     out = os.path.join(STORE, a.name)
     os.makedirs(out, exist_ok=True)
+    # the board's Ethernet (the MPS2's LAN9118) on QEMU's user network, in the range asked for
+    network = ["-nic", f"user,model=lan9118,net={a.network}"] if a.network else []
     shutil.copy2(signed, os.path.join(out, "app.signed.bin"))
     shutil.copy2(confirmed, os.path.join(out, "factory.signed.bin"))
     # the SDK's objcopy: on PATH, or under ZEPHYR_SDK_INSTALL_DIR (where west found the SDK),
@@ -117,10 +126,10 @@ def build(a):
         sys.exit("no arm-zephyr-eabi-objcopy: put the SDK's bin on PATH or set ZEPHYR_SDK_INSTALL_DIR")
     subprocess.run([objcopy, "-R", "FLASH_SIM", elf, os.path.join(out, "mcuboot.elf")], check=True)
     manifest = {"family": a.family, "format": "mcuboot-bin", "file": "app.signed.bin", "target": a.board,
-                "board_tag": a.board_tag, "app": os.path.relpath(app, workspace) if app.startswith(workspace) else app,
+                "board_tag": a.board_tag, "app": os.path.relpath(app, workspace if app.startswith(workspace) else REPO),
                 "hash": mcuboot_hash(os.path.join(out, "app.signed.bin")), "version": a.version,
                 "build": zephyr_commit(workspace), "zephyr": zephyr_version(workspace),
-                "qemu": {"system": "qemu-system-arm", "argv": machine, "kernel": "mcuboot.elf",
+                "qemu": {"system": "qemu-system-arm", "argv": machine + network, "kernel": "mcuboot.elf",
                          "load": [{"file": "factory.signed.bin", "addr": slot0}]}}
     with open(os.path.join(out, "manifest.json"), "w") as f:
         json.dump(manifest, f)
@@ -142,6 +151,7 @@ def main(argv=None):
     b.add_argument("--mcuboot-conf")
     b.add_argument("--family", default="zephyr_mcumgr")
     b.add_argument("--version", default="0.0.0")
+    b.add_argument("--network", help="the machine's Ethernet on QEMU's user network, as this range")
     a = ap.parse_args(argv)
     build(a)
 

@@ -1,0 +1,4 @@
+---
+# The board types of the hawkBit route's simulated Zephyr device (zh1).
+boards:
+  mps2-an385: {mcu: cortex-m3, zephyr_boards: [mps2/an385]}

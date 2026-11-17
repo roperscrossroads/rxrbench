@@ -281,3 +281,16 @@ def test_a_device_with_a_declared_token_is_planned_before_the_server_knows_it(tm
     assert r["changed"] and not server.targets and not server.modules
     assert "to be enrolled" in bench.route.enrollment()
 
+
+def test_the_plugins_simulated_registry_holds_two_simulators_devices_and_each_takes_its_own(monkeypatch):
+    """hb1 is the Linux plugin's A/B machine and zh1 core's emulated MCU. The A/B machine's
+    tool is given this registry whole, and must take from it only the device it can run."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("simvm_under_test", os.path.join(RX, "linux", "sim", "simvm.py"))
+    simvm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(simvm)
+    monkeypatch.setattr(simvm, "REGISTRY", os.path.join(RX, "hawkbit", "sim", "registry.yaml"))
+    assert simvm.devices() == {"hb1": 22212}
+    reg = layout.load_registry(os.path.join(RX, "hawkbit", "sim", "registry.yaml"))
+    assert set(reg["devices"]) == {"hb1", "zh1"}
+    assert all("hawkbit" in d["reach"] for d in reg["devices"].values())

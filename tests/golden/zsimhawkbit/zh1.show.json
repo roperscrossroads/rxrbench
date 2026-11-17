@@ -1,0 +1,52 @@
+{
+ "ansible_python_interpreter": "{{ bench_repo }}/venv/bin/python",
+ "bench_apply_allowed": true,
+ "bench_delivery_timeout": 180,
+ "bench_delivery_tool": "{{ bench_repo }}/collections/ansible_collections/rxrbench/hawkbit/host/bin/hawkbit_route.py",
+ "bench_devreg_tool": "{{ bench_repo }}/devreg/devreg.py",
+ "bench_flasher": "smp",
+ "bench_hawkbit": {
+  "password": "made-up",
+  "url": "http://127.0.0.1:8080",
+  "user": "bench"
+ },
+ "bench_hawkbit_device_host": "192.0.2.2",
+ "bench_hawkbit_device_port": "8080",
+ "bench_hawkbit_token": "0123456789abcdef0123456789abcdef",
+ "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "zapp version",
+   "expect": "^version zapp 3\\.",
+   "name": "version"
+  },
+  {
+   "cmd": "zapp hawkbit status",
+   "expect": "^hawkbit image .* confirmed .* net up ",
+   "name": "client"
+  }
+ ],
+ "firmware": {
+  "family": "zephyr_settings",
+  "image": "zqh-b"
+ },
+ "routes": {
+  "flash": "hawkbit"
+ },
+ "zephyr": {
+  "digest_command": "zapp digest",
+  "secrets": {
+   "token": "zhb/token"
+  },
+  "settings": {
+   "zhb/id": "{{ bench_routes.flash.addr }}",
+   "zhb/port": "{{ bench_hawkbit_device_port }}",
+   "zhb/server": "{{ bench_hawkbit_device_host }}",
+   "zhb/token": "{{ bench_hawkbit_token }}"
+  },
+  "state_command": "zapp state"
+ }
+}

@@ -110,6 +110,6 @@ them:
 |---|---|
 | [`mesh`](../collections/ansible_collections/rxrbench/mesh/README.md) | `sim-up`, `sim-down`, `sim-build`, `sim-build-zephcore` (the simulated mesh bench), `sim-mt-up`, `sim-mt-down`, `sim-mt-pull`, `sim-mt-wipe` (stock Meshtastic in containers), `stage-image`, `net-facts` |
 | [`linux`](../collections/ansible_collections/rxrbench/linux/README.md) | `sim-linux-up`, `sim-linux-down`, `sim-linux-reimage` (Linux devices in containers), `sim-vm-up`, `sim-vm-down`, `sim-vm-bundle`, `sim-vm-sandbox` (the A/B machine), `stage-wic` |
-| [`zephyr`](../collections/ansible_collections/rxrbench/zephyr/README.md) | `sim-zapp-build`, `zapp-build` |
+| [`zephyr`](../collections/ansible_collections/rxrbench/zephyr/README.md) | `sim-zapp-build`, `sim-zapp-qemu-build`, `zapp-build` |
 | [`nuttx`](../collections/ansible_collections/rxrbench/nuttx/README.md) | `sim-nuttx-build` |
 | [`launcher`](../collections/ansible_collections/rxrbench/launcher/README.md) | `launcher` |

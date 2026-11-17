@@ -1,0 +1,11 @@
+---
+# The hawkBit route on a simulated Zephyr device: an emulated MCU under MCUboot whose own
+# client fetches its updates from a server (docs/SIMULATED.md). The registry and the catalog
+# are the hawkbit plugin's.
+plugin: rxrbench.core.devreg
+layers: [sim]
+registry: ../../../collections/ansible_collections/rxrbench/hawkbit/sim/registry.yaml
+catalog_dir: ../../../collections/ansible_collections/rxrbench/hawkbit/sim/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  zh1: {host: simhost}

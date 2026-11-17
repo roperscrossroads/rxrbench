@@ -1,0 +1,12 @@
+@all:
+  |--@ungrouped:
+  |--@bench_hosts:
+  |  |--simhost
+  |--@boards:
+  |  |--zh1
+  |--@family_zephyr_settings:
+  |  |--zh1
+  |--@host_simhost:
+  |  |--zh1
+  |--@kind_sim:
+  |  |--zh1

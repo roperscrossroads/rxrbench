@@ -82,7 +82,9 @@ def devices():
     """{name: its loopback ssh port}, from the registry the layouts name."""
     with open(REGISTRY) as fh:
         reg = yaml.safe_load(fh)
-    return {name: int(d["reach"]["ssh"]["port"]) for name, d in reg["devices"].items()}
+    # a registry may hold another simulator's devices beside these: this tool's have an ssh port
+    return {name: int(d["reach"]["ssh"]["port"]) for name, d in reg["devices"].items()
+            if ((d.get("reach") or {}).get("ssh") or {}).get("port")}
 
 
 def envtool(*argv):

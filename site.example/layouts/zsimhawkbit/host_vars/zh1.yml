@@ -1,0 +1,20 @@
+---
+# The emulated MCU under MCUboot, running zapp with Zephyr's hawkBit client, and the image it
+# is brought to. The image is not uploaded: the server is told, and the device's own client
+# fetches it, reboots into it and confirms it. It is read over MCUmgr on its console all the
+# same, before and after.
+firmware: {family: zephyr_settings, image: zqh-b}
+bench_flasher: smp
+routes: {flash: hawkbit}
+# What the device's client needs: where the server is (this machine, as the emulated network
+# shows it), the name it asks under (its address on the route, as the registry has it) and
+# its security token, the same one the run makes the server hold for it (bench_hawkbit_token).
+zephyr:
+  digest_command: zapp digest
+  state_command: zapp state
+  settings:
+    zhb/server: "{{ bench_hawkbit_device_host }}"
+    zhb/port: "{{ bench_hawkbit_device_port }}"
+    zhb/id: "{{ bench_routes.flash.addr }}"
+    zhb/token: "{{ bench_hawkbit_token }}"
+  secrets: {token: zhb/token}

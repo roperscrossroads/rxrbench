@@ -1,7 +1,12 @@
 ---
-# The hawkBit route's simulated bench: the Linux plugin's QEMU A/B machine (linux/sim/simvm.py)
-# as a second device beside that plugin's own, on its own loopback port, with a `hawkbit` route.
-# The server it polls is a stand-in the test starts (sim/fakeserver.py), or a real one.
+# The hawkBit route's simulated bench. Two devices, each with a `hawkbit` route:
+#
+#   hb1   the Linux plugin's QEMU A/B machine (linux/sim/simvm.py) as a second device beside
+#         that plugin's own, on its own loopback port
+#   zh1   core's emulated MCU under MCUboot (core/sim/simbench.py), running zapp with Zephyr's
+#         hawkBit client and a network
+#
+# The server they poll is a stand-in a test starts (sim/fakeserver.py), or a real one.
 version: 1
 hosts:
   simhost: {hostname: this machine, local: true}
@@ -24,3 +29,14 @@ devices:
         known_hosts: ~/.cache/rxrbench/simvm/known_hosts
       # its address on the server is its controller id; the bench host does not write it
       hawkbit: {host: simhost, addr: hb1, state: live, can: [flash]}
+  zh1:
+    kind: sim
+    firmware: zqh
+    policy: {board_tag: mps2-an385}
+    match: {sim_device_id: 41}
+    sim_exe: zephyr/zqh/manifest.json
+    sim_console: qemu
+    reach:
+      # read, and written when the layout does not pin the server, over MCUmgr on its console
+      usb: {host: simhost, state: live, can: [shell, flash, diag]}
+      hawkbit: {host: simhost, addr: zh1, state: live, can: [flash]}

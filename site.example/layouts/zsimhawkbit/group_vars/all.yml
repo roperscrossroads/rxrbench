@@ -1,0 +1,29 @@
+---
+# The interpreter, the image store and the brokers' sockets: from layers/sim (devreg.yml `layers:`).
+
+# A simulated device may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+bench_image: "{{ bench_store }}/zephyr/{{ firmware.image }}"
+
+# The registry tool the routes' addresses are checked with: this repository's.
+bench_devreg_tool: "{{ bench_repo }}/devreg/devreg.py"
+
+# The server the route speaks to. A test starts a stand-in and passes its own address
+# (`-e`); a real site keeps the login in a *.sops.yaml file.
+bench_hawkbit: {url: "http://127.0.0.1:8080", user: bench, password: made-up}
+# The device's security token on the server. The run makes the server hold the device with
+# it, and the device's client settings declare the same one (host_vars). A hawkBit token is
+# 32 characters; a real site keeps it in a *.sops.yaml file, one per device.
+bench_hawkbit_token: 0123456789abcdef0123456789abcdef
+# Where the device finds the server: this machine, as the emulated MCU's network shows it
+# (tools/zephyr_qemu.py --network), and the server's port.
+bench_hawkbit_device_host: 192.0.2.2
+bench_hawkbit_device_port: "8080"
+# The route's tool, from this repository: a simulated bench has no installed host tools.
+bench_delivery_tool: "{{ bench_repo }}/collections/ansible_collections/rxrbench/hawkbit/host/bin/hawkbit_route.py"
+# A simulated device asks every few seconds and confirms itself after ten.
+bench_delivery_timeout: 180
+
+bench_tests:
+  - {name: version, cmd: "zapp version", expect: "^version zapp 3\\."}
+  - {name: client, cmd: "zapp hawkbit status", expect: "^hawkbit image .* confirmed .* net up "}

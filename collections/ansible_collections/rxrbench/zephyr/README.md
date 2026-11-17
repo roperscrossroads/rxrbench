@@ -47,7 +47,7 @@ long as a shell line can write: it is checked by its digest, not read back.
 | Kind | Origin | What |
 |---|---|---|
 | `device_key` | device | The setting `zephyr.device_key` names, made by the device at first boot. `just secrets` compares it with the site's escrow; `just keys-export` escrows it; `just keys-restore` writes it back after an erase. |
-| `psk`, `cert`, `wifi_psk` | declared | The settings `zephyr.secrets` names, compared with the layout's values; the settings step writes them. `wifi_psk` is the key of the network the device joins (zapp's `wifi/psk`). |
+| `psk`, `cert`, `wifi_psk`, `token` | declared | The settings `zephyr.secrets` names, compared with the layout's values; the settings step writes them. `wifi_psk` is the key of the network the device joins (zapp's `wifi/psk`). |
 
 ## The example application
 
@@ -76,6 +76,7 @@ catalog entry says what it provides and the board exercise picks a second image 
 | `locate` | `zapp locate on/off/blink [s]` | the board's LED (a GPIO `led0` or a WS2812 `led-strip`) |
 | `selftest` | `zapp test flash/entropy/temp/wifi/all/list` | the board's hardware, one `test <name> pass/fail` line each: a layout binds them as device tests (`bench_tests`) |
 | `wifi` | `zapp wifi status/connect` | the CYW43439 on a W board: joins the network the settings `wifi/ssid` and `wifi/psk` name (`secrets: {wifi_psk: wifi/psk}`), DHCP |
+| `hawkbit` | `zapp hawkbit status/probe` | Zephyr's hawkBit client: polls the update server the settings `zhb/server`, `zhb/port`, `zhb/id` and `zhb/token` name, takes what it offers and reboots into it (with `--mcuboot --hawkbit`) |
 
 `just zapp-build <board> <version>` builds it for a board of `sim/zapp/hw/boards.yml` (Pico 2 W,
 Pico W, KB2040, Pro Micro RP2040: a storage partition at the top of flash, the CDC-ACM console,
@@ -92,6 +93,29 @@ for it, with MCUmgr over the shell's serial port and over UDP on WiFi (features 
 through picoboot), `zapp-<v>-<board>-signed` (family `zephyr_settings`, flasher `smp`: an update
 over MCUmgr, the board's settings and secrets still the family's) and `mcuboot-<board>` (the
 bootloader, for `just boot`).
+
+`--hawkbit` (with `--mcuboot`, on a board with a network) adds Zephyr's hawkBit client on a
+thread of zapp's own (feature `hawkbit`): the device polls an update server, takes what it
+offers into its second slot and reboots into it. Which server, under which name and with
+which token are settings, declared like any other and read before each poll:
+
+```yaml
+zephyr:
+  digest_command: zapp digest
+  settings:
+    zhb/server: 192.0.2.10
+    zhb/port: "8080"
+    zhb/id: node-a
+    zhb/token: "{{ bench_hawkbit_token }}"
+  secrets: {token: zhb/token}
+```
+
+`zapp hawkbit status` prints one line and `zapp hawkbit probe` asks now. An image on its test
+boot confirms itself after a minute of uptime, and the client asks the server nothing before
+that. Version 3.4 is an image made to fail, for a bench to show an update that does not hold:
+it faults a few seconds into its test boot (`CONFIG_ZAPP_HAWKBIT_FAULT_SEC`), the device
+resets, and MCUboot returns to the image before it. A board built this way can take its updates through the
+[`rxrbench.hawkbit`](../hawkbit/README.md) route (`routes: {flash: hawkbit, read: wifi}`).
 
 ## On hardware
 
@@ -117,4 +141,5 @@ What this plugin adds to the tool's `just` (its `zephyr.just`, which the justfil
 | | |
 |---|---|
 | `just sim-zapp-build [args ...]` | the `rxrbench.zephyr` example application at three versions (`zapp-1.0`, `zapp-1.1`, `zapp-2.0`), from any west workspace |
+| `just sim-zapp-qemu-build [args ...]` | the `rxrbench.zephyr` example application with a hawkBit client for the emulated MCU with a network (`zqh`, `zqh-b`, and `zqh-bad`, made to fail): the simulated device of the hawkBit route (Zephyr SDK) |
 <!-- commands: end -->

@@ -1,0 +1,153 @@
+{
+ "bench_access_host": "simhost",
+ "bench_apply_allowed": true,
+ "bench_board": "zh1",
+ "bench_board_tag": "mps2-an385",
+ "bench_board_type": {
+  "mcu": "cortex-m3",
+  "zephyr_boards": [
+   "mps2/an385"
+  ]
+ },
+ "bench_boot_radio_problems": [],
+ "bench_can": [
+  "chip"
+ ],
+ "bench_chip_mac": null,
+ "bench_compatible": null,
+ "bench_config_via": "console",
+ "bench_delivery": {
+  "address": "zh1",
+  "bearer": "hawkbit",
+  "credential": "bench_hawkbit_token",
+  "formats": [
+   "raucb",
+   "mcuboot-bin"
+  ],
+  "settings": "bench_hawkbit",
+  "tool": "hawkbit_route.py"
+ },
+ "bench_delivery_timeout": 180,
+ "bench_delivery_tool": "{{ bench_repo }}/collections/ansible_collections/rxrbench/hawkbit/host/bin/hawkbit_route.py",
+ "bench_devreg": "zh1",
+ "bench_devreg_tool": "{{ bench_repo }}/devreg/devreg.py",
+ "bench_diag_defaults": [],
+ "bench_family": "zephyr_settings",
+ "bench_family_facts": {},
+ "bench_flasher": "smp",
+ "bench_fw_kind": "zqh",
+ "bench_hawkbit": {
+  "password": "made-up",
+  "url": "http://127.0.0.1:8080",
+  "user": "bench"
+ },
+ "bench_hawkbit_device_host": "192.0.2.2",
+ "bench_hawkbit_device_port": "8080",
+ "bench_hawkbit_token": "0123456789abcdef0123456789abcdef",
+ "bench_identity_key": null,
+ "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
+ "bench_key_escrow": null,
+ "bench_kind": "sim",
+ "bench_layers": [
+  "sim"
+ ],
+ "bench_layout": "zsimhawkbit",
+ "bench_led": null,
+ "bench_locate": null,
+ "bench_may_transmit": true,
+ "bench_mcu": "cortex-m3",
+ "bench_plugin": "rxrbench.zephyr",
+ "bench_present": true,
+ "bench_rf_rules": {
+  "band_mhz": [
+   902.0,
+   928.0
+  ],
+  "max_tx_power": 2,
+  "region": "US"
+ },
+ "bench_routes": {
+  "diag": {
+   "bearer": "usb",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "state": "live"
+  },
+  "flash": {
+   "addr": "zh1",
+   "bearer": "hawkbit",
+   "can": [
+    "flash"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "state": "live"
+  },
+  "read": {
+   "bearer": "usb",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "state": "live"
+  },
+  "shell": {
+   "bearer": "usb",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "state": "live"
+  }
+ },
+ "bench_secret_kinds": [
+  {
+   "escrow": false,
+   "kind": "token",
+   "origin": "declared",
+   "tasks": "token"
+  }
+ ],
+ "bench_sim_console": "qemu",
+ "bench_sim_device_id": 41,
+ "bench_sim_exe": "zephyr/zqh/manifest.json",
+ "bench_sim_run": "{{ lookup('ansible.builtin.env', 'RXRBENCH_SIM_RUN') | default('/tmp/rxrbench-sim', true) }}",
+ "bench_sim_seed": null,
+ "bench_socket": "{{ bench_sim_run }}/{{ bench_board }}.sock",
+ "bench_store": "{{ bench_repo }}/.build/store",
+ "bench_tests": [
+  {
+   "cmd": "zapp version",
+   "expect": "^version zapp 3\\.",
+   "name": "version"
+  },
+  {
+   "cmd": "zapp hawkbit status",
+   "expect": "^hawkbit image .* confirmed .* net up ",
+   "name": "client"
+  }
+ ],
+ "bench_update": null,
+ "bench_usb_serial": null,
+ "bench_via": "console",
+ "bench_vocabulary": "settings"
+}
