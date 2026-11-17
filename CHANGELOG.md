@@ -12,8 +12,34 @@
   after as for every other route, so what the route records never decides whether an update
   worked. A family says what it can take (`Family.takes_delivery`); a layout that pins such a
   route for one that cannot is refused. `rxrbench.hawkbit` brings the first: an Eclipse hawkBit
-  update server, for the RAUC families of `rxrbench.linux` (`docs/PLUGINS.md`, "A route that
-  delivers").
+  update server, for the RAUC families of `rxrbench.linux` and for MCUboot images on every
+  device written over MCUmgr (`docs/PLUGINS.md`, "A route that delivers"). A device whose flash
+  route delivers is read by the route it would otherwise be written by (`routes: {read: ...}`).
+- **A device is enrolled on its delivering route by the run**: a route's plugin may name a
+  per-device credential (`rxrbench.hawkbit`: `bench_hawkbit_token`, the target's security
+  token). With it declared, `just plan` says what differs and `just apply` makes the route hold
+  the device with it (core's `route_enroll`) and brings the device's config, its client's
+  settings among it, to its declared state before a delivered image.
+- **The route on a simulated Zephyr device, and on real boards with no server**: layout
+  `zsimhawkbit` (device `zh1`) is the emulated MCU under MCUboot with a network, running zapp
+  with Zephyr's hawkBit client (`just sim-zapp-qemu-build`; `tools/zephyr_qemu.py --network`),
+  with an image made to fail on its test boot (zapp 3.4, `CONFIG_ZAPP_HAWKBIT_FAULT_SEC`).
+  The hardware test of the route can start the plugin's stand-in server on the bench host
+  itself (`RXRBENCH_HW_HAWKBIT=standin:<address>:<port>`) and takes an image made to fail
+  through the route (`RXRBENCH_HW_BAD_LAYOUT`).
+- **A run that fails after a delivery says what the route recorded**, and names a record that
+  says success beside a device that did not keep the image.
+- **zapp rejoins its WiFi network by itself**: a link with no address for 45 seconds is left
+  and joined again (`zapp wifi drop` shows it). Before, a board that lost its access point
+  stayed off the network until it was rebooted.
+- **Declared files on a Linux device**: `linux.files` (path to content and mode), compared by
+  digest and mode over ssh and written whole when they differ; their content is in no output.
+- **A token as a Zephyr secret**: the zephyr plugin's secret kind `token` (what a device shows
+  a server it asks), declared and compared by digest as `psk` is.
+- **zapp with a hawkBit client**: `just zapp-build <board> <version> --mcuboot --hawkbit` adds
+  Zephyr's hawkBit client to the zephyr plugin's example application, for a board with a
+  network: the server, the device's name and its token are settings (`zhb/...`), declared like
+  any other; `zapp hawkbit status` and `probe`; versions 3.2 and 3.3.
 - **`just boot` on an RP2040 / RP2350**: MCUboot at the start of flash, read and identified (its
   signing key, its hash) and written when the policy says, through the chip's ROM bootloader
   (`bootloader_flash` flasher `picoboot_mcuboot`); a layout names it with `bench_bootloader.name`.
