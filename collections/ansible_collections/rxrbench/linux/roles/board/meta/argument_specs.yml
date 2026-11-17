@@ -124,6 +124,23 @@ argument_specs:
         description: >-
           The registry's C(compatible) for the device: an update bundle must carry it. (Documented with the
           other layout variables in C(docs/LAYOUT.md).)
+      bench_delivery:
+        type: dict
+        description: >-
+          Set by the layout when the device's flash route carries the bundle itself (a plugin's delivering
+          route) and this family can take it: the route's C(bearer), the C(tool) that speaks for it on a bench
+          host, the C(formats) it carries and the name of the layout variable holding its C(settings). The
+          bundle is then not copied or installed from the bench host; the device is read over ssh all the same.
+      bench_delivery_tool:
+        type: str
+        description: >-
+          Where the delivering route's tool is on the bench host, when it is not in the place the plugins'
+          host tools are installed (a simulated bench runs it from the repository).
+      bench_delivery_timeout:
+        type: float
+        description: >-
+          Seconds a device has to take a delivery and reboot (default 1800): it asks its route on its own
+          schedule, so this is that interval plus the download and the install.
       bench_devreg_tool: &bench_devreg_tool
         type: str
         description: >-

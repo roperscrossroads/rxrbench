@@ -10,6 +10,9 @@ class Family(linux.Family):
     names = ("linux_rauc",)
     diag_commands = (*linux.Family.diag_commands,
                      {"name": "rauc-status", "cmd": "rauc status --detailed"})
+    #: A bundle may also reach the device by a route that carries it itself (an update server
+    #: the device polls): the slot it boots is read over ssh all the same.
+    takes_delivery = ("raucb",)
 
     def check_layout(self, all_hostvars):
         """A device that declares a bundle must say where it lands, when its family cannot."""

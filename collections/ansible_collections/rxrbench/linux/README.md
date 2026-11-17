@@ -37,6 +37,12 @@ linux:
   os: {id: poky, version_id: "5.0.4"}                   # /etc/os-release fields it must show
 ```
 
+A RAUC device may also take its bundle by a route that carries it to the device itself (an
+update server the device polls): `routes: {flash: <bearer>}`, with that route in its registry
+entry. The copy and the install are then the route's; the slot the device boots, and its
+health gate, are read over ssh all the same, and decide whether the update worked.
+[`rxrbench.hawkbit`](../hawkbit/README.md) brings such a route.
+
 The device is a registry entry with an `ssh` route (`reach: {ssh: {host, ip, user, port,
 state: live, can: [flash, shell, diag]}}`); the route's address is checked against the registry
 (`devreg guard --route`) before any connection is made.

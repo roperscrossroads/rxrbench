@@ -112,14 +112,48 @@ def wait_healthy(target, left_slot, seconds, sleep=10.0, unit=None, family="linu
         time.sleep(sleep)
 
 
+def route_record(delivery, flasher, image, device):
+    """What a delivering route says of the device, beside what the device itself runs. The
+    device's answer decides whether an update worked; this says whether the route's record
+    agrees with it, so a record that does not is seen."""
+    out = {"bearer": delivery.bearer, "address": delivery.target}
+    if flasher.delivered is not None:
+        out["started"] = flasher.delivered
+    try:
+        says = delivery.state()
+    except common.FlashError as e:
+        out["route_says"], out["agrees"] = {"error": str(e)}, None
+        return out
+    out["route_says"] = says
+    runs = bool(image.get("hash")) and device.get("hash") == image.get("hash")
+    if says.get("open"):
+        out["agrees"] = None          # the route has not heard the outcome yet
+    elif says.get("result") == "success":
+        out["agrees"] = runs
+    elif says.get("result") == "failure":
+        out["agrees"] = not runs
+    else:
+        out["agrees"] = None
+    return out
+
+
 class RaucFlasher(common.Flasher):
+    """`delivery` (flash/delivery.py) is a route that carries the bundle to the device itself:
+    the device is still read here, over ssh, before and after; only the write is the route's.
+    `delivery_timeout` is how long the device may take to fetch the bundle, install it and
+    reboot (it asks on its own schedule)."""
+
     def __init__(self, target, manifest, bundle, remote_bundle, compatible=None,
-                 reboot_timeout=240.0):
+                 reboot_timeout=240.0, delivery=None, delivery_timeout=1800.0, sleep=5.0):
         self.t, self.manifest, self.bundle = target, manifest, bundle
         self.remote_bundle = remote_bundle
         self.family = manifest.get("family") or "linux_rauc"
         self.compatible = compatible
         self.reboot_timeout = reboot_timeout
+        self.delivery, self.delivery_timeout, self._sleep = delivery, delivery_timeout, sleep
+        #: how long a device whose delivery the route already calls done has to reboot
+        self.down_grace = 60.0
+        self.delivered = None
         self.before_slot = None
         self.slot = None
 
@@ -140,6 +174,20 @@ class RaucFlasher(common.Flasher):
         if slot["boot_status"] != "good":
             out.append(f"the running slot ({slot['bootname']}) is not marked good "
                        f"({slot['boot_status']}): the device is still proving its last update")
+        if self.delivery is not None:
+            # The bundle is not put on the device from here: where it lands and whether it
+            # fits are the device's own client's. What is asked instead is whether the route
+            # can carry it and knows the device, and that no earlier delivery is still open.
+            out += self.delivery.refusals(self.manifest)
+            if not out:
+                known = self.delivery.state()
+                if not known.get("known"):
+                    out.append(f"its {self.delivery.bearer} route does not know the target "
+                               f"{self.delivery.target!r}")
+                elif known.get("open"):
+                    out.append(f"its {self.delivery.bearer} route still has a delivery in flight "
+                               f"for it ({known.get('detail') or 'no detail'})")
+            return out
         size = os.path.getsize(self.bundle)
         landing = os.path.dirname(self.remote_bundle) or "/"
         rc, df = self.t.run(f"df -k {landing} | tail -1", timeout=15)
@@ -152,7 +200,51 @@ class RaucFlasher(common.Flasher):
             out.append(f"cannot read the free space on {landing}")
         return out
 
+    def _boot(self):
+        """The kernel's own id of the running boot, or None while the device does not answer."""
+        rc, out = self.t.run("cat /proc/sys/kernel/random/boot_id", timeout=15)
+        return (out.strip() or None) if rc == 0 else None
+
+    def _deliver(self):
+        """The write, by a route that carries the bundle itself: say which bundle, then wait
+        until the device has fetched it, installed it and rebooted. The device asks on its own
+        schedule and may be down for less time than one look takes, so a reboot is known by
+        the kernel's boot id having changed, not only by the device being seen down.
+
+        A delivery the route closes as failed while the same boot still runs failed on the
+        device before any reboot: the route's own word says why. One it closes as done in the
+        same boot is a client that reports before its reboot: it is given the time a push
+        gives a device to go down, and the slot it then runs is read like any other."""
+        boot = self._boot()
+        self.delivered = self.delivery.deliver(self.bundle, self.manifest)
+        end = time.monotonic() + self.delivery_timeout
+        done_at = None
+        while True:
+            if not self.t.up():
+                return
+            now = self._boot()
+            if boot is not None and now is not None and now != boot:
+                return
+            state = self.delivery.state()
+            if not state.get("open") and state.get("result") == "failure":
+                raise common.FlashError(
+                    f"the {self.delivery.bearer} delivery failed before the device rebooted: "
+                    f"{state.get('detail') or 'no detail'}")
+            if not state.get("open") and state.get("result") == "success":
+                done_at = done_at or time.monotonic()
+                if time.monotonic() - done_at > self.down_grace:
+                    return
+            if time.monotonic() > end:
+                raise common.FlashError(
+                    f"the device did not take the {self.delivery.bearer} delivery and reboot "
+                    f"within {self.delivery_timeout:.0f} s "
+                    f"({state.get('detail') or 'the route has no word of it'})")
+            time.sleep(self._sleep)
+
     def write(self):
+        if self.delivery is not None:
+            self._deliver()
+            return
         try:
             self.t.put(self.bundle, self.remote_bundle)
             self.t.check(f"rauc install {self.remote_bundle}", timeout=900)

@@ -4,6 +4,16 @@
 
 ### New
 
+- **A route that delivers, and `rxrbench.hawkbit`**: a plugin may bring a route that carries an
+  image to the device itself (`ROUTE_DELIVERIES`: a bearer, the tool that speaks for it on a
+  bench host, the image formats it carries). A device with such an entry under its registry
+  `reach`, pinned by `routes: {flash: <bearer>}`, is not written by the bench host: the route is
+  told which image the device should take, and the family's flasher reads the device before and
+  after as for every other route, so what the route records never decides whether an update
+  worked. A family says what it can take (`Family.takes_delivery`); a layout that pins such a
+  route for one that cannot is refused. `rxrbench.hawkbit` brings the first: an Eclipse hawkBit
+  update server, for the RAUC families of `rxrbench.linux` (`docs/PLUGINS.md`, "A route that
+  delivers").
 - **`just boot` on an RP2040 / RP2350**: MCUboot at the start of flash, read and identified (its
   signing key, its hash) and written when the policy says, through the chip's ROM bootloader
   (`bootloader_flash` flasher `picoboot_mcuboot`); a layout names it with `bench_bootloader.name`.

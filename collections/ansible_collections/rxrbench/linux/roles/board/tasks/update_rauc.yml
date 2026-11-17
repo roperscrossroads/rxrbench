@@ -3,6 +3,10 @@
 # Everything runs on the host that can reach the device and drives ssh itself: the image may
 # have no Python. Where a bundle lands and which unit gates a slot are the family's
 # (bench_remote_bundle, bench_health_unit).
+#
+# A flash route that carries the bundle itself (bench_delivery, set by the layout when the
+# route's plugin delivers and this family can take it) replaces the copy and the install, and
+# nothing else: the device is read over its ssh route before and after.
 
 - name: Stage the bundle
   ansible.builtin.copy:
@@ -22,7 +26,17 @@
     board: "{{ bench_board }}"
     family: "{{ bench_family }}"
     devreg: "{{ bench_devreg_tool | default(omit) }}"
-    route: "{{ bench_routes.flash }}"
+    route: "{{ bench_routes.shell if bench_delivery is defined else bench_routes.flash }}"
+    delivery: >-
+      {{ (bench_delivery | ansible.builtin.dict2items
+          | ansible.builtin.rejectattr('key', 'equalto', 'settings') | ansible.builtin.items2dict
+          | ansible.builtin.combine({
+              'tool': bench_delivery_tool | default(bench_delivery.tool),
+              'address': bench_routes.flash.addr | default(omit),
+              'settings': lookup('ansible.builtin.vars', bench_delivery.settings, default={})
+                          if bench_delivery.settings else {}}))
+         if bench_delivery is defined else omit }}
+    delivery_timeout: "{{ bench_delivery_timeout | default(omit) }}"
     bundle: >-
       {{ (board_host_store | default('~/rxrbench/store') ~ '/' ~ (bench_bundle | basename))
          if (bench_stage_bundle | default(false) | bool) else bench_bundle }}

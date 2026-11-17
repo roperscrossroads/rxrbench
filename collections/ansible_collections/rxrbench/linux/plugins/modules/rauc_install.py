@@ -60,6 +60,40 @@ options:
       one (C(bench_health_unit), the family's). Without it a slot's health is RAUC's own
       C(boot_status).
     type: str
+  delivery:
+    description:
+      - A route that carries the bundle to the device itself (C(bench_delivery), from the
+        plugin that brings the route). The bundle is then not copied or installed from here.
+        The route is told which bundle the device should take, and this module waits for the
+        device to fetch it, install it and reboot.
+      - The device is read over ssh before and after all the same (I(route) is then its ssh
+        route), so what the route's own records say never decides whether the update worked.
+    type: dict
+    suboptions:
+      bearer:
+        description: The route's name in the registry.
+        type: str
+        required: true
+      tool:
+        description: The plugin's tool on this host that speaks for the route.
+        type: str
+        required: true
+      formats:
+        description: The image formats the route carries.
+        type: list
+        elements: str
+        required: true
+      address:
+        description: The device's address on that route, as the registry records it.
+        type: str
+      settings:
+        description: The plugin's own settings for the route (its server, its login).
+        type: dict
+  delivery_timeout:
+    description: Seconds a device has to take a delivery and go down for its reboot. It asks
+      on its own schedule, so this is that interval plus the download and the install.
+    type: float
+    default: 1800.0
   family:
     description: The device's family, which its identity names.
     type: str
@@ -121,6 +155,13 @@ checked:
   description: The depth of the checks before the write (C(full) or C(spot)) and why (docs/ARCHITECTURE.md#checking-depth).
   returned: success
   type: dict
+delivery:
+  description: With I(delivery), the route's own record beside the device's answer. C(bearer),
+    C(address), C(started) (the delivery this run started, absent when nothing was written),
+    C(route_says) (what the route knows of the device after the run) and C(agrees) (whether
+    that matches what the device itself runs; false is reported, and the device's answer stands).
+  returned: when I(delivery) is given
+  type: dict
 """
 
 import json
@@ -132,6 +173,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.rxrbench.core.plugins.module_utils import ssh
 from ansible_collections.rxrbench.core.plugins.module_utils import gate
 from ansible_collections.rxrbench.core.plugins.module_utils.flash import common
+from ansible_collections.rxrbench.core.plugins.module_utils.flash import delivery as route_delivery
 from ansible_collections.rxrbench.linux.plugins.module_utils import rauc
 
 
@@ -164,6 +206,14 @@ def main():
             "family": {"type": "str", "default": "linux_rauc"},
             "flash_unknown": {"type": "bool", "default": True},
             "check_depth": {"type": "str", "choices": ["full", "spot"], "default": "full"},
+            "delivery": {"type": "dict", "options": {
+                "bearer": {"type": "str", "required": True},
+                "tool": {"type": "str", "required": True},
+                "formats": {"type": "list", "elements": "str", "required": True},
+                "address": {"type": "str"},
+                "settings": {"type": "dict", "no_log": True},
+            }},
+            "delivery_timeout": {"type": "float", "default": 1800.0},
             **gate.ARGS,
         },
         supports_check_mode=True,
@@ -180,9 +230,19 @@ def main():
                                    p["route"].get("bearer") or "ssh", target.host)
         if why:
             raise common.FlashError(why)
+        carrier = None
+        if p["delivery"]:
+            # The device's address on the delivering route is the registry's too, or the
+            # route is not told anything about it.
+            why = common.route_refusal(p["devreg"], p["board"], p["delivery"]["bearer"],
+                                       p["delivery"].get("address"))
+            if why:
+                raise common.FlashError(why)
+            carrier = route_delivery.Delivery(p["delivery"], p["delivery"].get("address"))
         flasher = rauc.RaucFlasher(target, manifest, p["bundle"], p["remote_bundle"],
                                    compatible=p["compatible"],
-                                   reboot_timeout=p["reboot_timeout"])
+                                   reboot_timeout=p["reboot_timeout"], delivery=carrier,
+                                   delivery_timeout=p["delivery_timeout"])
         r = common.drive(flasher, manifest, check_mode=module.check_mode, check_depth=p["check_depth"],
                              flash_unknown=p["flash_unknown"])
         state = rauc.health(target, p["health_unit"])
@@ -196,6 +256,9 @@ def main():
               "device": r["before"] if module.check_mode else r["after"],
               "slot": flasher.slot, "health": state,
               "pending": state == "soaking" or flasher.slot["boot_status"] != "good"}
+    if carrier is not None:
+        result["delivery"] = rauc.route_record(carrier, flasher, r["image"],
+                                               r["before"] if module.check_mode else r["after"])
     result["timing"] = r.get("timing", [])
     result["checked"] = r.get("checked")
     result["identity_checked"] = r.get("identity_checked")
