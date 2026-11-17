@@ -36,7 +36,7 @@ data (`specs()`, module_utils/familyspec.py).
 """
 from . import bare, base, foreign, zephyr_mcumgr
 from .. import registry
-from ...module_utils import hwsurvey, regions, site
+from ...module_utils import hwsurvey, regions, routes, site
 from ...module_utils.flash import common as flash_common
 
 _NOTHING = {"vocabulary": None, "state_command": None, "identity_key": None, "build": "images",
@@ -64,7 +64,7 @@ def load(names=None, roots=()):
     the site's, site.plugins()). Called on first use; call it again to change what is loaded."""
     global _table  # pylint: disable=global-statement
     rows, plugins, owners, usb = dict(CORE_FAMILIES), dict(CORE_PLUGINS), {}, {}
-    flashers, recognisers, bearers_of = {}, [], {}
+    flashers, recognisers, bearers_of, deliveries = {}, [], {}, {}
     for collection, mod in registry.load(site.plugins() if names is None else names, roots).items():
         theirs = getattr(mod, "PLUGINS", {})
         # the USB ids of the boards its devices are (hwsurvey.KINDS says what a row is)
@@ -76,6 +76,17 @@ def load(names=None, roots=()):
         # the bearers each of its flashers writes over (a probe flasher: swd)
         for flasher, bearers in (getattr(mod, "FLASHER_BEARERS", None) or {}).items():
             bearers_of[flasher] = tuple(bearers)
+        # the bearers it brings that carry an image to the device themselves, each with the
+        # tool that does it on a bench host and the image formats it takes (ROUTE_DELIVERIES)
+        for bearer, how in (getattr(mod, "ROUTE_DELIVERIES", None) or {}).items():
+            if bearer in deliveries or bearer in routes.DEFAULT_ORDER:
+                raise registry.PluginError(f"{collection}: a route named {bearer!r} is already known")
+            if not how.get("tool") or not how.get("formats"):
+                raise registry.PluginError(f"{collection}: the delivering route {bearer!r} names no "
+                                           "tool or no image formats")
+            deliveries[bearer] = {"bearer": bearer, "tool": how["tool"],
+                                  "formats": list(how["formats"]),
+                                  "settings": how.get("settings")}
         for flasher, caps in (getattr(mod, "FLASHERS", None) or {}).items():
             if flasher in flash_common.FLASHERS or flasher in flashers:
                 raise registry.PluginError(f"{collection}: a flasher named {flasher!r} is already known")
@@ -94,7 +105,8 @@ def load(names=None, roots=()):
                 row["plugin"] = f"{collection}:{family}"
             rows[family], owners[family] = row, collection
     _table = {"FAMILIES": rows, "PLUGINS": plugins, "OWNERS": owners, "USB_KINDS": usb,
-              "FLASHERS": flashers, "RECOGNISERS": recognisers, "BEARERS": bearers_of}
+              "FLASHERS": flashers, "RECOGNISERS": recognisers, "BEARERS": bearers_of,
+              "DELIVERIES": deliveries}
     hwsurvey.register_kinds(usb)
     regions.register_recognisers(recognisers)
     return _table
@@ -112,6 +124,15 @@ def flasher_bearers(flasher):
     if flasher in flash_common.BEARERS:
         return flash_common.BEARERS[flasher]
     return (_table or load())["BEARERS"].get(flasher)
+
+
+def route_delivery(bearer):
+    """How a route delivers an image itself, or None: a loaded plugin's ROUTE_DELIVERIES row
+    for that bearer ({bearer, tool, formats, settings}). A device whose flash route is such a
+    bearer is not written by the bench host: the route carries the image, and the family's
+    own flasher still reads the device before and after."""
+    how = (_table or load())["DELIVERIES"].get(bearer)
+    return dict(how) if how else None
 
 
 def flashers():

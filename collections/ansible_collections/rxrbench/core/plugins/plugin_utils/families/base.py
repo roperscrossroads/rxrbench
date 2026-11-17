@@ -108,6 +108,12 @@ class Family:
     #: RP2040 names none.
     region_flashers = None
 
+    #: The image formats this family's update step takes from a route that delivers an image
+    #: itself (a plugin's ROUTE_DELIVERIES): its flasher then reads the device, hands the write
+    #: to the route, and reads the device again. Empty: the family is only written by the
+    #: bench host, and a layout that pins such a route for it is refused.
+    takes_delivery = ()
+
     def release_partitions(self, member, read):
         """What a release's full install writes beside its merged ESP32 image (an `esp-image`
         catalog entry whose `member` is that image), as [{partition, member, md5?}]: the

@@ -1,4 +1,4 @@
-"""A plugin with four families (README.md): a widget that answers `widget state` with a state
+"""A plugin with four families and one delivering route (README.md): a widget that answers `widget state` with a state
 line; a gadget, an ESP32 release written whole; a beacon, whose LoRa radio this tool sets; and
 a probe chip, a family whose devices have no console and are written through a debug probe by
 this plugin's own flasher (`probeflash`), from images built elsewhere. The last is the
@@ -31,6 +31,8 @@ class Widget(base.Family):
     image_match = ("class", "features")
     image_bytes_check = {"field": "class", "args": ["--class"]}
     features = ("fast", "quiet")
+    #: a widget image may also reach the board by a route that carries it (ROUTE_DELIVERIES)
+    takes_delivery = ("widget-image",)
     #: what `just diag` asks a widget when its layout does not say
     diag_commands = ({"name": "version", "cmd": "widget version"},
                      {"name": "state", "cmd": "widget state"})
@@ -144,3 +146,7 @@ RECOGNISERS = [{"name": "widget-image", "at": 0, "magic": "57494447"}]
 #: and the config regions declared for it
 FLASHERS = {"probeflash": ("regions", "chip")}
 FLASHER_BEARERS = {"probeflash": ["swd"]}
+#: a route this plugin brings that carries an image to the device itself: the smallest example
+#: of one (docs/PLUGINS.md, "A route that delivers"). A widget takes it; no other family does.
+ROUTE_DELIVERIES = {"courier": {"tool": "courier_route.py", "formats": ("widget-image",),
+                                "settings": "bench_courier"}}

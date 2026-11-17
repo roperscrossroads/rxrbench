@@ -51,11 +51,12 @@ family's row.
 
 | Export | Shape | What it is |
 |---|---|---|
-| `FAMILIES` | `{family: row}` | **Required.** One row per family it brings (fields below) |
+| `FAMILIES` | `{family: row}` | **Required.** One row per family it brings (fields below); `{}` for a plugin that brings none |
 | `PLUGINS` | `{name: Family()}` | The `Family` objects its rows name as `plugin`. A row with none gets the generic answers |
 | `USB_KINDS` | `{"vid:pid": {kind, mcu, mode, serial_is, note}}` | The USB ids of its boards, so the survey tells a bootloader from an app. A row for an id core has replaces core's; ids read off a USB serial by a rule are marked `ids_from: usb serial` until the firmware confirms them |
 | `FLASHERS` | `{"<flasher>": ("chip", "regions")}` | Flashers its images name that core does not have, with the levels a device written that way supports beside the image write (`()` for none). A layout whose image names an unknown flasher is refused |
 | `FLASHER_BEARERS` | `{"<flasher>": ["swd"]}` | The bearers each of its flashers writes over. A board whose flash route is `swd` is written by its image's flasher when that one writes over `swd`, else refused |
+| `ROUTE_DELIVERIES` | `{"<bearer>": {tool, formats, settings}}` | The routes it brings that carry an image to the device themselves ([A route that delivers](#a-route-that-delivers)). A bearer core already has, or one two plugins bring, is refused at load |
 | `RECOGNISERS` | `[{name, at, magic, u32le?}]` | What its images look like at the start of a region, so core's write rule sees an image of its kind (`module_utils/regions.py`). Says an image is there, never whose |
 
 A row's fields (a field left out takes the "nothing" value):
@@ -185,6 +186,67 @@ and times the phases.
 - **Timing.** A plugin's own module times phases with `module_utils/timing.py`
   (`with phases.phase("install"):`) and returns `timing=phases.out`; the `rxrbench.core.timing`
   callback records it.
+
+## A route that delivers
+
+Most routes are a way for a bench host to write to a device: a serial port, a debug probe, ssh.
+An update server is not. It holds the image, and the device fetches it on its own schedule; the
+bench host only says which image the device should have. A plugin brings such a route as a
+bearer of its own, and nothing about it is a family: what a device runs, and how that is read,
+stay the family's.
+
+```python
+# plugin_utils/bench.py
+FAMILIES = {}
+ROUTE_DELIVERIES = {
+    "courier": {"tool": "courier_route.py",      # host/bin/, deployed to a bench host
+                "formats": ("raucb",),            # the image formats it carries
+                "settings": "bench_courier"},     # the layout variable holding its settings
+}
+```
+
+```yaml
+# the registry: one more way to reach the device, for one verb
+reach:
+  ssh:     {host: bench1, ip: 192.0.2.10, state: live, can: [flash, shell, diag]}
+  courier: {host: bench1, addr: dev-1, state: live, can: [flash]}
+# a layout: this device takes its images that way
+routes: {flash: courier}
+```
+
+`addr` is the device's address on that route (its name on the server), checked like any other
+route's (`devreg guard --route`). `host` is the bench host that speaks to the route for it. The
+route rules hold unchanged: a pinned route must be `live` and able to `flash`, and nothing falls
+back to another route during a run.
+
+- **The family says whether it can take one.** `Family.takes_delivery` lists the image formats
+  its update step takes from a delivering route (empty by default). A layout that pins such a
+  route for a family that lists none of its formats is refused when it is loaded.
+- **The layout carries the route to the update step as data**: `bench_delivery` is the row
+  (`bearer`, `tool`, `formats`, `settings`). The family's task file passes it to its module with
+  the variable `settings` names resolved, and the device's `addr`. Core names no route and the
+  family names no plugin.
+- **The flasher hands over its write and nothing else.** A module builds
+  `flash/delivery.py::Delivery` from that data and gives it to its flasher. `device`,
+  `preflight` and `verify` are unchanged: the device is read by the family's own route before
+  and after, so the route's record of an update is reported beside the device's answer and
+  never instead of it. `preflight` adds `Delivery.refusals(manifest)` and asks `state()`
+  (a target the route does not know, a delivery still in flight); `write` calls `deliver()` and
+  waits for the device to take it.
+- **The tool** is the plugin's own program in `host/bin/`, so neither core nor a family imports
+  it. One verb as its argument, one JSON object on stdin, one printed:
+
+  | Verb | Reads | Prints |
+  |---|---|---|
+  | `state` | `{settings, target}` | `{known, open, result, image, detail}`: whether the route has the target, whether a delivery is in flight, the last one's result (`success`, `failure` or null) as the route has it, the image it was of, and its own last word. Changes nothing: a plan calls it |
+  | `deliver` | `{settings, target, image, manifest}` | the delivery it started (`id`, `already`); idempotent for the same image |
+
+  `settings` reaches the tool on stdin only, never on a command line. A tool that cannot do
+  what it was asked prints `{"error": "<why>"}` and exits non-zero; its words become the
+  refusal.
+
+The fixture plugin `fixture.widgets` brings the smallest one, `courier`, and
+`tests/unit/test_delivery.py` holds core to the above with it.
 
 ## Secrets
 

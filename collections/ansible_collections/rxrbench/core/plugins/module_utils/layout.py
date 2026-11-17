@@ -475,6 +475,18 @@ def load_layout(layout_dir, config, reg=None):
                 b["vars"]["bench_flasher"] = flasher
             if why:
                 problems.append(f"{name}: {why}")
+        # A flash route that carries the image itself (a plugin's ROUTE_DELIVERIES): the
+        # family's update step hands the write to it, when the family can take one.
+        delivery = families.route_delivery((b["vars"]["bench_routes"].get("flash") or {}).get("bearer"))
+        if delivery:
+            takes = [f for f in delivery["formats"] if f in plugin.takes_delivery]
+            if takes:
+                b["vars"]["bench_delivery"] = delivery
+            else:
+                problems.append(
+                    f"{name}: its flash route is {delivery['bearer']}, which delivers an image "
+                    f"itself ({', '.join(delivery['formats'])}); family {fam!r} cannot take a "
+                    "delivered image (its Family.takes_delivery, docs/PLUGINS.md)")
         # What can be done to a device flashed this way beside writing its image (its
         # config regions and its whole chip backed up, restored, erased): flash/common.py.
         b["vars"]["bench_can"] = families.flasher_can(
