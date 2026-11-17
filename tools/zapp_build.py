@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""zapp_build.py <board> <version> [--workspace W] [--module DIR]... [--mcuboot [--key PEM]] [--stage]: build
+"""zapp_build.py <board> <version> [--workspace W] [--module DIR]... [--mcuboot [--key PEM] [--hawkbit]] [--stage]: build
 the zephyr plugin's example application, zapp, for a real board, and stage it in the image store
 with what it provides.
 
@@ -13,7 +13,8 @@ catalog/firmware.yml is printed.
 --mcuboot builds it under MCUboot with sysbuild, for the board's `mcuboot.target`: MCUboot signed
 with ECDSA P-256 (the key --key names; without it MCUboot's development key, public and only for
 an example), zapp signed for it with MCUmgr over the shell's serial port and, with WiFi, over UDP.
-Its version is the full x.y.0 MCUboot reports. Staged three ways: `zapp-<v>-<board>-mcuboot` (one
+With --hawkbit it also carries Zephyr's hawkBit client (`zapp hawkbit`): updates from a server
+the device polls. Its version is the full x.y.0 MCUboot reports. Staged three ways: `zapp-<v>-<board>-mcuboot` (one
 UF2, MCUboot and the signed app, family bare, for the first flash through picoboot),
 `zapp-<v>-<board>-signed` (the signed app, family zephyr_settings, for an update over MCUmgr) and
 `mcuboot-<board>` (the bootloader alone, for `just boot`), and their catalog entries printed.
@@ -76,13 +77,15 @@ def command(west, row, version, build_dir, modules):
     return cmd
 
 
-def command_mcuboot(west, row, version, build_dir, modules, key=None):
+def command_mcuboot(west, row, version, build_dir, modules, key=None, hawkbit=False):
     """The sysbuild line for a board under MCUboot: its mcuboot target, MCUboot signed ECDSA P-256
-    (with `key`, else MCUboot's development key), zapp's confs, MCUmgr's, and the full version."""
+    (with `key`, else MCUboot's development key), zapp's confs, MCUmgr's, and the full version;
+    with `hawkbit`, the client of a hawkBit server the device polls."""
     full = full_version(version)
     confs = [os.path.join(HW, "hw.conf")] + [os.path.join(HW, c) for c in row.get("confs") or []] + \
         [os.path.join(HW, "mcuboot.conf")] + \
         ([os.path.join(HW, "mcuboot-udp.conf")] if "wifi.conf" in (row.get("confs") or []) else []) + \
+        ([os.path.join(HW, "hawkbit.conf")] if hawkbit else []) + \
         [os.path.join(VERSIONS, f"zapp-{version}.conf")]
     mb = row["mcuboot"]
     cmd = [west, "build", "-p", "always", "--sysbuild", "-b", mb["target"], "-S", "cdc-acm-console", "-d", build_dir,
@@ -187,6 +190,8 @@ def main(argv=None):
                     help="a Zephyr module the workspace lacks (a directory named as the module)")
     ap.add_argument("--mcuboot", action="store_true", help="under MCUboot, with sysbuild (the board's mcuboot.target)")
     ap.add_argument("--key", help="with --mcuboot: MCUboot's signing key (ECDSA P-256 PEM); default its development key")
+    ap.add_argument("--hawkbit", action="store_true",
+                    help="with --mcuboot, on a board with a network: updates from a hawkBit server the device polls")
     ap.add_argument("--stage", action="store_true", help="stage the image and print its catalog entry")
     ap.add_argument("--store", default=os.path.join(REPO, ".build", "store"), help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -200,6 +205,8 @@ def main(argv=None):
         sys.exit(f"zapp_build: {a.board} has no mcuboot target in hw/boards.yml")
     if a.key and not a.mcuboot:
         sys.exit("zapp_build: --key is for --mcuboot")
+    if a.hawkbit and not (a.mcuboot and "wifi.conf" in (row.get("confs") or [])):
+        sys.exit("zapp_build: --hawkbit is for --mcuboot on a board with a network (wifi.conf)")
     workspace = os.path.abspath(os.path.expanduser(a.workspace or os.environ.get("RXRBENCH_ZEPHYR_WORKSPACE") or ""))
     if not os.path.isdir(os.path.join(workspace, "zephyr")):
         sys.exit("zapp_build: no workspace: --workspace W, or RXRBENCH_ZEPHYR_WORKSPACE=W (a west workspace)")
@@ -233,7 +240,7 @@ def main(argv=None):
 def build_mcuboot(a, row, workspace, west, modules):
     """--mcuboot: the sysbuild, then (with --stage) the three stagings and their catalog entries."""
     build_dir = os.path.join(BUILDS, f"{a.board}-{a.version}-mcuboot")
-    cmd = command_mcuboot(west, row, a.version, build_dir, modules, a.key)
+    cmd = command_mcuboot(west, row, a.version, build_dir, modules, a.key, a.hawkbit)
     print("+", " ".join(cmd), flush=True)
     if subprocess.run(cmd, cwd=workspace, check=False).returncode:
         sys.exit("zapp_build: west build failed")

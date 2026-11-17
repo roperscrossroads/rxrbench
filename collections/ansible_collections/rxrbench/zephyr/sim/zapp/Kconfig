@@ -55,6 +55,40 @@ config ZAPP_WIFI
 	  when wifi/psk is set, an open one otherwise) and takes an address by DHCP. `zapp wifi
 	  status` says where it is. The PSK is a secret the layout declares.
 
+config ZAPP_HAWKBIT
+	bool "Updates from an Eclipse hawkBit server the device polls"
+	depends on HAWKBIT && HAWKBIT_SET_SETTINGS_RUNTIME && HAWKBIT_CUSTOM_DEVICE_ID
+	depends on !HAWKBIT_AUTOHANDLER && !HAWKBIT_CONFIRM_IMG_ON_INIT
+	select NET_MGMT_EVENT
+	help
+	  Zephyr's hawkBit client (subsys/mgmt/hawkbit) on a thread of its own: it asks the
+	  server, downloads an update into the second slot and reboots into it. The settings
+	  zhb/server, zhb/port, zhb/id and zhb/token say which server, under which name and
+	  with which token; `zapp hawkbit status` says where it is. An image on its test boot
+	  confirms itself after ZAPP_HAWKBIT_CONFIRM_SEC of uptime, and the client asks nothing
+	  of the server before that, so the server hears of an update only from an image that
+	  came up and stayed up. A fault must reset the device (RESET_ON_FATAL_ERROR, or a
+	  watchdog), or an image that hangs on its test boot is never swapped back.
+
+config ZAPP_HAWKBIT_CONFIRM_SEC
+	int "Confirm an image on its test boot after this many seconds of uptime"
+	depends on ZAPP_HAWKBIT
+	default 60
+
+config ZAPP_HAWKBIT_MIN_POLL_SEC
+	int "Never ask the server more often than this"
+	depends on ZAPP_HAWKBIT
+	default 30
+
+config ZAPP_HAWKBIT_FAULT_SEC
+	int "For an image made to fail: fault this many seconds into a test boot"
+	depends on ZAPP_HAWKBIT
+	default 0
+	help
+	  0: never. Otherwise an image on its test boot (not yet confirmed) panics once it has
+	  been up this long, before it would confirm itself: the device resets and MCUboot
+	  returns to the image it ran. For a bench to show an update that fails on the device.
+
 config ZAPP_CONSOLE_FLOW_CONTROL
 	bool "Flow control on the shell's serial port, turned on once zapp is up"
 	depends on SERIAL

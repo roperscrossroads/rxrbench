@@ -9,7 +9,7 @@ target_sources(app PRIVATE src/main.c src/shell.c src/features.c)
 
 # each feature its own file; the list goes beside the image for the catalog
 set(features "")
-foreach(f DIGEST STATE LOCATE SELFTEST BOOTSEL WIFI)
+foreach(f DIGEST STATE LOCATE SELFTEST BOOTSEL WIFI HAWKBIT)
   if(CONFIG_ZAPP_${f})
     string(TOLOWER ${f} name)
     target_sources(app PRIVATE src/${name}.c)
