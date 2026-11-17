@@ -1,0 +1,21 @@
+---
+# The interpreter: from layers/simlinux (devreg.yml `layers:`).
+
+# A simulated device may be written to freely. (A go-ahead is never inherited from a layer.)
+bench_apply_allowed: true
+
+# The registry tool the routes' addresses are checked with: this repository's.
+bench_devreg_tool: "{{ bench_repo }}/devreg/devreg.py"
+
+# The server the route speaks to. A test starts a stand-in and passes its own address
+# (`-e`); a real site keeps the login in a *.sops.yaml file.
+bench_hawkbit: {url: "http://127.0.0.1:8080", user: bench, password: made-up}
+# The route's tool, from this repository: a simulated bench has no installed host tools.
+bench_delivery_tool: "{{ bench_repo }}/collections/ansible_collections/rxrbench/hawkbit/host/bin/hawkbit_route.py"
+# A simulated device is asked to poll every few seconds: it has taken a delivery and rebooted
+# within minutes or not at all.
+bench_delivery_timeout: 420
+
+bench_tests:
+  - {name: slot-good, cmd: "rauc status", expect: "boot status: .*good"}
+  - {name: data-mounted, cmd: "grep ' /data ' /proc/mounts", expect: "/data"}

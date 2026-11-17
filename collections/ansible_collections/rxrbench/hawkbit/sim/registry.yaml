@@ -1,0 +1,26 @@
+---
+# The hawkBit route's simulated bench: the Linux plugin's QEMU A/B machine (linux/sim/simvm.py)
+# as a second device beside that plugin's own, on its own loopback port, with a `hawkbit` route.
+# The server it polls is a stand-in the test starts (sim/fakeserver.py), or a real one.
+version: 1
+hosts:
+  simhost: {hostname: this machine, local: true}
+protected: []
+devices:
+  hb1:
+    kind: sim
+    firmware: linux
+    policy: {board_tag: sim-qemuarm, compatible: rxrbench-sim-qemuarm}
+    match: {}
+    reach:
+      ssh:
+        host: simhost
+        ip: 127.0.0.1
+        port: 22212
+        user: root
+        state: live
+        can: [shell, diag]
+        identity: ~/.cache/rxrbench/simvm/id_ed25519
+        known_hosts: ~/.cache/rxrbench/simvm/known_hosts
+      # its address on the server is its controller id; the bench host does not write it
+      hawkbit: {host: simhost, addr: hb1, state: live, can: [flash]}

@@ -1,0 +1,9 @@
+---
+# The simulated A/B device with slotguard's health gate, and the signed bundle it is brought to.
+firmware: {family: linux_slotguard, image: sim-ab}
+bench_bundle: ~/.cache/rxrbench/simvm/bundles/update-1.1-sim.raucb
+# The sim's health gate soaks 10 s, not the family's 300; the wait covers the boot as well.
+bench_health_soak: 10
+bench_wait_good: 180
+# The bundle is not pushed: the server is told, and the device fetches it.
+routes: {flash: hawkbit}

@@ -37,3 +37,25 @@ RXRBENCH_HW_LAYOUT=mybench RXRBENCH_HW_BOARDS=node1 RXRBENCH_HW_DESTRUCTIVE=1 ./
 The record each run leaves is `runs/<time>/exercise/<board>.json`; with `RXRBENCH_HW_RECORD=1` it
 is also kept as the site's latest for the board (`<site>/exercise/<board>.json`), which is what
 `just matrix` reads to write the site's capability matrix table.
+
+## The hawkBit route
+
+`tests/hw/test_hawkbit_route.py` runs `apply.yml` on a layout that pins `routes: {flash: hawkbit}`
+for one device, against a real server:
+
+```bash
+RXRBENCH_HW_LAYOUT=mybench RXRBENCH_HW_BOARDS=node1 \
+RXRBENCH_HW_HAWKBIT=http://updates.example.org:8080 RXRBENCH_HW_HAWKBIT_AUTH=bench:... \
+  ./venv/bin/pytest -q tests/hw/test_hawkbit_route.py                  # the plan: writes nothing
+... RXRBENCH_HW_APPLY=1 ./venv/bin/pytest -q tests/hw/test_hawkbit_route.py    # the delivery too
+```
+
+The plan reads the device and the server and must leave the server's record of the target as
+it was. With `RXRBENCH_HW_APPLY=1` the device takes its declared bundle through the server:
+the run must end with the device on it, the server's record saying success once the device's
+client has reported, and a second run finding nothing to do. The device needs a hawkBit client
+that polls; for an image that has no timer for it yet, `RXRBENCH_HW_POLL` is a command the test
+runs every few seconds in its place (for example an ssh that runs the client once).
+`RXRBENCH_HW_BUNDLE` names a bundle to deliver in place of the layout's declared one. The login
+is taken from the environment and written nowhere.
+

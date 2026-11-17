@@ -30,6 +30,7 @@ are in `site.example/layouts/`, their registry and catalog in `site.example/sim/
 | `sim` | `sim1`, `sim2` | the mesh plugin's `zephyrtastic` on `native_sim`: radio, channels, secrets, a family of images | a zephyrtastic tree, built by `just sim-build` |
 | `zcsim`, `simswitch` | `zc1`, `zc2`; `sim1` | `zephcore` on `native_sim`, and a board switched between zephyrtastic and zephcore | a zephcore workspace (not public) |
 | `simab`, `simabrauc` | `ab1` | an A/B device in QEMU with RAUC slots, as `linux_slotguard` (with its health gate) and as `linux_rauc`: a signed bundle, the reboot, the slot read back, a rollback | a Yocto image of the device and a U-Boot sandbox binary (`simvm.py setup`), QEMU |
+| `simabhawkbit` | `hb1` | the same A/B machine as a second device that takes its bundle through an update server (the hawkbit plugin's route): the server is told, the device's own client fetches, installs and reboots, the slot and its gate are read over ssh; a bundle that fails its gate is reported to the server and rolled back | the `simab` image; the server is a stand-in the test starts |
 
 The emulated MCU (`zq1`) is Zephyr's SMP server under MCUboot on QEMU's MPS2 AN385, in MCUboot's
 RAM-load mode with its slots in a simulated flash that survives a CPU reset. MCUboot there runs
@@ -82,6 +83,7 @@ RXRBENCH_SITE=site.example just bench-test zsim      # apply, device tests, scen
 | `simmt` | `just sim-mt-pull`, then `just sim-mt-up` | `just sim-mt-down [--erase]` | `just sim-mt-wipe <node>` |
 | `simlinux` | `just sim-linux-up` | `just sim-linux-down` | `just sim-linux-reimage <device>` |
 | `simab`, `simabrauc` | `just sim-vm-up` | `just sim-vm-down` | `just sim-vm-bundle`, `just sim-vm-sandbox` |
+| `simabhawkbit` | started by its test (`tests/sim/test_hawkbit_sim.py`): `simvm.py --registry <the hawkbit plugin's sim/registry.yaml>` with `fresh hb1`, `up hb1`, `pin hb1` | stop it | `RXRBENCH_TEST_HAWKBIT=http://host:8080` runs the test against a real server |
 
 `just test` runs the unit tests, every simulated bench whose images are built (the rest skip),
 lint and the privacy check. The sim tests are in `tests/sim/`, one file per bench or feature;

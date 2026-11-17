@@ -1,0 +1,12 @@
+---
+# simabhawkbit: the simulated A/B device (the Linux plugin's sim/simvm.py), taking its bundle
+# through an update server instead of having it pushed over ssh: the hawkbit plugin's route.
+# It is a second machine, hb1, beside the simab layouts' ab1 (started by simvm.py with
+# `--registry` naming this layout's registry), and it is still read over ssh.
+plugin: rxrbench.core.devreg
+layers: [simlinux]
+registry: ../../../collections/ansible_collections/rxrbench/hawkbit/sim/registry.yaml
+catalog_dir: ../../../collections/ansible_collections/rxrbench/linux/sim/vm/catalog
+rf_ceiling: ../../rf_rules.bench.yml
+boards:
+  hb1: {host: simhost}
