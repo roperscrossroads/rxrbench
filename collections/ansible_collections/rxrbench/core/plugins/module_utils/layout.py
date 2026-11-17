@@ -324,7 +324,8 @@ def load_layout(layout_dir, config, reg=None):
         all_hv[name] = hv
         fw_kind = entry.get("firmware") or "unknown"
         try:
-            chosen = routes.select(entry, hv.get("routes"), default_host=host)
+            chosen = routes.select(entry, hv.get("routes"), default_host=host,
+                                   delivering=families.delivering())
         except routes.RouteError as e:
             problems.append(f"{name}: {e}")
             continue
@@ -479,9 +480,11 @@ def load_layout(layout_dir, config, reg=None):
         # family's update step hands the write to it, when the family can take one.
         delivery = families.route_delivery((b["vars"]["bench_routes"].get("flash") or {}).get("bearer"))
         if delivery:
-            takes = [f for f in delivery["formats"] if f in plugin.takes_delivery]
-            if takes:
-                b["vars"]["bench_delivery"] = delivery
+            flasher = all_hv[name].get("bench_flasher") or b["vars"].get("bench_flasher")
+            if families.takes_delivery(fam, flasher, delivery["formats"]):
+                # with the device's address on the route, which the update step hands the tool
+                b["vars"]["bench_delivery"] = {
+                    **delivery, "address": b["vars"]["bench_routes"]["flash"].get("addr")}
             else:
                 problems.append(
                     f"{name}: its flash route is {delivery['bearer']}, which delivers an image "

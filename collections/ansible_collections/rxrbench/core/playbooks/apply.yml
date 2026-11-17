@@ -60,6 +60,13 @@
             tasks_from: chip_findings
           when: bench_update is not none
 
+        # So is this: a device whose flash route delivers is enrolled on it first.
+        - name: The device's place on the route that delivers its image
+          ansible.builtin.include_role:
+            name: rxrbench.core.board
+            tasks_from: enroll
+          when: bench_update is not none and bench_delivery is defined
+
         - name: Bring the device to its declared state (its plugin's step)
           ansible.builtin.include_role:
             name: "{{ bench_plugin }}.board"

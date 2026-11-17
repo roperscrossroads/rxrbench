@@ -16,7 +16,11 @@ FAMILIES = {}
 
 # The route. `tool` is deployed to a bench host from host/bin/; `formats` are the images it
 # carries (a family takes the route when it lists one of them in `takes_delivery`); `settings`
-# names the layout variable that says where the server is and how to log in to it.
+# names the layout variable that says where the server is and how to log in to it;
+# `credential` names the one that holds a device's security token on the server. A layout that
+# sets it has the target made and its token set by the run (core's route_enroll), and declares
+# the same token in the device's own client config.
 ROUTE_DELIVERIES = {
-    "hawkbit": {"tool": "hawkbit_route.py", "formats": ("raucb",), "settings": "bench_hawkbit"},
+    "hawkbit": {"tool": "hawkbit_route.py", "formats": ("raucb", "mcuboot-bin"),
+                "settings": "bench_hawkbit", "credential": "bench_hawkbit_token"},
 }

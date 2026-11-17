@@ -48,15 +48,27 @@ def test_a_target_the_server_does_not_have_is_said_so_and_nothing_is_created(ser
     assert "pi-a" in s["detail"] and not writes(server)
 
 
-def test_a_target_is_created_once_and_keeps_its_token(server):
-    assert ask(server, "target", token="first")["created"] is True
-    assert ask(server, "target", token="another")["created"] is False
-    assert server.targets["pi-a"]["securityToken"] == "first"
-    assert ask(server, "state")["known"] is True
+def test_a_target_is_enrolled_once_and_its_token_follows_the_declared_one(server):
+    assert ask(server, "enroll", credential="first") == {"created": True, "changed": True}
+    assert ask(server, "enroll", credential="first") == {"created": False, "changed": False}
+    assert ask(server, "state", credential="first")["enrolled"] is True
+    assert ask(server, "state", credential="another")["enrolled"] is False
+    assert ask(server, "enroll", credential="another") == {"created": False, "changed": True}
+    assert server.targets["pi-a"]["securityToken"] == "another"
+    # asked without a credential, the answer does not speak of one
+    assert "enrolled" not in ask(server, "state")
+
+
+def test_a_server_that_does_not_show_tokens_cannot_say_and_nothing_is_enrolled_without_one(server):
+    ask(server, "enroll", credential="t")
+    del server.targets["pi-a"]["securityToken"]        # a login that may not read tokens
+    assert ask(server, "state", credential="t")["enrolled"] is None
+    with pytest.raises(ValueError, match="no security token"):
+        ask(server, "enroll")
 
 
 def test_a_delivery_uploads_the_image_once_and_assigns_it(server, bundle):
-    ask(server, "target", token="t")
+    ask(server, "enroll", credential="t")
     first = ask(server, "deliver", image=bundle, manifest=MANIFEST)
     assert first["id"] and not first["already"] and first["uploaded"]
     assert (first["name"], first["version"]) == ("example-pi", "1.1")
@@ -70,7 +82,7 @@ def test_a_delivery_uploads_the_image_once_and_assigns_it(server, bundle):
 
 
 def test_a_version_is_not_given_a_second_image(server, bundle, tmp_path):
-    ask(server, "target", token="t")
+    ask(server, "enroll", credential="t")
     ask(server, "deliver", image=bundle, manifest=MANIFEST)
     other = tmp_path / "update.raucb"
     other.write_bytes(b"another bundle under the same version")
@@ -93,7 +105,7 @@ def test_an_image_the_route_cannot_carry_is_refused_before_the_server_is_asked(s
 
 @pytest.mark.parametrize("finished,result", [("success", "success"), ("failure", "failure")])
 def test_the_state_follows_what_the_device_reported(server, bundle, finished, result):
-    ask(server, "target", token="t")
+    ask(server, "enroll", credential="t")
     action = ask(server, "deliver", image=bundle, manifest=MANIFEST)["id"]
     device = fakeserver.Device(server.url, "pi-a", "t")
     assert device.poll() == str(action)
@@ -107,7 +119,7 @@ def test_the_state_follows_what_the_device_reported(server, bundle, finished, re
 
 
 def test_reading_the_state_writes_nothing(server, bundle):
-    ask(server, "target", token="t")
+    ask(server, "enroll", credential="t")
     ask(server, "deliver", image=bundle, manifest=MANIFEST)
     del server.requests[:]
     ask(server, "state")
@@ -121,8 +133,8 @@ def run(verb, request):
 
 
 def test_as_a_program_it_reads_one_object_and_prints_one(server):
-    rc, out = run("target", {"settings": server.settings, "target": "pi-a", "token": "t"})
-    assert (rc, out) == (0, {"created": True})
+    rc, out = run("enroll", {"settings": server.settings, "target": "pi-a", "credential": "t"})
+    assert (rc, out) == (0, {"created": True, "changed": True})
     rc, out = run("state", {"settings": server.settings, "target": "pi-a"})
     assert rc == 0 and out["known"] is True
 

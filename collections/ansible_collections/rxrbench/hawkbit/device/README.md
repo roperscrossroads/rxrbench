@@ -17,7 +17,8 @@ POSIX sh; busybox is enough. It uses `curl` when the image has it, else `wget`. 
 | `slotguard-hawkbit.service`, `.timer` | `poll` on a timer |
 | `slotguard-hawkbit-report.service` | `report` once per boot, ordered after the health gate, the target it gates and `rauc-mark-good.service` |
 
-Its config is `/data/hawkbit/config` (mode 600, never in an image):
+Its config is `/data/hawkbit/config` (mode 600, never in an image; a layout declares it as
+one of the device's files, `linux.files`, from the same token the server is given):
 
 ```sh
 SERVER=http://updates.example.org:8080

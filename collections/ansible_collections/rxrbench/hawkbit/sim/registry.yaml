@@ -19,7 +19,7 @@ devices:
         port: 22212
         user: root
         state: live
-        can: [shell, diag]
+        can: [shell, flash, diag]
         identity: ~/.cache/rxrbench/simvm/id_ed25519
         known_hosts: ~/.cache/rxrbench/simvm/known_hosts
       # its address on the server is its controller id; the bench host does not write it

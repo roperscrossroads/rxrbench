@@ -5,6 +5,19 @@
 # Order: the image, then the config the family's vocabulary writes. A layout that names no
 # image for a board (bench_image) does not flash it; a family may say a board of it takes no
 # config, and then it gets the image only.
+#
+# A board whose flash route carries the image itself (bench_delivery) is the one exception to
+# the order. Its own client fetches the image, and it can do that only once the route knows
+# the board and the board knows the route: so the route is enrolled first, and the board's
+# config, which holds its client's settings, is brought to its declared state before the
+# image as well as after it.
+
+# The credential the board shows its delivering route, when the layout declares one: the
+# route is made to hold the board with it (enroll.yml, which a plugin's own update step is
+# given by the apply play as well).
+- name: The board's place on the route that delivers its image
+  ansible.builtin.include_tasks: enroll.yml
+  when: bench_delivery is defined
 
 # A board's flasher runs on its bench host, so the image has to be there. Copying it is done
 # in a plan too: it touches no board, and the plan needs the manifest to read. A simulated
@@ -223,6 +236,17 @@
       or (board_flashed | default({})).first_flash | default(false)
       or (board_flashed | default({})).family_switch | default(false)
 
+# A board that takes its image from a delivering route: its client's settings first.
+- name: Bring the board's config to its declared state, before a delivered image
+  ansible.builtin.include_role:
+    name: "{{ bench_plugin }}.board"
+    tasks_from: "{{ bench_vocabulary }}"
+  when:
+    - bench_delivery is defined
+    - bench_image is defined and bench_flasher is defined and bench_flasher == 'smp'
+    - bench_plugin is defined
+    - bench_vocabulary is not none and bench_vocabulary | length > 0
+
 # An update over MCUmgr instead of a wired flash: the layout says `bench_flasher: smp`.
 # Its Python is the bench host's venv with smpclient, not the one the other modules use.
 - name: The declared image, over MCUmgr
@@ -232,23 +256,41 @@
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
     flash_unknown: "{{ bench_flash_unknown | default(true) | bool }}"
     board: "{{ bench_board }}"
+    devreg: "{{ bench_devreg_tool | default(omit) }}"
     socket: "{{ bench_socket | default(omit) }}"
     image: "{{ board_host_store }}/{{ bench_image | basename }}"
-    # ble, udp on a network route (eth, wifi), or the console's serial port
+    # ble, udp on a network route (eth, wifi), or the console's serial port: the flash route,
+    # or, when that one carries the image to the device itself, the route it is read by
     transport: >-
-      {{ 'ble' if bench_routes.flash.bearer == 'ble'
-         else 'udp' if bench_routes.flash.bearer in ['eth', 'wifi'] else 'serial' }}
-    address: "{{ bench_routes.flash.addr | default(bench_routes.flash.ip | default(omit)) }}"
-    bearer: "{{ bench_routes.flash.bearer if bench_routes.flash.bearer in ['eth', 'wifi'] else omit }}"
-    udp_port: "{{ bench_routes.flash.port | default(omit) }}"
+      {{ 'ble' if board_smp_route.bearer == 'ble'
+         else 'udp' if board_smp_route.bearer in ['eth', 'wifi'] else 'serial' }}
+    address: "{{ board_smp_route.addr | default(board_smp_route.ip | default(omit)) }}"
+    bearer: "{{ board_smp_route.bearer if board_smp_route.bearer in ['eth', 'wifi'] else omit }}"
+    udp_port: "{{ board_smp_route.port | default(omit) }}"
+    # A flash route that delivers (bench_delivery): the upload is the device's own client's,
+    # and the image is read back over MCUmgr all the same.
+    delivery: >-
+      {{ bench_delivery | ansible.builtin.combine({
+           'tool': bench_delivery_tool | default(bench_delivery.tool),
+           'settings': lookup('ansible.builtin.vars', bench_delivery.settings, default={})
+                       if bench_delivery.settings else {},
+           'credential': lookup('ansible.builtin.vars', bench_delivery.credential, default='')
+                         if bench_delivery.credential | default('', true) else ''})
+         if bench_delivery is defined else omit }}
+    delivery_timeout: "{{ bench_delivery_timeout | default(omit) }}"
     board_tag: "{{ bench_board_tag | default(omit) }}"
     declared: "{{ firmware | default(omit) }}"
     rebond: "{{ bench_ble_rebond | default(omit) }}"
     console: "{{ (bench_routes.shell | default({})).get('bearer', '') == 'usb' }}"
     port_from: "{{ 'broker' if bench_kind | default('') == 'sim' else 'devreg' }}"
     run_dir: "{{ bench_sim_run | default(omit) }}"
+  # A route's address is checked against the registry the layout was resolved with where this
+  # machine is the bench host; on another host, against the copy `just hosts-setup` put there.
+  environment: >-
+    {{ {'DEVREG_REGISTRY': bench_registry} if ansible_connection | default('ssh') == 'local' else {} }}
   vars:
     ansible_python_interpreter: "{{ board_smp_python }}"
+    board_smp_route: "{{ bench_routes.read | default(bench_routes.flash) }}"
   when: bench_image is defined and bench_flasher is defined and bench_flasher == 'smp'
 
 # Config, in the configuration language the board's family speaks (its row's `vocabulary`):
@@ -279,3 +321,7 @@
            or board_flashed.first_flash | default(false)
            or board_picoboot.changed | default(false)
            or board_esp_image.changed | default(false)))
+    # a board that takes a delivered image had its config planned before the image, above:
+    # a plan says it once (an apply brings it again, and finds nothing to do)
+    - not (ansible_check_mode and bench_delivery is defined and bench_image is defined
+           and bench_flasher | default('') == 'smp')

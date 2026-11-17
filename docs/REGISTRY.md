@@ -104,7 +104,9 @@ routes that can do it; a layout may pin one. `devreg reach <name>` prints them.
 A plugin may bring a bearer of its own: a route that carries an image to the device itself
 ([PLUGINS.md](PLUGINS.md#a-route-that-delivers)). Its entry has the same keys (`host`, `addr`
 for the device's address on that route, `state`, `can`), and it sorts after the bearers above,
-so it is chosen for a verb only when pinned or when no other live route can do it.
+so it is chosen for a verb only when pinned or when no other live route can do it. A device
+whose flash route delivers is read by another of its routes that can flash it (`read`, which a
+layout may pin beside `flash`).
 
 | Key | Meaning |
 |---|---|

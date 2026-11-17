@@ -5,14 +5,16 @@ which image the device should take. Standard library only.
     hawkbit_route.py state      what the server holds of a target; changes nothing
     hawkbit_route.py deliver    make the image a software module and a distribution set if
                                 the server has neither, and assign the set to the target
-    hawkbit_route.py target     create a target with a security token if there is none
+    hawkbit_route.py enroll     create the target with its security token if there is none,
+                                set the token when the target holds another
 
 Each verb reads one JSON object on stdin and prints one:
 
     {"settings": {"url": "http://server:8080", "user": "...", "password": "..."},
      "target": "<controller id>",
      "image": "<file>", "manifest": {"format", "target", "version", "file", ...},   deliver
-     "token": "<security token>"}                                                    target
+     "name": "<the image's name on this bench, or null>",                            deliver
+     "credential": "<the target's security token>"}                    enroll; state compares it
 
 The login reaches this tool on stdin only. Failure is `{"error": "<why>"}` and exit 1.
 
@@ -104,15 +106,19 @@ class Mgmt:
         except NotFound:
             return None
 
-    def ensure_target(self, controller_id, token=None):
-        """(target, created). An existing target is returned as it is: its token stays."""
+    def ensure_target(self, controller_id, token):
+        """(created, token set). The target made with the token when the server has none of
+        that id; the token of an existing one set when it holds another."""
         t = self.target(controller_id)
-        if t is not None:
-            return t, False
-        body = {"controllerId": controller_id, "name": controller_id}
-        if token:
-            body["securityToken"] = token
-        return self.call("POST", "targets", [body])[0], True
+        if t is None:
+            self.call("POST", "targets", [{"controllerId": controller_id, "name": controller_id,
+                                           "securityToken": token}])
+            return True, True
+        if t.get("securityToken") == token:
+            return False, False
+        self.call("PUT", f"targets/{urllib.parse.quote(controller_id, safe='')}",
+                  {"securityToken": token})
+        return False, True
 
     def _find(self, kind, name, version, type_):
         q = urllib.parse.quote(f"name=={name};version=={version}", safe="=;")
@@ -190,12 +196,18 @@ def state(req):
     if t is None:
         return {"known": False, "open": False, "result": None, "image": None,
                 "detail": f"the server has no target {req['target']!r}"}
+    # Whether the target holds the declared token. A login that may not read tokens gets none
+    # back, and then the server cannot say.
+    enrolled = {}
+    if req.get("credential"):
+        enrolled = {"enrolled": (t["securityToken"] == req["credential"])
+                    if t.get("securityToken") else None}
     action, last = m.last_action(req["target"])
     if action is None:
-        return {"known": True, "open": False, "result": None, "image": None,
+        return {"known": True, "open": False, "result": None, "image": None, **enrolled,
                 "detail": f"target {t['updateStatus']}, nothing assigned yet"}
     text = (last.get("messages") or [""])[0]
-    return {"known": True, "open": action["status"] not in CLOSED,
+    return {"known": True, "open": action["status"] not in CLOSED, **enrolled,
             "result": CLOSED.get(action["status"]), "image": m.assigned(req["target"]),
             "id": action["id"],
             "detail": f"target {t['updateStatus']}, action {action['id']} {action['status']}"
@@ -209,7 +221,9 @@ def deliver(req):
         raise ValueError(f"this route carries {', '.join(sorted(TYPES))}; the image is "
                          f"{manifest.get('format')!r}")
     module_type, set_type = TYPES[manifest["format"]]
-    name = manifest.get("target") or os.path.splitext(os.path.basename(req["image"]))[0]
+    # The image's name on the server: what the bench calls it (a staged image's name), else
+    # what it is for (a bundle's `compatible`). With its version it names one image.
+    name = req.get("name") or manifest.get("target") or os.path.splitext(os.path.basename(req["image"]))[0]
     version = manifest.get("version")
     if not version:
         raise ValueError("the image carries no version to name it by on the server")
@@ -224,14 +238,17 @@ def deliver(req):
             "version": version, "sha256": hashlib.sha256(blob).hexdigest()}
 
 
-def target(req):
-    """Create the target when the server has none. An existing one is left as it is."""
-    _, created = client(req.get("settings")).ensure_target(req["target"], req.get("token"))
-    return {"created": created}
+def enroll(req):
+    """The target with the device's security token: made when the server has none, its token
+    set when it holds another. The token is what the device shows the server when it polls."""
+    if not req.get("credential"):
+        raise ValueError("no security token to enroll the target with")
+    created, changed = client(req.get("settings")).ensure_target(req["target"], req["credential"])
+    return {"created": created, "changed": changed}
 
 
 def main(argv=None):
-    verbs = {"state": state, "deliver": deliver, "target": target}
+    verbs = {"state": state, "deliver": deliver, "enroll": enroll}
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 1 or argv[0] not in verbs:
         print(json.dumps({"error": f"usage: hawkbit_route.py {'|'.join(verbs)} < request.json"}))

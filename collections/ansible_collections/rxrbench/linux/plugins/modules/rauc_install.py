@@ -89,6 +89,9 @@ options:
       settings:
         description: The plugin's own settings for the route (its server, its login).
         type: dict
+      credential:
+        description: What the device shows the route when it asks, when the layout declares it.
+        type: str
   delivery_timeout:
     description: Seconds a device has to take a delivery and go down for its reboot. It asks
       on its own schedule, so this is that interval plus the download and the install.
@@ -212,6 +215,7 @@ def main():
                 "formats": {"type": "list", "elements": "str", "required": True},
                 "address": {"type": "str"},
                 "settings": {"type": "dict", "no_log": True},
+                "credential": {"type": "str", "no_log": True},
             }},
             "delivery_timeout": {"type": "float", "default": 1800.0},
             **gate.ARGS,
@@ -220,6 +224,7 @@ def main():
     )
     p = module.params
     gate.check(module)   # the layout's go-ahead, before any device is touched
+    carrier = flasher = None
     try:
         if not os.path.isfile(p["bundle"]):
             raise common.FlashError(f"{p['bundle']}: no such bundle")
@@ -230,7 +235,6 @@ def main():
                                    p["route"].get("bearer") or "ssh", target.host)
         if why:
             raise common.FlashError(why)
-        carrier = None
         if p["delivery"]:
             # The device's address on the delivering route is the registry's too, or the
             # route is not told anything about it.
@@ -251,14 +255,17 @@ def main():
             flasher.slot, state = rauc.wait_healthy(target, left, p["wait_good"],
                                                     unit=p["health_unit"], family=p["family"])
     except (common.FlashError, ssh.SshError, ValueError) as e:
-        module.fail_json(msg=str(e))
+        msg = str(e)
+        if carrier is not None and flasher is not None and flasher.delivered is not None:
+            msg += "; " + carrier.verdict()      # what the route recorded of a delivery that failed
+        module.fail_json(msg=msg)
     result = {"changed": r["changed"], "image": r["image"],
               "device": r["before"] if module.check_mode else r["after"],
               "slot": flasher.slot, "health": state,
               "pending": state == "soaking" or flasher.slot["boot_status"] != "good"}
     if carrier is not None:
-        result["delivery"] = rauc.route_record(carrier, flasher, r["image"],
-                                               r["before"] if module.check_mode else r["after"])
+        result["delivery"] = carrier.record(flasher.delivered, r["image"],
+                                            r["before"] if module.check_mode else r["after"])
     result["timing"] = r.get("timing", [])
     result["checked"] = r.get("checked")
     result["identity_checked"] = r.get("identity_checked")

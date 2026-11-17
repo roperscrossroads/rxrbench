@@ -16,6 +16,12 @@ The rule is deliberately dull:
 
 A device with no `reach` block (a simulated board, an older registry entry) gets one live
 usb route on its declared host that can do everything.
+
+A flash route may be one that carries the image to the device itself (a plugin's delivering
+route: flash/delivery.py). The bench host then writes nothing, and still has to read the
+device before and after. It reads it by the route it would otherwise have written it by: the
+`read` route, chosen by the same rule among the routes that can `flash` and do not deliver,
+or pinned (`routes: {flash: <delivering>, read: eth}`).
 """
 
 VERBS = ("shell", "flash", "config", "diag")
@@ -84,11 +90,12 @@ def candidates(entry, verb, pin=None, default_host=None):
     return usable
 
 
-def select(entry, pins=None, default_host=None):
+def select(entry, pins=None, default_host=None, delivering=()):
     """{verb: route} for every verb the device can be reached for. A verb no live route can
-    carry is simply absent; a bad pin raises."""
+    carry is simply absent; a bad pin raises. `delivering` names the bearers that carry an
+    image themselves: when the flash route is one, `read` is the route the device is read by."""
     pins = pins or {}
-    unknown = sorted(set(pins) - set(VERBS))
+    unknown = sorted(set(pins) - set(VERBS) - {"read"})
     if unknown:
         raise RouteError(f"routes: unknown verb(s) {', '.join(unknown)}")
     out = {}
@@ -96,4 +103,17 @@ def select(entry, pins=None, default_host=None):
         c = candidates(entry, verb, pins.get(verb), default_host)
         if c:
             out[verb] = c[0]
+    delivers = (out.get("flash") or {}).get("bearer") in delivering
+    if "read" in pins and not delivers:
+        raise RouteError("routes: read is pinned, but the flash route is not one that delivers "
+                         "an image itself: the device is read by its flash route")
+    if delivers:
+        if pins.get("read") in delivering:
+            raise RouteError(f"read is pinned to {pins['read']}, which delivers and reads nothing")
+        direct = [r for r in candidates(entry, "flash", pins.get("read"), default_host)
+                  if r["bearer"] not in delivering]
+        if not direct:
+            raise RouteError(f"its flash route {out['flash']['bearer']} delivers an image itself, and "
+                             "no other live route can flash it: there is nothing to read it by")
+        out["read"] = direct[0]
     return out

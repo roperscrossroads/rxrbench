@@ -1,0 +1,33 @@
+---
+# A board whose flash route carries its image itself (bench_delivery), and whose layout
+# declares the credential the board shows that route (the variable the route's plugin names):
+# the route is made to hold the board with it. The board's own copy is part of its config,
+# in its family's vocabulary. A plan says what would be done and tells the route nothing.
+#
+# Entered from this role's main.yml, and by the apply play for a family whose plugin has an
+# update step of its own.
+- name: The board's place on the route that delivers its image
+  rxrbench.core.route_enroll:
+    board: "{{ bench_board }}"
+    devreg: "{{ bench_devreg_tool | default(omit) }}"
+    delivery: >-
+      {{ bench_delivery | ansible.builtin.combine({
+           'tool': bench_delivery_tool | default(bench_delivery.tool),
+           'settings': lookup('ansible.builtin.vars', bench_delivery.settings, default={})
+                       if bench_delivery.settings else {},
+           'credential': lookup('ansible.builtin.vars', bench_delivery.credential)}) }}
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  # The address is checked against the registry the layout was resolved with where this
+  # machine is the bench host; on another host, against the copy `just hosts-setup` put there.
+  environment: >-
+    {{ {'DEVREG_REGISTRY': bench_registry} if ansible_connection | default('ssh') == 'local' else {} }}
+  register: board_enrolled
+  when:
+    - bench_delivery is defined
+    - bench_delivery.credential | default('', true) | length > 0
+    - lookup('ansible.builtin.vars', bench_delivery.credential, default='') | length > 0
+
+- name: What the route is told
+  ansible.builtin.debug:
+    msg: "{{ bench_board }}: {{ board_enrolled.step }}"
+  when: board_enrolled is not skipped and board_enrolled.changed

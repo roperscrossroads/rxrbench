@@ -221,9 +221,29 @@ route's (`devreg guard --route`). `host` is the bench host that speaks to the ro
 route rules hold unchanged: a pinned route must be `live` and able to `flash`, and nothing falls
 back to another route during a run.
 
-- **The family says whether it can take one.** `Family.takes_delivery` lists the image formats
-  its update step takes from a delivering route (empty by default). A layout that pins such a
-  route for a family that lists none of its formats is refused when it is loaded.
+A route may hold a **credential** for each device, which the device shows when it asks for
+its image (an update server's per-target token). A plugin that wants it declared names the
+layout variable holding it (`credential` in its row). A layout that sets that variable has
+both ends brought together by the run, whether or not the image differs: core's
+`route_enroll` makes the route hold the device with it (the tool's `enroll`), and the device's
+config is brought to its declared state before the image as well as after, because its client
+can fetch nothing until it knows the route. The device's own copy of the credential is part of
+that config, declared in its family's vocabulary from the same variable. The credential
+reaches the tool on stdin with every request and appears in no output.
+
+The bench host writes nothing over such a route, and still reads the device before and after.
+It reads it by the route it would otherwise have written it by: `bench_routes.read`, chosen by
+the same rule among the device's routes that can `flash` and do not deliver, or pinned
+(`routes: {flash: courier, read: eth}`). A device with no such route is refused: there would be
+nothing to read it by.
+
+- **The family says whether it can take one, or its flasher does.** `Family.takes_delivery`
+  lists the image formats a family's own update step takes from a delivering route (empty by
+  default). A family whose image is written by a core flasher that hands its image over needs
+  to say nothing: an image written over MCUmgr (`smp`) is a signed MCUboot image whatever
+  family runs it (`flash/common.py` `DELIVERS`), so any such device can take a route that
+  carries `mcuboot-bin`. A layout that pins a delivering route for a device that can take none
+  of its formats is refused when it is loaded.
 - **The layout carries the route to the update step as data**: `bench_delivery` is the row
   (`bearer`, `tool`, `formats`, `settings`). The family's task file passes it to its module with
   the variable `settings` names resolved, and the device's `addr`. Core names no route and the
@@ -232,9 +252,11 @@ back to another route during a run.
   `flash/delivery.py::Delivery` from that data and gives it to its flasher. `device`,
   `preflight` and `verify` are unchanged: the device is read by the family's own route before
   and after, so the route's record of an update is reported beside the device's answer and
-  never instead of it. `preflight` adds `Delivery.refusals(manifest)` and asks `state()`
-  (a target the route does not know, a delivery still in flight); `write` calls `deliver()` and
-  waits for the device to take it.
+  never instead of it. `preflight` adds `Delivery.blockers(manifest)` (an image the route does
+  not carry, a target it does not know and nothing declared to enroll it with, a delivery
+  still in flight); `write` calls `deliver()` and waits for the device to take it. What the device's own client then does is the device's: a
+  delivered MCUboot image is confirmed by the device, when it judges itself healthy, and the
+  flasher waits for that and never confirms it in its place.
 - **The tool** is the plugin's own program in `host/bin/`, so neither core nor a family imports
   it. One verb as its argument, one JSON object on stdin, one printed:
 
@@ -247,8 +269,9 @@ back to another route during a run.
   what it was asked prints `{"error": "<why>"}` and exits non-zero; its words become the
   refusal.
 
-`rxrbench.hawkbit` is the bundled example, with the RAUC families of `rxrbench.linux` taking it;
-`tests/unit/test_route_delivery.py` holds both to the above.
+`rxrbench.hawkbit` is the bundled example: the RAUC families of `rxrbench.linux` take it for
+bundles, and every device written over MCUmgr takes it for MCUboot images
+(`tests/unit/test_route_delivery.py`, `tests/unit/test_flash_smp.py`).
 
 ## Secrets
 

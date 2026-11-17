@@ -39,6 +39,10 @@ def test_only_a_family_that_says_so_takes_a_delivered_image():
     assert families.plugin("linux_slotguard").takes_delivery == ("raucb",)
     assert families.plugin("linux").takes_delivery == ()
     assert families.plugin("zephyr_mcumgr").takes_delivery == ()
+    # ... and a Zephyr image written over MCUmgr is handed over by its flasher, not its family
+    assert families.takes_delivery("zephyr_mcumgr", "smp", families.route_delivery("hawkbit")["formats"]) == [
+        "mcuboot-bin"]
+    assert families.takes_delivery("linux", "rauc", families.route_delivery("hawkbit")["formats"]) == []
 
 
 # --- what a layout is told, or refused ---------------------------------------------------------
@@ -67,9 +71,10 @@ def test_a_pinned_delivering_route_reaches_the_update_step_as_data(tmp_path):
     v = resolved(tmp_path, "linux_rauc", {"flash": "hawkbit"})["boards"]["ab1"]["vars"]
     assert v["bench_routes"]["flash"]["bearer"] == "hawkbit"
     assert v["bench_routes"]["flash"]["addr"] == "ab1"
-    assert v["bench_routes"]["shell"]["bearer"] == "ssh"          # it is still read over ssh
-    assert v["bench_delivery"] == {"bearer": "hawkbit", "tool": "hawkbit_route.py",
-                                   "formats": ["raucb"], "settings": "bench_hawkbit"}
+    assert v["bench_routes"]["read"]["bearer"] == "ssh"           # it is still read over ssh
+    assert v["bench_delivery"] == {"bearer": "hawkbit", "tool": "hawkbit_route.py", "address": "ab1",
+                                   "formats": ["raucb", "mcuboot-bin"], "settings": "bench_hawkbit",
+                                   "credential": "bench_hawkbit_token"}
 
 
 def test_without_the_pin_the_device_is_written_as_before(tmp_path):
@@ -121,7 +126,7 @@ class Bench:
         self.thread = threading.Thread(target=self._client, daemon=True)
 
     def enrol(self):
-        self.route._call("target", {"token": "t"}, 30)     # pylint: disable=protected-access
+        delivery.Delivery({**self.spec, "credential": "t"}, "pi-a").enroll()
         return self
 
     def flasher(self, **kw):
@@ -173,7 +178,7 @@ def server():
 def settled(bench, flasher, r):
     """The route's record beside the device's answer, once the device's client has spoken."""
     bench.thread.join(5)
-    return rauc.route_record(bench.route, flasher, r["image"], r["after"])
+    return bench.route.record(flasher.delivered, r["image"], r["after"])
 
 
 def test_a_delivered_bundle_is_fetched_by_the_device_and_read_back_over_ssh(tmp_path, server):
@@ -225,7 +230,7 @@ def test_a_rollback_fails_the_apply_even_when_the_server_was_told_success(tmp_pa
             common.drive(bench.flasher(), MANIFEST)
         bench.thread.join(5)
         assert bench.route.state()["result"] == "success"        # the record that is wrong
-        record = rauc.route_record(bench.route, bench.flasher(), MANIFEST, {"hash": OLD["hash"]})
+        record = bench.route.record(None, MANIFEST, {"hash": OLD["hash"]})
     assert record["agrees"] is False
 
 
@@ -265,3 +270,14 @@ def test_the_slot_must_be_good_before_a_delivery_as_before_a_push(tmp_path, serv
     with pytest.raises(common.FlashError, match="not marked good"):
         common.drive(bench.flasher(), MANIFEST)
     assert not server.actions
+
+
+def test_a_device_with_a_declared_token_is_planned_before_the_server_knows_it(tmp_path, server):
+    """The first plan of a device the server has never heard of: the run will enroll it, so
+    the flasher does not refuse, and the plan still tells the server nothing."""
+    bench = Bench(tmp_path, server, Device())
+    bench.route = delivery.Delivery({**bench.spec, "credential": "t"}, "pi-a")
+    r = common.drive(bench.flasher(), MANIFEST, check_mode=True)
+    assert r["changed"] and not server.targets and not server.modules
+    assert "to be enrolled" in bench.route.enrollment()
+

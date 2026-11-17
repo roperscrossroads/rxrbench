@@ -149,8 +149,13 @@ class SmpFlasher(common.Flasher):
                  board_tag=None, declared=None, devreg="~/.devreg/devreg.py",
                  settle=240.0, devlock_dir="~/.devreg", adapter=BLE_ADAPTER,
                  ble_lock_wait=BLE_LOCK_WAIT, rebond="auto", console=None,
-                 port_from="devreg", run_dir=None, bearer=None, udp_port=UDP_PORT):
+                 port_from="devreg", run_dir=None, bearer=None, udp_port=UDP_PORT,
+                 delivery=None, delivery_timeout=1800.0):
         self.name, self.manifest = name, manifest
+        # A route that carries the image to the device itself (flash/delivery.py): the upload,
+        # the test mark and the reset are then the device's own client's, and so is the
+        # confirmation. The device is read over MCUmgr before and after all the same.
+        self.delivery, self.delivery_timeout, self.delivered = delivery, delivery_timeout, None
         # A simulated board (run_dir): its serial port is whatever pty its broker releases
         # (port_from "broker"), and it runs an executable, not a slot: it is known by the
         # executable's bytes, mapped to the image whose exe_hash they are.
@@ -473,13 +478,53 @@ class SmpFlasher(common.Flasher):
         if self.flags is not None and not self.flags["confirmed"]:
             out.append("the running image is not confirmed: the device is still on trial "
                        "with its last update")
+        if self.delivery is not None and not out:
+            out += self.delivery.blockers({"format": common.DELIVERS["smp"]})
         try:
             import smpclient  # noqa: F401  pylint: disable=import-outside-toplevel,unused-import
         except ImportError:
             out.append("no `smpclient` library for this module's Python")
         return out
 
+    def _deliver(self):
+        """The write, by a route that carries the image itself: say which image, then wait
+        until the device runs it, which is after its own client has fetched it, reset, and
+        MCUboot has swapped it in. The device asks on its own schedule and does not answer
+        MCUmgr while it swaps, so a look that fails is only a look that failed.
+
+        A delivery the route closes as failed before the device runs the image failed on the
+        device (a download, a hash, a full slot): the route's own word says why. One it closes
+        as done while the device runs something else is left to `verify`, which reads the
+        device and says what it runs."""
+        self.delivered = self.delivery.deliver(
+            self.image, {**self.manifest, "format": common.DELIVERS["smp"]},
+            name=os.path.basename(os.path.dirname(os.path.abspath(self.image))))
+        end = time.monotonic() + self.delivery_timeout
+        while True:
+            try:
+                images = self._session(self._states)
+                if any(i["active"] and i["hash"] == self.manifest["hash"] for i in images):
+                    return
+            except common.FlashError:
+                pass
+            state = self.delivery.state()
+            if not state.get("open"):
+                if state.get("result") == "failure":
+                    raise common.FlashError(
+                        f"the {self.delivery.bearer} delivery failed before the device ran the "
+                        f"image: {state.get('detail') or 'no detail'}")
+                return
+            if time.monotonic() > end:
+                raise common.FlashError(
+                    f"the device did not take the {self.delivery.bearer} delivery and run the image "
+                    f"within {self.delivery_timeout:.0f} s "
+                    f"({state.get('detail') or 'the route has no word of it'})")
+            time.sleep(5)
+
     def write(self):
+        if self.delivery is not None:
+            self._deliver()
+            return
         from smpclient.requests.image_management import ImageStatesWrite  # pylint: disable=import-outside-toplevel
         from smpclient.requests.os_management import ResetWrite  # pylint: disable=import-outside-toplevel
         with open(self.image, "rb") as f:
@@ -516,7 +561,10 @@ class SmpFlasher(common.Flasher):
         async def confirm(client):
             images = await self._states(client)
             active = next((i for i in images if i["active"]), None)
-            if active and active["hash"] == self.manifest["hash"] and not active["confirmed"]:
+            # A delivered image is confirmed by the device's own client, when it judges
+            # itself healthy: that is waited for here, never done for it.
+            if (self.delivery is None and active and active["hash"] == self.manifest["hash"]
+                    and not active["confirmed"]):
                 await client.request(ImageStatesWrite(hash=want, confirm=True))
                 images = await self._states(client)
             return images
@@ -554,6 +602,10 @@ class SmpFlasher(common.Flasher):
                     raise common.FlashError(
                         "the device runs its previous image: the new one did not boot, or "
                         "MCUboot swapped back")
+                if not self.flags["confirmed"] and self.delivery is not None:
+                    why = ("the new image runs but the device has not confirmed it: "
+                           "its next reset will swap back")
+                    continue
                 if not self.flags["confirmed"]:
                     raise common.FlashError("the new image runs but could not be confirmed: "
                                             "the next reset will swap back")

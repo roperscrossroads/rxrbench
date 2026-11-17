@@ -6,7 +6,8 @@
 #
 # A flash route that carries the bundle itself (bench_delivery, set by the layout when the
 # route's plugin delivers and this family can take it) replaces the copy and the install, and
-# nothing else: the device is read over its ssh route before and after.
+# nothing else: the device is read before and after over the route it would otherwise be
+# written by (bench_routes.read).
 
 - name: Stage the bundle
   ansible.builtin.copy:
@@ -26,15 +27,15 @@
     board: "{{ bench_board }}"
     family: "{{ bench_family }}"
     devreg: "{{ bench_devreg_tool | default(omit) }}"
-    route: "{{ bench_routes.shell if bench_delivery is defined else bench_routes.flash }}"
+    # read over the route it would otherwise be written by, when the flash route delivers
+    route: "{{ bench_routes.read | default(bench_routes.flash) }}"
     delivery: >-
-      {{ (bench_delivery | ansible.builtin.dict2items
-          | ansible.builtin.rejectattr('key', 'equalto', 'settings') | ansible.builtin.items2dict
-          | ansible.builtin.combine({
-              'tool': bench_delivery_tool | default(bench_delivery.tool),
-              'address': bench_routes.flash.addr | default(omit),
-              'settings': lookup('ansible.builtin.vars', bench_delivery.settings, default={})
-                          if bench_delivery.settings else {}}))
+      {{ bench_delivery | ansible.builtin.combine({
+           'tool': bench_delivery_tool | default(bench_delivery.tool),
+           'settings': lookup('ansible.builtin.vars', bench_delivery.settings, default={})
+                       if bench_delivery.settings else {},
+           'credential': lookup('ansible.builtin.vars', bench_delivery.credential, default='')
+                         if bench_delivery.credential | default('', true) else ''})
          if bench_delivery is defined else omit }}
     delivery_timeout: "{{ bench_delivery_timeout | default(omit) }}"
     bundle: >-

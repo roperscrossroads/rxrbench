@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from ansible_collections.rxrbench.core.plugins.module_utils.flash import common, smp
+from ansible_collections.rxrbench.core.plugins.module_utils.flash import common, delivery, smp
 
 DEVLOCK_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "devreg")
 
@@ -581,3 +581,112 @@ def test_an_upload_start_is_never_sent_twice():
     assert smp._upload_start(start)
     assert not smp._upload_start(chunk)
     assert not smp._upload_start(_frame(1))
+
+
+# ---- the write handed to a route that carries the image itself ---------------------------------
+
+class Route:
+    """A delivering route (flash/delivery.py), scripted: what it says of the device each time
+    it is asked, and what it was told to deliver."""
+    bearer, target, credential = "courier", "dev1", None
+    blockers = delivery.Delivery.blockers          # the real rule, over this route's answers
+
+    def __init__(self, *says, refuses=()):
+        self.says, self.refuses, self.told = list(says), list(refuses), []
+
+    def refusals(self, manifest):
+        assert manifest["format"] == "mcuboot-bin"      # what the flasher would have uploaded
+        return list(self.refuses)
+
+    def state(self):
+        return self.says.pop(0) if len(self.says) > 1 else self.says[0]
+
+    def deliver(self, image, manifest, name=None):
+        self.told.append((os.path.basename(image), manifest["format"], name))
+        return {"id": 7, "already": False}
+
+
+IDLE = {"known": True, "open": False, "result": None, "detail": "nothing assigned yet"}
+OPEN = {"known": True, "open": True, "result": None, "detail": "action 7 retrieved"}
+DONE = {"known": True, "open": False, "result": "success", "detail": "action 7 finished"}
+FAILED = {"known": True, "open": False, "result": "failure", "detail": "action 7 error: no room in the slot"}
+
+
+class Delivered(Scripted):
+    """The scripted flasher with its real write, and a last answer that repeats: a device is
+    looked at as often as the wait asks."""
+    write = smp.SmpFlasher.write
+
+    def _session(self, work, timeout=60.0):  # pylint: disable=unused-argument
+        self.sessions += 1
+        return self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Time that passes only while the flasher sleeps, so a wait ends at once."""
+    now = [0.0]
+    monkeypatch.setattr(smp.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(smp.time, "sleep", lambda s: now.__setitem__(0, now[0] + s))
+    return now
+
+
+def test_a_delivered_image_is_fetched_by_the_device_and_confirmed_by_it(tmp_path, clock):
+    route = Route(IDLE, OPEN, OPEN, DONE)
+    f = Delivered(tmp_path, [[image(OLD, True)],                       # what it runs
+                             [image(OLD, True)],                       # still fetching
+                             [image(NEW, True, confirmed=False)],      # swapped in: the write is over
+                             [image(NEW, True, confirmed=False)],      # on trial
+                             [image(NEW, True), image(OLD, False)]],   # it confirmed itself
+                  delivery=route)
+    r = common.drive(f, MANIFEST)
+    assert r["changed"] and r["after"]["hash"] == NEW and f.flags["confirmed"]
+    assert route.told == [("app.signed.bin", "mcuboot-bin", tmp_path.name)]
+    assert f.delivered == {"id": 7, "already": False}
+
+
+def test_a_plan_tells_the_route_nothing(tmp_path, clock):
+    route = Route(IDLE)
+    f = Delivered(tmp_path, [[image(OLD, True)]], delivery=route)
+    r = common.drive(f, MANIFEST, check_mode=True)
+    assert r["changed"] and route.told == []
+
+
+def test_a_device_that_never_confirms_a_delivered_image_is_an_error_and_is_not_confirmed_for_it(tmp_path, clock):
+    route = Route(IDLE, OPEN)
+    f = Delivered(tmp_path, [[image(OLD, True)], [image(NEW, True, confirmed=False)]], delivery=route)
+    with pytest.raises(common.FlashError, match="the device has not confirmed it"):
+        common.drive(f, MANIFEST)
+
+
+def test_a_delivery_that_fails_on_the_device_ends_the_wait_with_the_routes_words(tmp_path, clock):
+    route = Route(IDLE, OPEN, FAILED)
+    f = Delivered(tmp_path, [[image(OLD, True)]], delivery=route)
+    with pytest.raises(common.FlashError, match="failed before the device ran the image.*no room in the slot"):
+        common.drive(f, MANIFEST)
+
+
+def test_a_route_told_of_a_success_does_not_make_a_swapped_back_device_updated(tmp_path, clock):
+    """The device took the image, it did not hold, MCUboot swapped back, and the old image's
+    client told the route the update was done. The device is read, and says otherwise."""
+    route = Route(IDLE, OPEN, DONE)
+    f = Delivered(tmp_path, [[image(OLD, True)], [image(OLD, True), image(NEW, False)]], delivery=route)
+    with pytest.raises(common.FlashError, match="runs its previous image"):
+        common.drive(f, MANIFEST)
+
+
+def test_a_device_that_never_asks_times_the_delivery_out(tmp_path, clock):
+    route = Route(IDLE, OPEN)
+    f = Delivered(tmp_path, [[image(OLD, True)]], delivery=route, delivery_timeout=60)
+    with pytest.raises(common.FlashError, match="did not take the courier delivery and run the image within 60 s"):
+        common.drive(f, MANIFEST)
+
+
+def test_a_route_that_cannot_carry_it_or_does_not_know_the_device_refuses_before_anything(tmp_path, clock):
+    for route, said in ((Route(IDLE, refuses=["its flash route courier carries raucb"]), "carries raucb"),
+                        (Route({"known": False, "open": False}), "does not know the target 'dev1'"),
+                        (Route(OPEN), "still has a delivery in flight")):
+        f = Delivered(tmp_path, [[image(OLD, True)]], delivery=route)
+        with pytest.raises(common.FlashError, match=said):
+            common.drive(f, MANIFEST)
+        assert route.told == []

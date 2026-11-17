@@ -59,3 +59,27 @@ runs every few seconds in its place (for example an ssh that runs the client onc
 `RXRBENCH_HW_BUNDLE` names a bundle to deliver in place of the layout's declared one. The login
 is taken from the environment and written nowhere.
 
+A server the device has never been on is fine when the layout declares the device's token
+(`bench_hawkbit_token`) and its client's config: the plan then says the run will enroll the
+device, and the apply does.
+
+**A failure, too.** `RXRBENCH_HW_BAD_LAYOUT` names a second layout of the same device that
+declares an image made to fail on it (one that faults on its test boot, a bundle whose slot
+fails its health gate). The apply of it must fail, the server's record must say failure once
+the device's client has reported, and the device must be back on its declared image by itself.
+A client that reports before it knows, or one that calls a swap back a success, fails this.
+
+**With no server at all.** `RXRBENCH_HW_HAWKBIT=standin:<address>:<port>` has the test start
+the plugin's stand-in server (`rxrbench.hawkbit`'s `sim/fakeserver.py`) on that address of
+this machine for as long as it runs, and needs no login:
+
+```bash
+RXRBENCH_HW_LAYOUT=mybench-updates RXRBENCH_HW_BAD_LAYOUT=mybench-updates-bad RXRBENCH_HW_BOARDS=node1 \
+RXRBENCH_HW_HAWKBIT=standin:192.0.2.10:8080 RXRBENCH_HW_APPLY=1 \
+  ./venv/bin/pytest -q tests/hw/test_hawkbit_route.py
+```
+
+The address is the bench host's on the boards' network, the one their client config names. The
+stand-in starts empty every time and checks tokens, so the layout must declare each device's
+token. This is the form a bench host can run by itself, on a schedule, with nothing else up.
+

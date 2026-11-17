@@ -112,31 +112,6 @@ def wait_healthy(target, left_slot, seconds, sleep=10.0, unit=None, family="linu
         time.sleep(sleep)
 
 
-def route_record(delivery, flasher, image, device):
-    """What a delivering route says of the device, beside what the device itself runs. The
-    device's answer decides whether an update worked; this says whether the route's record
-    agrees with it, so a record that does not is seen."""
-    out = {"bearer": delivery.bearer, "address": delivery.target}
-    if flasher.delivered is not None:
-        out["started"] = flasher.delivered
-    try:
-        says = delivery.state()
-    except common.FlashError as e:
-        out["route_says"], out["agrees"] = {"error": str(e)}, None
-        return out
-    out["route_says"] = says
-    runs = bool(image.get("hash")) and device.get("hash") == image.get("hash")
-    if says.get("open"):
-        out["agrees"] = None          # the route has not heard the outcome yet
-    elif says.get("result") == "success":
-        out["agrees"] = runs
-    elif says.get("result") == "failure":
-        out["agrees"] = not runs
-    else:
-        out["agrees"] = None
-    return out
-
-
 class RaucFlasher(common.Flasher):
     """`delivery` (flash/delivery.py) is a route that carries the bundle to the device itself:
     the device is still read here, over ssh, before and after; only the write is the route's.
@@ -178,16 +153,7 @@ class RaucFlasher(common.Flasher):
             # The bundle is not put on the device from here: where it lands and whether it
             # fits are the device's own client's. What is asked instead is whether the route
             # can carry it and knows the device, and that no earlier delivery is still open.
-            out += self.delivery.refusals(self.manifest)
-            if not out:
-                known = self.delivery.state()
-                if not known.get("known"):
-                    out.append(f"its {self.delivery.bearer} route does not know the target "
-                               f"{self.delivery.target!r}")
-                elif known.get("open"):
-                    out.append(f"its {self.delivery.bearer} route still has a delivery in flight "
-                               f"for it ({known.get('detail') or 'no detail'})")
-            return out
+            return out + self.delivery.blockers(self.manifest)
         size = os.path.getsize(self.bundle)
         landing = os.path.dirname(self.remote_bundle) or "/"
         rc, df = self.t.run(f"df -k {landing} | tail -1", timeout=15)

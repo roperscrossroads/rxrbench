@@ -149,4 +149,4 @@ FLASHER_BEARERS = {"probeflash": ["swd"]}
 #: a route this plugin brings that carries an image to the device itself: the smallest example
 #: of one (docs/PLUGINS.md, "A route that delivers"). A widget takes it; no other family does.
 ROUTE_DELIVERIES = {"courier": {"tool": "courier_route.py", "formats": ("widget-image",),
-                                "settings": "bench_courier"}}
+                                "settings": "bench_courier", "credential": "bench_courier_key"}}

@@ -3,6 +3,46 @@
 # the types when the role is entered; antsibull-docs documents them. tests/unit/
 # test_role_specs.py holds this file to what the tasks read (tools/role_vars.py).
 argument_specs:
+  enroll:
+    short_description: "Enroll a board on the route that delivers its image"
+    description:
+      - >-
+        A board whose flash route carries its image itself, and whose layout declares the credential
+        the board shows that route: the route is made to hold the board with it. A plan says what
+        would be done and tells the route nothing.
+    options:
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it.
+      bench_board: &bench_board
+        type: str
+        description: >-
+          The board's name in the layout.
+      bench_delivery: &bench_delivery
+        type: dict
+        description: >-
+          Set by the layout when the board's flash route carries the image itself (a plugin's delivering
+          route) and the image is written by a core flasher that hands it over (C(smp)): the route's
+          C(bearer), the C(tool) that speaks for it on a bench host, the C(formats) it carries, the board's
+          C(address) on it and the name of the layout variable holding its C(settings). The image is then
+          not uploaded from the bench host; the board is read over the route it would otherwise be written by.
+      bench_delivery_tool: &bench_delivery_tool
+        type: str
+        description: >-
+          Where the delivering route's tool is on the bench host, when it is not in the place the plugins'
+          host tools are installed.
+      bench_devreg_tool: &bench_devreg_tool
+        type: str
+        description: >-
+          The devreg script on the host that reaches a Linux device, when it is not the deployed
+          C(~/.devreg/devreg.py) (a layout whose modules run on the controller names the repository's own).
+      bench_registry: &bench_registry
+        type: str
+        description: >-
+          The site's device registry file.
   forget_bootloader:
     short_description: "Forget the bootloader read C(just boot) recorded for a board"
     description:
@@ -11,10 +51,7 @@ argument_specs:
         bootloader read C(just boot) recorded stale: forgotten, so the next plan reads it again or
         says it does not know, instead of comparing a chip it no longer describes.
     options:
-      bench_board: &bench_board
-        type: str
-        description: >-
-          The board's name in the layout.
+      bench_board: *bench_board
       bench_facts_dir: &bench_facts_dir
         type: str
         description: >-
@@ -63,12 +100,15 @@ argument_specs:
           checks the chip itself whatever this says. Regions C(bench_overwrite) names are left out too, and
           what the board's family says its declaration owns there (a Launcher layout: Launcher, the apps it
           declares, and the shared data when it declares every app on the chip).
-      bench_apply_allowed: &bench_apply_allowed
-        type: bool
+      bench_apply_allowed: *bench_apply_allowed
+      bench_delivery: *bench_delivery
+      bench_delivery_tool: *bench_delivery_tool
+      bench_delivery_timeout:
+        type: float
         description: >-
-          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
-          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
-          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it.
+          Seconds a board has to take a delivery and run the image (default 1800): it asks its route on its
+          own schedule, so this is that interval plus the download, the reset and the swap.
+      bench_devreg_tool: *bench_devreg_tool
       bench_ble_rebond: &bench_ble_rebond
         type: str
         description: >-
@@ -217,6 +257,7 @@ argument_specs:
         description: >-
           The board type's PSRAM, which a first flash checks.
       bench_repo: *bench_repo
+      bench_registry: *bench_registry
       bench_routes: &bench_routes
         type: dict
         description: >-

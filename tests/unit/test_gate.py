@@ -28,7 +28,8 @@ def module_path(name):
     return found[0]
 
 WRITERS = ("board_flash", "smp_flash", "swd_flash", "bootloader_flash", "region_erase", "region_restore",
-           "chip_restore", "card_write", "rauc_install", "launcher_apply", "launcher_install")
+           "chip_restore", "card_write", "rauc_install", "launcher_apply", "launcher_install",
+           "route_enroll")
 WRITING_PLAYS = ("apply", "boot", "restore-regions", "restore-chip", "keys-restore", "erase", "switch", "card")
 
 

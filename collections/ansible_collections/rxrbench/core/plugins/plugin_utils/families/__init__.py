@@ -86,7 +86,8 @@ def load(names=None, roots=()):
                                            "tool or no image formats")
             deliveries[bearer] = {"bearer": bearer, "tool": how["tool"],
                                   "formats": list(how["formats"]),
-                                  "settings": how.get("settings")}
+                                  "settings": how.get("settings"),
+                                  "credential": how.get("credential")}
         for flasher, caps in (getattr(mod, "FLASHERS", None) or {}).items():
             if flasher in flash_common.FLASHERS or flasher in flashers:
                 raise registry.PluginError(f"{collection}: a flasher named {flasher!r} is already known")
@@ -128,11 +129,24 @@ def flasher_bearers(flasher):
 
 def route_delivery(bearer):
     """How a route delivers an image itself, or None: a loaded plugin's ROUTE_DELIVERIES row
-    for that bearer ({bearer, tool, formats, settings}). A device whose flash route is such a
+    for that bearer ({bearer, tool, formats, settings, credential}). A device whose flash route is such a
     bearer is not written by the bench host: the route carries the image, and the family's
     own flasher still reads the device before and after."""
     how = (_table or load())["DELIVERIES"].get(bearer)
     return dict(how) if how else None
+
+
+def delivering():
+    """The bearers that carry an image to the device themselves (the loaded plugins')."""
+    return tuple((_table or load())["DELIVERIES"])
+
+
+def takes_delivery(family, flasher, formats):
+    """The formats among `formats` a device can take from a delivering route: those its
+    family's own update step takes (Family.takes_delivery), and the one a core flasher that
+    writes its image hands over (flash/common.py DELIVERS)."""
+    own = set(plugin(family).takes_delivery) | {flash_common.DELIVERS.get(flasher)}
+    return [f for f in formats if f in own]
 
 
 def flashers():

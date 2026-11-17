@@ -15,9 +15,12 @@
  "bench_compatible": "rxrbench-sim-qemuarm",
  "bench_config_via": null,
  "bench_delivery": {
+  "address": "hb1",
   "bearer": "hawkbit",
+  "credential": "bench_hawkbit_token",
   "formats": [
-   "raucb"
+   "raucb",
+   "mcuboot-bin"
   ],
   "settings": "bench_hawkbit",
   "tool": "hawkbit_route.py"
@@ -122,6 +125,7 @@
    "bearer": "ssh",
    "can": [
     "diag",
+    "flash",
     "shell"
    ],
    "host": "simhost",
@@ -147,10 +151,29 @@
    ],
    "state": "live"
   },
+  "read": {
+   "bearer": "ssh",
+   "can": [
+    "diag",
+    "flash",
+    "shell"
+   ],
+   "host": "simhost",
+   "hosts": [
+    "simhost"
+   ],
+   "identity": "~/.cache/rxrbench/simvm/id_ed25519",
+   "ip": "127.0.0.1",
+   "known_hosts": "~/.cache/rxrbench/simvm/known_hosts",
+   "port": 22212,
+   "state": "live",
+   "user": "root"
+  },
   "shell": {
    "bearer": "ssh",
    "can": [
     "diag",
+    "flash",
     "shell"
    ],
    "host": "simhost",

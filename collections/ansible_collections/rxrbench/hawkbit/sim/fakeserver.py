@@ -8,6 +8,11 @@ misbehave. It is a test double: one tenant, no rollouts, nothing kept across a r
         hb.faults["corrupt_download"] = True
         hb.requests                     # [(method, path)] seen so far
 
+    with FakeHawkbit(bind="192.0.2.10", port=8080) as hb:    # where real boards can reach it
+
+On a bench host it can stand in for a server in front of real boards (tests/hw/README.md):
+bound to the host's address on the boards' network, it needs no other machine.
+
 `Device` is a device's side of a delivery, for a test that needs one to happen.
 """
 import hashlib
@@ -21,9 +26,10 @@ PART = {"os": "os", "application": "bApp", "runtime": "jvm"}
 
 
 class FakeHawkbit:
-    def __init__(self):
+    def __init__(self, bind="127.0.0.1", port=0, token_auth=False, polling="00:05:00"):
         self.targets, self.modules, self.sets, self.actions = {}, {}, {}, {}
-        self.token_auth = False
+        self.token_auth = token_auth
+        self.polling = polling      # how often a device is told to ask (hh:mm:ss)
         self.requests = []
         # corrupt_download: serve the artifact with one byte changed (the metadata hash stays)
         # fail_feedback:    answer this many feedback posts with 503
@@ -54,9 +60,9 @@ class FakeHawkbit:
 
             do_GET = do_POST = do_PUT = do_DELETE = _go
 
-        self._srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._srv = ThreadingHTTPServer((bind, port), Handler)
         self.port = self._srv.server_address[1]
-        self.url = f"http://127.0.0.1:{self.port}"
+        self.url = f"http://{bind}:{self.port}"
 
     def __enter__(self):
         threading.Thread(target=self._srv.serve_forever, daemon=True).start()
@@ -124,6 +130,8 @@ class FakeHawkbit:
             if method == "DELETE":
                 del self.targets[m.group(1)]
                 return 204, None
+            if method == "PUT":
+                t.update({k: v for k, v in js.items() if k in ("name", "securityToken")})
             return 200, t
         m = re.match(r"^targets/([^/]+)/assignedDS$", path)
         if m:
@@ -227,7 +235,7 @@ class FakeHawkbit:
                 links["deploymentBase"] = {"href": f"{base}/deploymentBase/{a['id']}?c=1"}
             if t["requestAttributes"]:
                 links["configData"] = {"href": f"{base}/configData"}
-            return 200, {"config": {"polling": {"sleep": "00:05:00"}}, "_links": links}
+            return 200, {"config": {"polling": {"sleep": self.polling}}, "_links": links}
         if rest == "/configData" and method == "PUT":
             t["requestAttributes"] = False
             t["attributes"] = json.loads(body).get("data", {})

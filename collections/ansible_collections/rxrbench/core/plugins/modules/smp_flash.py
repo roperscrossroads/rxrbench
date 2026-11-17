@@ -103,6 +103,43 @@ options:
         it to answer, so the next task does not find the port closed.
     type: bool
     default: false
+  delivery:
+    description:
+      - A route that carries the image to the device itself (C(bench_delivery), from the plugin
+        that brings the route). The image is then not uploaded from here. The route is told
+        which image the device should take, and this module waits for the device to fetch it,
+        swap it in and confirm it. The device confirms a delivered image itself.
+      - The device is read over MCUmgr before and after all the same, so what the route's own
+        records say never decides whether the update worked.
+    type: dict
+    suboptions:
+      bearer:
+        description: The route's name in the registry.
+        type: str
+        required: true
+      tool:
+        description: The plugin's tool on this host that speaks for the route.
+        type: str
+        required: true
+      formats:
+        description: The image formats the route carries.
+        type: list
+        elements: str
+        required: true
+      address:
+        description: The device's address on that route, as the registry records it.
+        type: str
+      settings:
+        description: The plugin's own settings for the route (its server, its login).
+        type: dict
+      credential:
+        description: What the device shows the route when it asks, when the layout declares it.
+        type: str
+  delivery_timeout:
+    description: Seconds a device has to take a delivery and run the image. It asks its route
+      on its own schedule.
+    type: float
+    default: 1800.0
   flash_unknown:
     description: Write a board that answers as its family but reports neither a build nor
       a hash, so nothing can tell whether it already runs the image. On by default (a roll
@@ -171,6 +208,7 @@ from ansible_collections.rxrbench.core.plugins.module_utils import familyspec
 from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
 from ansible_collections.rxrbench.core.plugins.module_utils import gate
 from ansible_collections.rxrbench.core.plugins.module_utils.flash import common, smp
+from ansible_collections.rxrbench.core.plugins.module_utils.flash import delivery as route_delivery
 
 
 def main():
@@ -197,6 +235,15 @@ def main():
             "run_dir": {"type": "path"},
             "flash_unknown": {"type": "bool", "default": True},
             "check_depth": {"type": "str", "choices": ["full", "spot"], "default": "full"},
+            "delivery": {"type": "dict", "options": {
+                "bearer": {"type": "str", "required": True},
+                "tool": {"type": "str", "required": True},
+                "formats": {"type": "list", "elements": "str", "required": True},
+                "address": {"type": "str"},
+                "settings": {"type": "dict", "no_log": True},
+                "credential": {"type": "str", "no_log": True},
+            }},
+            "delivery_timeout": {"type": "float", "default": 1800.0},
             **gate.ARGS,
         },
         required_if=[("transport", "ble", ["address"]), ("transport", "udp", ["address", "bearer"])],
@@ -205,6 +252,7 @@ def main():
     p = module.params
     gate.check(module)   # the layout's go-ahead, before any device is touched
     familyspec.load(p["families"])
+    carrier = flasher = None
     try:
         manifest, _file = common.load_image(p["image"])
         kw = {"transport": p["transport"], "address": p["address"], "board_tag": p["board_tag"],
@@ -215,6 +263,15 @@ def main():
               "ble_lock_wait": p["ble_lock_wait"],
               # A plan changes nothing, and that includes this host's bonds.
               "rebond": "never" if module.check_mode else p["rebond"]}
+        if p["delivery"]:
+            # The device's address on the delivering route is the registry's too, or the
+            # route is told nothing about it.
+            why = common.route_refusal(p["devreg"], p["board"], p["delivery"]["bearer"],
+                                       p["delivery"].get("address"))
+            if why:
+                raise common.FlashError(why)
+            carrier = route_delivery.Delivery(p["delivery"], p["delivery"].get("address"))
+            kw.update(delivery=carrier, delivery_timeout=p["delivery_timeout"])
         if p["transport"] == "serial":
             with broker_client.Board(p["board"], path=p["socket"], timeout=p["settle"] + 60) as b:
                 flasher = smp.SmpFlasher(p["board"], manifest, p["image"], board=b, **kw)
@@ -231,11 +288,16 @@ def main():
                              flash_unknown=p["flash_unknown"])
     except (common.FlashError, broker_client.BrokerError, ValueError) as e:
         # `unanswered`: the device is not there to read (the play skips it, not the bench)
-        module.fail_json(msg=str(e), unanswered=isinstance(e, common.Unanswered))
+        msg = str(e)
+        if carrier is not None and flasher is not None and flasher.delivered is not None:
+            msg += "; " + carrier.verdict()      # what the route recorded of a delivery that failed
+        module.fail_json(msg=msg, unanswered=isinstance(e, common.Unanswered))
     result = {"changed": r["changed"], "image": r["image"], "slot": flasher.flags,
               "device": r["before"] if module.check_mode else r["after"]}
     if flasher.rebonded:
         result["rebonded"] = flasher.rebonded
+    if carrier is not None:
+        result["delivery"] = carrier.record(flasher.delivered, r["image"], result["device"])
     result["timing"] = r.get("timing", [])
     result["checked"] = r.get("checked")
     result["identity_checked"] = r.get("identity_checked")

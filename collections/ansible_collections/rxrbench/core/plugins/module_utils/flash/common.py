@@ -38,6 +38,11 @@ FLASHERS = ("sim", "esptool", "uf2", "smp", "swd", "picoboot", "esp-image")
 BEARERS = {"sim": ("sim",), "esptool": ("usb",), "uf2": ("usb",), "smp": ("usb", "ble", "eth", "wifi"),
            "swd": ("swd",), "picoboot": ("usb",), "esp-image": ("usb",)}
 
+#: What a core flasher hands a route that carries the image itself, in place of writing it: the
+#: format of the file it would have written (flash/delivery.py). A device whose image names
+#: such a flasher can take a delivering route that carries that format, whatever its family.
+DELIVERS = {"smp": "mcuboot-bin"}
+
 #: What a flasher can do beside writing an image, so a play asks for the ability and never
 #: names a flasher: `regions` (a device's config regions read, written back and erased),
 #: `chip` (the whole chip read and written back). A flasher not listed can do neither.
