@@ -1,9 +1,11 @@
 # Plugins: adding device families
 
 Core knows two device families (`zephyr_mcumgr`, `bare`). Every other family comes from a
-**plugin**: an Ansible collection a site names. Five are bundled: `rxrbench.mesh`,
-`rxrbench.linux`, `rxrbench.zephyr`, `rxrbench.nuttx` and `rxrbench.launcher`. The smallest real
-one is `rxrbench.nuttx`; the smallest whole one is the test fixture
+**plugin**: an Ansible collection a site names. Five bundled plugins bring families:
+`rxrbench.mesh`, `rxrbench.linux`, `rxrbench.zephyr`, `rxrbench.nuttx` and `rxrbench.launcher`.
+A sixth, `rxrbench.hawkbit`, brings no family: it brings a route
+([A route that delivers](#a-route-that-delivers)). The smallest real family plugin is
+`rxrbench.nuttx`; the smallest whole one is the test fixture
 `tests/fixtures/collections/ansible_collections/fixture/widgets`. How core uses what a plugin
 gives it is [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -245,8 +247,8 @@ back to another route during a run.
   what it was asked prints `{"error": "<why>"}` and exits non-zero; its words become the
   refusal.
 
-The fixture plugin `fixture.widgets` brings the smallest one, `courier`, and
-`tests/unit/test_delivery.py` holds core to the above with it.
+`rxrbench.hawkbit` is the bundled example, with the RAUC families of `rxrbench.linux` taking it;
+`tests/unit/test_route_delivery.py` holds both to the above.
 
 ## Secrets
 

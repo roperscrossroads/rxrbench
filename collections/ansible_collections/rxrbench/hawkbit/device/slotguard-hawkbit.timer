@@ -1,0 +1,12 @@
+# Poll after the boot has settled and then every five minutes (hawkBit's default polling
+# time; the server's own value, config.polling.sleep, is not read).
+[Unit]
+Description=hawkBit poll timer
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

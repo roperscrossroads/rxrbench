@@ -9,7 +9,7 @@ changes nothing.
 
 What the tool can do for a device depends on its **family**. Two are built in: any Zephyr
 application with MCUmgr, and a chip behind a debug probe. The rest come from **plugins**,
-Ansible collections a site names. Five ship here:
+Ansible collections a site names. Six ship here:
 
 | Plugin | What it manages |
 |---|---|
@@ -18,6 +18,7 @@ Ansible collections a site names. Five ship here:
 | [`rxrbench.zephyr`](collections/ansible_collections/rxrbench/zephyr/README.md) | any Zephyr application configured through Zephyr's settings shell, with its secrets |
 | [`rxrbench.nuttx`](collections/ansible_collections/rxrbench/nuttx/README.md) | Apache NuttX devices through NSH, their configuration kept as files |
 | [`rxrbench.launcher`](collections/ansible_collections/rxrbench/launcher/README.md) | ESP32 devices under the Launcher app manager: its version, the apps in its slots, its settings |
+| [`rxrbench.hawkbit`](collections/ansible_collections/rxrbench/hawkbit/README.md) | no family: an Eclipse hawkBit update server as a route, where a device fetches its image itself and is still read by the bench |
 
 ## Status: alpha
 

@@ -1,0 +1,31 @@
+# The report after a boot: runs once this boot's health gate has an answer, whichever it is.
+#
+# Ordering only (After=), no Requires=: when boot-health-check.service FAILS, the jobs of
+# boot-complete.target and rauc-mark-good.service fail with it, and a unit that merely
+# comes After= them is still started. That is the case this unit exists for.
+#
+# DefaultDependencies=no for the same reason rauc-mark-good.service has it: the unit is
+# WantedBy=multi-user.target and must run after boot-health-check.service, which itself runs
+# After=multi-user.target; with default dependencies that is an ordering cycle.
+[Unit]
+Description=hawkBit report (how the pending update turned out on this boot)
+Documentation=file:///usr/bin/slotguard-hawkbit
+DefaultDependencies=no
+After=boot-health-check.service boot-complete.target rauc-mark-good.service
+After=data.mount network-online.target
+Wants=network-online.target
+Conflicts=shutdown.target
+Before=shutdown.target
+# Only when an update is in flight.
+ConditionPathExists=/data/hawkbit/pending
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slotguard-hawkbit report
+# As in slotguard-hawkbit.service; a report the server did not take (4) is retried by the timer.
+SuccessExitStatus=3 4 5
+# It may wait a minute for a poll that is running, then for a slow server.
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target

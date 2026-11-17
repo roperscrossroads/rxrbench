@@ -1,0 +1,17 @@
+---
+namespace: rxrbench
+name: hawkbit
+version: 0.1.0
+readme: README.md
+authors:
+  - Adam Roper
+description: An Eclipse hawkBit update server as a route. The device fetches its image; the bench still reads it.
+license:
+  - MIT
+tags:
+  - tools
+  - infrastructure
+dependencies:
+  rxrbench.core: ">=0.2.0"
+repository: https://github.com/roperscrossroads/rxrbench
+issues: https://github.com/roperscrossroads/rxrbench/issues

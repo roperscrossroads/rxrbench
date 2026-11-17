@@ -95,7 +95,7 @@ def no_admin_pacing(monkeypatch):
         return
     monkeypatch.setattr(config, "PACE", 0)
 
-BUNDLED = ("mesh", "linux", "zephyr", "nuttx", "launcher")
+BUNDLED = ("mesh", "linux", "zephyr", "nuttx", "launcher", "hawkbit")
 _IMPORTS_BUNDLED = re.compile(r"""^(?:from|import) ansible_collections\.rxrbench\.(?:%s)\b"""
                               r"""|import_module\(\s*["']ansible_collections\.rxrbench\.(?:%s)\b"""
                               % ("|".join(BUNDLED), "|".join(BUNDLED)), re.M)

@@ -44,7 +44,7 @@ def test_the_synopsis_says_what_a_recipe_takes():
 
 
 def test_the_doc_tools_see_every_collection_and_its_python():
-    assert docs.collections() == ["core", "launcher", "linux", "mesh", "nuttx", "zephyr"]
+    assert docs.collections() == ["core", "hawkbit", "launcher", "linux", "mesh", "nuttx", "zephyr"]
     pkgs = docs.python_packages()
     assert "ansible_collections.rxrbench.core.plugins.module_utils" in pkgs
     assert not [p for p in pkgs if ".modules" in p], "modules are antsibull-docs' to document"

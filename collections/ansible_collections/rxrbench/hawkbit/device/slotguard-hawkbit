@@ -1,0 +1,620 @@
+#!/bin/sh
+# slotguard-hawkbit: a hawkBit device client for RAUC + slotguard that tells the server an
+# update succeeded only after the new slot has booted and passed its health gate.
+#
+#   slotguard-hawkbit poll      ask the server; install what it offers; reboot
+#   slotguard-hawkbit report    after a boot: say how the update that was pending turned out
+#   slotguard-hawkbit status    print the config in use and the pending record, change nothing
+#
+# Why not rauc-hawkbit-updater: it reports closed/success as soon as RAUC has written the
+# inactive slot, before the reboot, and keeps no state, so the server never learns that a slot
+# failed its gate or that the bootloader fell back.
+#
+# What this does instead:
+#   poll    no pending record: GET the base resource; if a deployment is offered, download the
+#           bundle to /data, check its sha256, write the pending record, report `proceeding`,
+#           `rauc install`, report `proceeding` again and reboot. The action stays OPEN.
+#           A pending record: never look for a deployment (the server still offers the open
+#           action, and taking it again is the reinstall loop); run `report` instead.
+#   report  compares the slot that is running with the record:
+#             the new slot, marked good (rauc-mark-good.service ran)   -> closed/success
+#             the new slot, boot-health-check.service failed           -> closed/failure + why
+#             the new slot, gate not finished                          -> nothing final, exit 3
+#             the old slot again (the bootloader fell back)            -> closed/failure "rolled back"
+#
+# An unhealthy slot is NOT left by this client's report: slotguard withholds mark-good, and the
+# bootloader goes back to the old slot only when the new slot's boot attempts have run out.
+# Each attempt is one boot, so something must reboot the device. REBOOT_ON_UNHEALTHY=1 makes
+# this client do it (once per boot, after the gate has failed); with 0 the device stays on the
+# unhealthy slot until a watchdog, a power cycle or an operator reboots it that many times.
+#
+# Files (DIR is /data/hawkbit: /data is writable and shared by both slots):
+#   DIR/config    shell-style KEY=value lines, read with sed, never sourced:
+#                   SERVER=http://host:8080      no trailing slash
+#                   TENANT=DEFAULT
+#                   CONTROLLER_ID=<target id>
+#                   TARGET_TOKEN=<security token>          (mode 600; never in an image)
+#                   REBOOT_ON_UNHEALTHY=0|1                 default 0
+#                   GATE_TIMEOUT_SEC=1800                   uptime after which an undecided gate is a failure
+#                   DOWNLOAD_TRIES=3                        attempts (resumed) before a download is a failure
+#                   REBOOT_CMD=systemctl reboot
+#   DIR/pending   the update in flight, written before RAUC touches a slot:
+#                   ACTION= VERSION= SLOT_OLD= SLOT_NEW= BOOT_ID= STATE=
+#                   STATE is installing (RAUC is writing), installed (written, reboot due),
+#                   failed (closed/failure sent, the failed slot has not been left yet) or
+#                   unreported (failed before the reboot and the server did not take the report)
+#   DIR/bundle.raucb.part, DIR/bundle.raucb   the download; removed after the install
+#   DIR/log       what the client did (reports, installs, reboots), kept across boots; the
+#                 last 200 lines. Each line: time, running slot, uptime, poll|report, text.
+#
+# Exit codes (the timer's unit treats 3 to 6 as "nothing wrong, try again later"):
+#   0  nothing to do, or done (a final report was accepted, or an install ended in a reboot)
+#   1  an install failed and closed/failure was reported
+#   2  usage or configuration error
+#   3  an update is pending and its outcome is not known yet (gate still running, or the
+#      reboot has not happened yet)
+#   4  the server could not be reached or refused; the record is kept, run again later
+#   5  failure reported; the failed slot is still running and waits for its fall-back
+#   6  a deployment is offered but this slot is not marked good yet; nothing was installed
+#
+# HTTP is curl when the image has it, else wget (busybox's is enough: --header, --post-data,
+# -S, -c, -T). busybox wget has no TLS in these images: an https server needs curl.
+#
+# JSON is read with awk, not a parser. Assumptions, all true of hawkBit 1.1.0's DDI output:
+#   - string values hold no escaped quote (\") and keys are not repeated before the one wanted;
+#   - a deployment has ONE artifact (one .raucb); more is refused with closed/failure;
+#   - "update":"skip" (download only, a closed maintenance window) means: do nothing yet;
+#   - the artifact carries "sha256" and a "download-http" (or "download") link.
+# Download and deployment links are rewritten to the configured SERVER's scheme://host:port,
+# because the server builds them from the Host header it was asked with (a proxy or a port
+# forward that does not pass Host on makes them point somewhere the device cannot reach).
+#
+# Works under busybox sh. Needs: rauc, systemctl, sha256sum, awk, sed, tr, cut, df, and
+# /proc/cmdline with rauc.slot= (else `rauc status`).
+
+set -u
+
+DIR="${SLOTGUARD_HAWKBIT_DIR:-/data/hawkbit}"
+CONF="$DIR/config"
+PENDING="$DIR/pending"
+BUNDLE="$DIR/bundle.raucb"
+LOCK="${SLOTGUARD_HAWKBIT_LOCK:-/run/slotguard-hawkbit.lock}"
+# For tests on a machine that is not the device (scripts/client-hosttest.py):
+CMDLINE_FILE="${SLOTGUARD_HAWKBIT_CMDLINE:-/proc/cmdline}"
+BOOT_ID_FILE="${SLOTGUARD_HAWKBIT_BOOT_ID:-/proc/sys/kernel/random/boot_id}"
+UPTIME_FILE="${SLOTGUARD_HAWKBIT_UPTIME:-/proc/uptime}"
+ME=slotguard-hawkbit
+
+log() { echo "$ME: $*" >&2; }
+die() { log "$*"; exit 2; }
+
+# event TEXT: something worth knowing after the fact (a report, an install, a reboot): to
+# stderr like log, and to DIR/log, which outlives the reboot (the journal of these images is
+# volatile, and the boot that reported a failure is gone by the time anyone looks).
+event() {
+    log "$*"
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) slot=$(running_slot) up=$(uptime_s)s $cmd: $*" >> "$DIR/log" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------- small tools
+
+# conf KEY [default]: the value of KEY in the config file (last one wins), never executed.
+conf() {
+    _v=$(sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$CONF" 2>/dev/null | tail -n 1 |
+        sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/")
+    printf '%s' "${_v:-${2:-}}"
+}
+
+# rec KEY: a field of the pending record.
+rec() { sed -n "s/^$1=//p" "$PENDING" 2>/dev/null | head -n 1; }
+
+# safe TEXT: only characters that are harmless in the record and in a file name.
+safe() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._+:-' | cut -c1-120; }
+
+# record_write ACTION VERSION SLOT_OLD SLOT_NEW BOOT_ID STATE: atomically, and on the disk.
+record_write() {
+    printf 'ACTION=%s\nVERSION=%s\nSLOT_OLD=%s\nSLOT_NEW=%s\nBOOT_ID=%s\nSTATE=%s\n' \
+        "$1" "$2" "$3" "$4" "$5" "$6" > "$PENDING.tmp" || return 1
+    sync
+    mv -f "$PENDING.tmp" "$PENDING" || return 1
+    sync
+}
+
+record_state() {
+    record_write "$(rec ACTION)" "$(rec VERSION)" "$(rec SLOT_OLD)" "$(rec SLOT_NEW)" "$(rec BOOT_ID)" "$1"
+}
+
+record_clear() { rm -f "$PENDING" "$PENDING.tmp" "$PENDING.reason" "$BUNDLE" "$BUNDLE.part" "$BUNDLE.sha"; sync; }
+
+boot_id() { cat "$BOOT_ID_FILE" 2>/dev/null || echo unknown; }
+uptime_s() { cut -d. -f1 "$UPTIME_FILE" 2>/dev/null || echo 0; }
+
+# The slot this boot runs: what the bootloader put on the kernel command line, else RAUC's word.
+running_slot() {
+    _s=$(tr ' ' '\n' < "$CMDLINE_FILE" | sed -n 's/^rauc\.slot=//p' | head -n 1)
+    [ -n "$_s" ] || _s=$(rauc status --output-format=shell 2>/dev/null |
+        sed -n "s/^RAUC_SYSTEM_BOOTED_BOOTNAME='\(.*\)'\$/\1/p")
+    printf '%s' "$_s"
+}
+
+# The slot an install would fill: the one other boot name. Assumes a two-slot A/B layout
+# (one bootable slot besides the running one); anything else prints nothing.
+other_slot() {
+    rauc status --output-format=shell 2>/dev/null |
+        sed -n "s/^RAUC_SLOT_BOOTNAME_[0-9]*='\(..*\)'\$/\1/p" | grep -vx "$1" > "$TMP/slots"
+    [ "$(wc -l < "$TMP/slots")" -eq 1 ] && cat "$TMP/slots"
+}
+
+# RAUC's boot status of the running slot (good|bad). With the U-Boot backend this reads
+# `good` whenever the slot still has boot attempts left, so it is necessary, NOT sufficient:
+# a slot that has not passed its gate yet reads good too. The proof is rauc-mark-good.service.
+rauc_boot_status() {
+    rauc status --output-format=shell 2>/dev/null | awk -F"'" -v slot="$1" '
+        /^RAUC_SLOT_BOOTNAME_[0-9]+=/    { n = $1; sub(/^RAUC_SLOT_BOOTNAME_/, "", n); sub(/=$/, "", n); name[n] = $2 }
+        /^RAUC_SLOT_BOOT_STATUS_[0-9]+=/ { n = $1; sub(/^RAUC_SLOT_BOOT_STATUS_/, "", n); sub(/=$/, "", n); st[n] = $2 }
+        END { for (n in name) if (name[n] == slot) print st[n] }'
+}
+
+# The bootloader's attempt counters, for the report's text (U-Boot backend; empty elsewhere).
+counters() {
+    command -v fw_printenv > /dev/null 2>&1 || return 0
+    fw_printenv 2>/dev/null | grep -E '^BOOT_(ORDER|[A-Za-z0-9]+_LEFT)=' | tr '\n' ' ' | sed 's/ $//'
+}
+
+unit_state() { systemctl is-active "$1" 2>/dev/null | head -n 1; }
+
+# gate SLOT: sets GATE to what this boot's health gate has decided (good | bad | wait) and
+# GATE_WHY to the reason, in words for the server.
+gate() {
+    _slot=$1
+    _mg=$(unit_state rauc-mark-good.service)
+    _hc=$(unit_state boot-health-check.service)
+    if [ "$_mg" = active ]; then
+        if [ "$(rauc_boot_status "$_slot")" = good ]; then
+            GATE_WHY="slot $_slot marked good after its health gate ($(counters))"
+            GATE=good
+        else
+            GATE_WHY="rauc-mark-good ran but RAUC does not call slot $_slot good ($(counters))"
+            GATE=bad
+        fi
+    elif [ "$_hc" = failed ]; then
+        _why=$(journalctl -b -u boot-health-check.service -o cat --no-pager 2>/dev/null |
+            sed -n 's/^boot-health-check: FAIL: //p' | tr '\n' ';' | sed 's/;$//; s/;/; /g')
+        GATE_WHY="health gate failed on slot $_slot: ${_why:-no reason in the journal}"
+        GATE=bad
+    elif [ "$_mg" = failed ]; then
+        GATE_WHY="rauc-mark-good.service failed on slot $_slot"
+        GATE=bad
+    elif [ "$(uptime_s)" -gt "$GATE_TIMEOUT_SEC" ]; then
+        GATE_WHY="health gate undecided after $(uptime_s) s on slot $_slot (boot-health-check: ${_hc:-?}, rauc-mark-good: ${_mg:-?})"
+        GATE=bad
+    else
+        GATE_WHY="boot-health-check: ${_hc:-?}, rauc-mark-good: ${_mg:-?}, uptime $(uptime_s) s"
+        GATE=wait
+    fi
+}
+
+# ---------------------------------------------------------------- JSON, read with awk
+
+# json_str KEY < flat-json: the first "KEY":"value". json_href REL < flat-json: the href of
+# the first link "REL":{"href":"..."}. See the assumptions at the top of this file.
+JSON_AWK='
+function strval(s, key,    i, r) {
+    while ((i = index(s, "\"" key "\"")) > 0) {
+        s = substr(s, i + length(key) + 2)
+        if (match(s, /^[ \t]*:[ \t]*"/)) { r = substr(s, RLENGTH + 1); return substr(r, 1, index(r, "\"") - 1) }
+    }
+    return ""
+}
+function link(s, rel,    i) {
+    while ((i = index(s, "\"" rel "\"")) > 0) {
+        s = substr(s, i + length(rel) + 2)
+        if (match(s, /^[ \t]*:[ \t]*[{]/)) return strval(substr(s, RLENGTH + 1), "href")
+    }
+    return ""
+}
+{ doc = doc $0 }
+END {
+    if (mode == "str")   print strval(doc, key)
+    if (mode == "href")  print link(doc, key)
+    if (mode == "count") print gsub("\"" key "\"[ \t]*:", "", doc)
+}'
+json_str()   { tr -d '\r\n' | awk -v mode=str   -v key="$1" "$JSON_AWK"; }
+json_href()  { tr -d '\r\n' | awk -v mode=href  -v key="$1" "$JSON_AWK"; }
+json_count() { tr -d '\r\n' | awk -v mode=count -v key="$1" "$JSON_AWK"; }
+
+# json_escape TEXT: safe inside a JSON string, one line, at most 400 characters (hawkBit
+# keeps 512 per status message).
+json_escape() {
+    printf '%s' "$1" | tr '\n\r\t' '   ' | tr -d '\000-\037' | cut -c1-400 | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# ---------------------------------------------------------------- HTTP
+
+# http METHOD URL OUTFILE [BODY]: sets HTTP_CODE (000 when there was no answer). The body of
+# the answer goes to OUTFILE. Returns 0 on 2xx.
+http() {
+    _m=$1; _url=$2; _out=$3; _body=${4:-}
+    HTTP_CODE=000
+    if [ "$HTTP" = curl ]; then
+        if [ "$_m" = POST ]; then
+            HTTP_CODE=$(curl -sS --connect-timeout 20 --max-time 120 -o "$_out" -w '%{http_code}' \
+                -H "Authorization: TargetToken $TARGET_TOKEN" -H 'Content-Type: application/json' \
+                --data "$_body" "$_url" 2> "$TMP/err") || true
+        else
+            HTTP_CODE=$(curl -sS --connect-timeout 20 --max-time 120 -o "$_out" -w '%{http_code}' \
+                -H "Authorization: TargetToken $TARGET_TOKEN" "$_url" 2> "$TMP/err") || true
+        fi
+    else
+        # -S prints the answer's headers on stderr; the status line is all that is read.
+        if [ "$_m" = POST ]; then
+            wget -q -S -T 60 -O "$_out" --header "Authorization: TargetToken $TARGET_TOKEN" \
+                --header 'Content-Type: application/json' --post-data "$_body" "$_url" 2> "$TMP/err" || true
+        else
+            wget -q -S -T 60 -O "$_out" --header "Authorization: TargetToken $TARGET_TOKEN" \
+                "$_url" 2> "$TMP/err" || true
+        fi
+        HTTP_CODE=$(sed -n 's/^.*HTTP\/[0-9.]* \([0-9][0-9][0-9]\).*$/\1/p' "$TMP/err" | tail -n 1)
+    fi
+    case "${HTTP_CODE:=000}" in
+        2??) return 0 ;;
+        000) log "no answer from $_url: $(tail -n 1 "$TMP/err" 2>/dev/null)"; return 1 ;;
+        *)   log "HTTP $HTTP_CODE from $_url"; return 1 ;;
+    esac
+}
+
+# download URL FILE: resumed across attempts (the .part file is kept between them).
+download() {
+    _n=0
+    while [ "$_n" -lt "$DOWNLOAD_TRIES" ]; do
+        _n=$((_n + 1))
+        if [ "$HTTP" = curl ]; then
+            curl -sS -f --connect-timeout 20 --retry 0 -C - -o "$2" \
+                -H "Authorization: TargetToken $TARGET_TOKEN" "$1" 2> "$TMP/err" && return 0
+        else
+            wget -q -c -T 60 -O "$2" --header "Authorization: TargetToken $TARGET_TOKEN" "$1" 2> "$TMP/err" && return 0
+        fi
+        log "download attempt $_n of $DOWNLOAD_TRIES failed: $(tail -n 1 "$TMP/err" 2>/dev/null)"
+        sleep 2
+    done
+    return 1
+}
+
+# to_server URL: the same path on the configured server (see the top of this file).
+to_server() {
+    _new=$(printf '%s' "$1" | sed "s|^[A-Za-z][A-Za-z0-9+.-]*://[^/]*|$ORIGIN|")
+    [ "$_new" = "$1" ] || log "link rewritten to the configured server: $1 -> $_new"
+    printf '%s' "$_new"
+}
+
+# feedback ACTION EXECUTION FINISHED TEXT...: one status report on an action. Returns 0 when
+# the server took it; FEEDBACK_GONE=1 when the server no longer has that action open (404,
+# 410: deleted, cancelled or closed by someone else), which no retry will change.
+feedback() {
+    _a=$1; _e=$2; _f=$3; shift 3
+    _d=""
+    for _t in "$@"; do
+        [ -n "$_t" ] || continue
+        _d="$_d${_d:+,}\"$(json_escape "$_t")\""
+    done
+    FEEDBACK_GONE=0
+    if http POST "$BASE/deploymentBase/$_a/feedback" "$TMP/fb" \
+        "{\"status\":{\"execution\":\"$_e\",\"result\":{\"finished\":\"$_f\"},\"details\":[$_d]}}"; then
+        event "reported $_e/$_f on action $_a: $1"
+        return 0
+    fi
+    case "$HTTP_CODE" in 404|410) FEEDBACK_GONE=1 ;; esac
+    return 1
+}
+
+# final ACTION success|failure TEXT...: the closing report. 0 = the server has it (or will
+# never take it: the action is gone); 1 = keep the record and try again later.
+final() {
+    _fa=$1; _fr=$2; shift 2
+    feedback "$_fa" closed "$_fr" "$@" && return 0
+    if [ "$FEEDBACK_GONE" = 1 ]; then
+        event "the server no longer has action $_fa open (HTTP $HTTP_CODE); dropping the report: $1"
+        return 0
+    fi
+    return 1
+}
+
+do_reboot() {
+    event "rebooting ($1)"
+    sync
+    # shellcheck disable=SC2086  # REBOOT_CMD is a command line
+    $REBOOT_CMD || log "the reboot command failed: $REBOOT_CMD"
+}
+
+# ---------------------------------------------------------------- report
+
+report() {
+    if [ ! -f "$PENDING" ]; then
+        log "no update pending"
+        return 0
+    fi
+    action=$(rec ACTION); version=$(rec VERSION); old=$(rec SLOT_OLD); new=$(rec SLOT_NEW)
+    state=$(rec STATE); slot=$(running_slot)
+    if [ -z "$action" ] || [ -z "$new" ] || [ -z "$slot" ]; then
+        log "the pending record is unreadable or the running slot is unknown; leaving it (record: $(tr '\n' ' ' < "$PENDING"))"
+        return 2
+    fi
+
+    if [ "$state" = unreported ]; then
+        # An install that failed before the reboot, whose report the server did not take then.
+        final "$action" failure "$(cat "$PENDING.reason" 2>/dev/null || echo 'the install failed before the reboot')" || return 4
+        record_clear
+        return 0
+    fi
+
+    if [ "$(rec BOOT_ID)" = "$(boot_id)" ]; then
+        # Still the boot that installed: no verdict is possible yet. (Without this, a poll
+        # that runs before the reboot has happened would see the old slot and say "rolled back".)
+        if [ "$state" = installed ]; then
+            log "action $action is installed to slot $new and this is still the boot that installed it"
+            do_reboot "action $action installed to slot $new; the earlier reboot did not happen"
+            return 3
+        fi
+        log "action $action: an install is recorded as started in this boot (state $state) and did not finish"
+        return 3
+    fi
+
+    if [ "$slot" = "$new" ]; then
+        gate "$slot"
+        verdict=$GATE
+        if [ "$state" = failed ]; then
+            # Already reported; this is a later boot of the same failed slot.
+            if [ "$verdict" = wait ]; then
+                log "action $action failed (reported); slot $new booted again, its gate is undecided ($GATE_WHY)"
+                return 3
+            fi
+            if [ "$verdict" = good ]; then
+                event "action $action was reported failed, but slot $new passed its gate on this boot; record cleared (the server still reads failure: assign again)"
+                record_clear
+                return 0
+            fi
+            log "action $action failed (reported); slot $new is still running and unhealthy ($(counters))"
+            [ "$REBOOT_ON_UNHEALTHY" = 1 ] && do_reboot "unhealthy slot $new: using up its boot attempts"
+            return 5
+        fi
+        case "$verdict" in
+            good)
+                final "$action" success "$GATE_WHY" "version $version, running slot $slot (was $old)" || return 4
+                record_clear
+                return 0 ;;
+            bad)
+                final "$action" failure "$GATE_WHY" \
+                    "slot $new stays in use until its boot attempts run out ($(counters)); then the bootloader returns to slot $old" || return 4
+                record_state failed
+                rm -f "$BUNDLE" "$BUNDLE.part" "$BUNDLE.sha"
+                [ "$REBOOT_ON_UNHEALTHY" = 1 ] && do_reboot "unhealthy slot $new: using up its boot attempts"
+                return 5 ;;
+            *)
+                log "action $action: slot $new is running, its gate is undecided ($GATE_WHY)"
+                return 3 ;;
+        esac
+    fi
+
+    # Not the new slot: the old one came back (or the install never finished).
+    case "$state" in
+        failed)
+            event "action $action failed (reported earlier); the bootloader is back on slot $slot ($(counters)); record cleared"
+            record_clear
+            return 0 ;;
+        installed)
+            final "$action" failure "rolled back: version $version was installed to slot $new, but slot $slot is running again" \
+                "the new slot did not boot, or used up its boot attempts without being marked good ($(counters))" || return 4
+            record_clear
+            return 0 ;;
+        *)
+            final "$action" failure "install interrupted: the device restarted while version $version was being written to slot $new (state $state)" \
+                "slot $slot is running; assign again to retry" || return 4
+            record_clear
+            return 0 ;;
+    esac
+}
+
+# ---------------------------------------------------------------- poll
+
+# fail_install ACTION TEXT...: an install that ended before the reboot.
+fail_install() {
+    _ia=$1; shift
+    event "action $_ia failed: $1"
+    if final "$_ia" failure "$@"; then
+        record_clear
+        return 1
+    fi
+    # The server did not take the report: keep it, `report` sends it on a later run.
+    rm -f "$BUNDLE" "$BUNDLE.part" "$BUNDLE.sha"
+    record_write "$_ia" "${version:-unknown}" "${old:-?}" "${new:-?}" "$(boot_id)" unreported
+    printf '%s\n' "$1" > "$PENDING.reason"
+    return 4
+}
+
+poll() {
+    if [ -f "$PENDING" ]; then
+        log "an update is pending (action $(rec ACTION), state $(rec STATE)): not asking for a deployment"
+        report
+        return $?
+    fi
+
+    http GET "$BASE" "$TMP/base" || return 4
+    cancel=$(json_href cancelAction < "$TMP/base")
+    if [ -n "$cancel" ]; then
+        # A cancel of an action this device never started (it has no record): agree, so the
+        # server can move on. (A cancel that arrives after the install is not seen here: a
+        # pending record stops the poll, and the action's outcome is reported as usual.)
+        cid=$(printf '%s' "$cancel" | sed -n 's|.*/cancelAction/\([0-9][0-9]*\).*|\1|p')
+        if [ -n "$cid" ] && http POST "$BASE/cancelAction/$cid/feedback" "$TMP/fb" \
+            '{"status":{"execution":"closed","result":{"finished":"success"},"details":["cancelled before the device started it"]}}'; then
+            event "action $cid was cancelled on the server before it started here; acknowledged"
+            return 0
+        fi
+        return 4
+    fi
+    link=$(json_href deploymentBase < "$TMP/base")
+    if [ -z "$link" ]; then
+        log "nothing offered"
+        return 0
+    fi
+    action=$(printf '%s' "$link" | sed -n 's|.*/deploymentBase/\([0-9][0-9]*\).*|\1|p')
+    [ -n "$action" ] || { log "no action id in $link"; return 4; }
+
+    old=$(running_slot)
+    if [ "${SLOTGUARD_HAWKBIT_NAIVE:-0}" != 1 ] && [ "$(unit_state rauc-mark-good.service)" != active ]; then
+        # Installing now would overwrite the other slot, the only one known to work, from a
+        # slot that has not passed its gate (or has failed it).
+        log "action $action is offered, but slot $old is not marked good (rauc-mark-good: $(unit_state rauc-mark-good.service)); not installing"
+        return 6
+    fi
+
+    http GET "$(to_server "$link")" "$TMP/dep" || return 4
+    if [ "$(json_str update < "$TMP/dep")" = skip ]; then
+        # A download-only assignment, or a maintenance window that is not open: the server
+        # says not to install yet. Nothing is fetched ahead of time; the action stays open.
+        log "action $action is offered with update=skip (download only, or outside its maintenance window): not installing"
+        return 0
+    fi
+    version=$(safe "$(json_str version < "$TMP/dep")")
+    sha=$(json_str sha256 < "$TMP/dep" | tr 'A-F' 'a-f')
+    size=$(tr -d '\r\n' < "$TMP/dep" | sed -n 's/.*"size"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+    file=$(json_str filename < "$TMP/dep")
+    # hawkBit names the https link "download" and the http one "download-http".
+    case "$ORIGIN" in
+        https:*) url=$(json_href download < "$TMP/dep") ;;
+        *)       url="" ;;
+    esac
+    [ -n "$url" ] || url=$(json_href download-http < "$TMP/dep")
+    [ -n "$url" ] || url=$(json_href download < "$TMP/dep")
+    n=$(json_count filename < "$TMP/dep")
+    new=$(other_slot "$old")
+    event "action $action: version ${version:-?}, $file (${size:-?} B), from slot $old to slot ${new:-?}"
+
+    if [ "$n" != 1 ]; then
+        fail_install "$action" "this client installs one bundle per deployment; the deployment has $n artifacts"
+        return $?
+    fi
+    if [ -z "$url" ] || ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$'; then
+        fail_install "$action" "the deployment has no download link or no sha256 for $file"
+        return $?
+    fi
+    if [ -z "$new" ]; then
+        fail_install "$action" "cannot tell which slot an install would fill (not a two-slot A/B layout?)"
+        return $?
+    fi
+
+    # ---- download and check
+    if [ "$(cat "$BUNDLE.sha" 2>/dev/null)" != "$sha" ]; then
+        rm -f "$BUNDLE.part"            # a leftover of some other artifact: never resume into it
+        printf '%s\n' "$sha" > "$BUNDLE.sha"
+    fi
+    free=$(df -kP "$DIR" 2>/dev/null | awk 'NR == 2 { print $4 }')
+    have=0
+    [ -f "$BUNDLE.part" ] && have=$(wc -c < "$BUNDLE.part")
+    if [ -n "$size" ] && [ -n "$free" ] && [ $(( (size - have) / 1024 + 1024 )) -gt "$free" ]; then
+        fail_install "$action" "not enough room on $DIR for $file: $size B wanted, $free KiB free"
+        return $?
+    fi
+    feedback "$action" proceeding none "downloading $file ($size B)" || return 4
+    got=""
+    [ "$have" = "${size:-x}" ] && got=$(sha256sum "$BUNDLE.part" | cut -d' ' -f1)   # complete already?
+    if [ "$got" != "$sha" ] && ! download "$(to_server "$url")" "$BUNDLE.part"; then
+        fail_install "$action" "download failed after $DOWNLOAD_TRIES attempts: $(tail -n 1 "$TMP/err" 2>/dev/null)"
+        return $?
+    fi
+    got=$(sha256sum "$BUNDLE.part" | cut -d' ' -f1)
+    if [ "$got" != "$sha" ]; then
+        rm -f "$BUNDLE.part"
+        fail_install "$action" "sha256 mismatch on $file: got $got, the server says $sha"
+        return $?
+    fi
+    mv -f "$BUNDLE.part" "$BUNDLE"
+
+    # ---- a test's negative control: what a client that reports before its reboot does. Only from the
+    # environment, never from the config file. Do not use.
+    if [ "${SLOTGUARD_HAWKBIT_NAIVE:-0}" = 1 ]; then
+        if rauc install "$BUNDLE" > "$TMP/rauc" 2>&1; then
+            final "$action" success "NAIVE: bundle installed to slot $new, reported before any reboot"
+            record_clear
+            do_reboot "naive install of action $action"
+            return 0
+        fi
+        final "$action" failure "NAIVE: rauc install failed: $(grep -v '^$' "$TMP/rauc" | tail -n 1)"
+        record_clear
+        return 1
+    fi
+
+    # ---- the record first, then RAUC
+    if ! record_write "$action" "$version" "$old" "$new" "$(boot_id)" installing; then
+        fail_install "$action" "cannot write $PENDING: nothing was installed"
+        return $?
+    fi
+    feedback "$action" proceeding none "sha256 ok; installing version $version to slot $new (running slot $old)" ||
+        log "the server did not take a progress report; installing anyway (the record is on the disk)"
+    if ! rauc install "$BUNDLE" > "$TMP/rauc" 2>&1; then
+        why=$(grep -v '^$' "$TMP/rauc" | tail -n 2 | tr '\n' ' ')
+        fail_install "$action" "rauc install failed: $why" "slot $old keeps running; nothing to roll back"
+        return $?
+    fi
+    record_state installed
+    rm -f "$BUNDLE" "$BUNDLE.sha"
+    feedback "$action" proceeding none "installed to slot $new; rebooting. Success is reported only after slot $new has passed its health gate ($(counters))" ||
+        log "the server did not take a progress report; rebooting anyway"
+    do_reboot "action $action installed to slot $new"
+    return 0
+}
+
+# ---------------------------------------------------------------- main
+
+cmd=${1:-}
+case "$cmd" in
+    poll|report|status) ;;
+    *) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac
+
+[ -r "$CONF" ] || die "no config at $CONF"
+SERVER=$(conf SERVER); SERVER=${SERVER%/}
+TENANT=$(conf TENANT DEFAULT)
+CONTROLLER_ID=$(conf CONTROLLER_ID)
+TARGET_TOKEN=$(conf TARGET_TOKEN)
+REBOOT_ON_UNHEALTHY=$(conf REBOOT_ON_UNHEALTHY 0)
+GATE_TIMEOUT_SEC=$(conf GATE_TIMEOUT_SEC 1800)
+DOWNLOAD_TRIES=$(conf DOWNLOAD_TRIES 3)
+REBOOT_CMD=$(conf REBOOT_CMD "systemctl reboot")
+[ -n "$SERVER" ] && [ -n "$CONTROLLER_ID" ] && [ -n "$TARGET_TOKEN" ] ||
+    die "$CONF needs SERVER, CONTROLLER_ID and TARGET_TOKEN"
+ORIGIN=$(printf '%s' "$SERVER" | sed -n 's|^\([A-Za-z][A-Za-z0-9+.-]*://[^/]*\).*|\1|p')
+[ -n "$ORIGIN" ] || die "SERVER is not a URL: $SERVER"
+BASE="$SERVER/$TENANT/controller/v1/$CONTROLLER_ID"
+if command -v curl > /dev/null 2>&1; then HTTP=curl; else HTTP=wget; fi
+command -v "$HTTP" > /dev/null 2>&1 || die "neither curl nor wget is here"
+
+if [ "$cmd" = status ]; then
+    echo "server      $BASE ($HTTP)"
+    echo "slot        $(running_slot) (rauc-mark-good: $(unit_state rauc-mark-good.service), boot-health-check: $(unit_state boot-health-check.service))"
+    echo "bootloader  $(counters)"
+    if [ -f "$PENDING" ]; then echo "pending     $(tr '\n' ' ' < "$PENDING")"; else echo "pending     none"; fi
+    exit 0
+fi
+
+# One at a time: the timer's poll and the boot's report are the same program. A poll that
+# finds the lock taken gives up (the timer brings it back); a report waits a minute for it,
+# because nothing starts the boot's report a second time.
+_w=0
+until mkdir "$LOCK" 2>/dev/null; do
+    if [ "$cmd" != report ] || [ "$_w" -ge 60 ]; then
+        log "another run holds $LOCK"
+        exit 3
+    fi
+    _w=$((_w + 2))
+    sleep 2
+done
+TMP="$LOCK"
+trap 'rm -rf "$LOCK"' EXIT
+if [ -f "$DIR/log" ] && [ "$(wc -l < "$DIR/log")" -gt 400 ]; then
+    tail -n 200 "$DIR/log" > "$DIR/log.tmp" && mv -f "$DIR/log.tmp" "$DIR/log"
+fi
+trap 'exit 4' INT TERM HUP
+
+"$cmd"
+exit $?

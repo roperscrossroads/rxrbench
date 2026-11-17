@@ -115,7 +115,7 @@ What the tool does for a device depends on its family:
 | `bare` (built in: a chip behind a debug probe, or a simulated board) | SWD (or the sim) | none | no radio |
 | a plugin's | its flasher: esptool, UF2, picoboot, MCUmgr, ... | what its task files bring to the declared state | enforced where the plugin says what its radio declares |
 
-Five plugins ship in this repository:
+Six plugins ship in this repository:
 
 | Plugin | Families | What it manages |
 |---|---|---|
@@ -124,6 +124,7 @@ Five plugins ship in this repository:
 | [`rxrbench.zephyr`](../collections/ansible_collections/rxrbench/zephyr/README.md) | `zephyr_settings` | Any Zephyr application that takes Zephyr's settings shell: declared settings written one by one, secrets by kind (a device-made key escrowed, a declared PSK or certificate compared) |
 | [`rxrbench.nuttx`](../collections/ansible_collections/rxrbench/nuttx/README.md) | `nuttx_nsh` | Apache NuttX through NSH: known by `uname -a`, its configuration as files on storage mounted first |
 | [`rxrbench.launcher`](../collections/ansible_collections/rxrbench/launcher/README.md) | `launcher` | ESP32 boards under the Launcher app manager: its version, the apps in its slots and its settings, through its serial console (below) |
+| [`rxrbench.hawkbit`](../collections/ansible_collections/rxrbench/hawkbit/README.md) | none | an Eclipse hawkBit update server as a route: the device fetches its image itself, and its family still reads it before and after |
 
 A firmware of a family no loaded plugin knows is **foreign**: it can be catalogued, pinned by
 sha256 and checked against the board type, and the board is warned about. It is not flashed,

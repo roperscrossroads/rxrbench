@@ -1,0 +1,20 @@
+# The poll: ask the hawkBit server, install what it offers, reboot. Started by
+# slotguard-hawkbit.timer. When an update is pending the same command only reports
+# (it never asks for a deployment then), so the timer also retries a report the
+# server could not be reached for.
+[Unit]
+Description=hawkBit poll (install what the server offers; report only after the health gate)
+Documentation=file:///usr/bin/slotguard-hawkbit
+Wants=network-online.target
+After=network-online.target data.mount rauc.service
+# Not configured yet (no hawkbit-setup run): do nothing, quietly.
+ConditionPathExists=/data/hawkbit/config
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slotguard-hawkbit poll
+# 3 pending, outcome not known yet; 4 server unreachable; 5 failure reported, waiting for
+# the fall-back; 6 this slot is not marked good yet. None is a fault of the unit.
+SuccessExitStatus=3 4 5 6
+# A download over a slow link and a `rauc install` on a small board fit in here.
+TimeoutStartSec=2h

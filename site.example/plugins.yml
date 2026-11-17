@@ -7,3 +7,4 @@ plugins:
   - rxrbench.zephyr
   - rxrbench.nuttx
   - rxrbench.launcher
+  - rxrbench.hawkbit
