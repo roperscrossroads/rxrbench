@@ -70,6 +70,9 @@ class Server:
     def __init__(self):
         real = os.environ.get("RXRBENCH_TEST_HAWKBIT")
         self.fake = None if real else fakeserver.FakeHawkbit().__enter__()
+        if self.fake:
+            self.fake.token_auth = True     # a device that shows another token is turned away
+        self.token = uuid.uuid4().hex       # this device's, declared for the server and for it
         self.url = real or self.fake.url
         user, _, password = (os.environ.get("RXRBENCH_TEST_HAWKBIT_AUTH") or "bench:made-up").partition(":")
         self.settings = {"url": self.url, "user": user, "password": password}
@@ -82,8 +85,8 @@ class Server:
         self.run = uuid.uuid4().hex[:6]
         self.made = []
         if real:
-            # A real server keeps what earlier runs left: the target is made anew, so that it
-            # holds this run's token and no old action.
+            # A real server keeps what earlier runs left: the target is removed, so that the
+            # run enrolls it anew and it holds no old action.
             import base64  # pylint: disable=import-outside-toplevel
             import urllib.error  # pylint: disable=import-outside-toplevel
             import urllib.request  # pylint: disable=import-outside-toplevel
@@ -112,8 +115,9 @@ class Server:
 
 @pytest.fixture(scope="module")
 def bench(tmp_path_factory):
-    """The device in its factory state and running, a target on the server with the token the
-    device holds, the client and its config on the device's /data, and the client's timer."""
+    """The device in its factory state and running, with the client on its /data (an image
+    would carry it) and the client's timer. The server has never heard of the device and the
+    device has no config for its client: both are the layout's, brought by the first apply."""
     server = Server()
     sim("fresh", DEVICE)
     out = open(tmp_path_factory.mktemp("simvm") / "simvm.out", "wb")  # pylint: disable=consider-using-with
@@ -128,14 +132,8 @@ def bench(tmp_path_factory):
     ticking = threading.Thread(target=timer, daemon=True)
     try:
         sim("pin", DEVICE)
-        token = uuid.uuid4().hex
-        server.tool("target", token=token)
         with open(CLIENT, encoding="utf-8") as fh:
             rc, said = on_device("mkdir -p /data/hawkbit && cat > /data/hawkbit/slotguard-hawkbit", stdin=fh.read())
-        assert rc == 0, said
-        rc, said = on_device("cat > /data/hawkbit/config && chmod 600 /data/hawkbit/config",
-                             stdin=f"SERVER={server.device_url}\nCONTROLLER_ID={server.target}\n"
-                                   f"TARGET_TOKEN={token}\nREBOOT_ON_UNHEALTHY=1\n")
         assert rc == 0, said
         ticking.start()
         yield server
@@ -152,12 +150,13 @@ def bench(tmp_path_factory):
                 os.unlink(path)
 
 
-def play(server, playbook, *args, bundle=None, timeout=900):
+def play(server, playbook, *args, bundle=None, token=None, timeout=900):
     env = {**os.environ, "ANSIBLE_FORCE_COLOR": "0", "PATH": VENV + os.pathsep + os.environ["PATH"]}
     # The server of this run in place of the layout's example, and this test's own bundle in
     # place of the one the example layouts share: another test may be making that one anew
     # for its own device at the same moment, and a bundle made twice is two bundles.
-    extra = {"bench_hawkbit": server.settings, "bench_bundle": bundle or server.bundle}
+    extra = {"bench_hawkbit": server.settings, "bench_bundle": bundle or server.bundle,
+             "bench_hawkbit_token": token or server.token, "bench_hawkbit_device_url": server.device_url}
     r = subprocess.run([os.path.join(VENV, "ansible-playbook"), "-i", f"site.example/layouts/{LAYOUT}",
                         os.path.join(PLAYS, playbook), "-e", json.dumps(extra), *args],
                        cwd=REPO, env=env, capture_output=True, text=True, timeout=timeout, check=False)
@@ -201,16 +200,24 @@ def test_a_bundle_goes_through_the_server_and_the_device_is_read_as_ever(bench):
     server.bundle = sim("bundle", "--version", good)
     server.made.append(server.bundle)
     assert "on slot A (boot status good" in healthy(server)
-    assert server.state()["known"] and not server.state()["open"]
+    # The server has never heard of the device, and the device's client has no config.
+    assert not server.state()["known"]
+    rc, said = on_device("ls /data/hawkbit/config 2>&1 || true")
+    assert "No such file" in said, said
 
-    # The plan reads the device and the server and changes neither.
+    # The plan reads the device and the server and changes neither. It says what the apply
+    # will do: enroll the device on the server, write its client's config, deliver the bundle.
     if server.fake:
         del server.fake.requests[:]
     rc, out = play(server, "apply.yml", "--check", "--diff")
-    assert rc == 0 and f'"version": "{good}"' in out and "changed=1" in out, out
+    assert rc == 0 and f'"version": "{good}"' in out, out
+    assert f"route does not know '{DEVICE}': to be enrolled" in out, out
+    assert "/data/hawkbit/config: missing" in out and server.token not in out, out
     if server.fake:
         assert server.fake.requests and {m for m, _ in server.fake.requests} == {"GET"}
-        assert not server.fake.modules and not server.fake.actions
+        assert not server.fake.targets and not server.fake.modules and not server.fake.actions
+    rc, said = on_device("ls /data/hawkbit/config 2>&1 || true")
+    assert "No such file" in said, said
 
     # The apply tells the server; the device fetches the bundle, installs it and reboots by
     # itself; the slot it then runs and its health gate are read over ssh.
@@ -226,10 +233,32 @@ def test_a_bundle_goes_through_the_server_and_the_device_is_read_as_ever(bench):
     assert record["image"] == {"name": "rxrbench-sim-qemuarm", "version": good}
     first = record["id"]
 
+    # The apply enrolled the device with the declared token and wrote the same one to its
+    # client's config, mode 600; the token is in no output.
+    assert server.tool("state", credential=server.token)["enrolled"] is True
+    rc, said = on_device("stat -c %a /data/hawkbit/config; grep -c TARGET_TOKEN /data/hawkbit/config")
+    assert said.split() == ["600", "1"], said
+    assert server.token not in out
+
     # A second apply changes nothing, on the device or on the server.
     rc, out = play(server, "apply.yml")
     assert rc == 0 and "changed=0" in out, out
     assert server.state()["id"] == first
+
+    # A new token in the layout: the plan names both places that hold the old one, the apply
+    # sets both, and the device's client is let in with the new one.
+    new = uuid.uuid4().hex
+    rc, out = play(server, "apply.yml", "--check", token=new)
+    assert rc == 0 and "with another credential: to be set" in out, out
+    assert "/data/hawkbit/config: content" in out and new not in out, out
+    rc, out = play(server, "apply.yml", token=new)
+    assert rc == 0 and new not in out, out
+    assert server.tool("state", credential=new)["enrolled"] is True
+    rc, said = on_device("sh /data/hawkbit/slotguard-hawkbit poll", timeout=120)
+    assert rc == 0 and "nothing offered" in said, said
+    server.token = new
+    rc, out = play(server, "apply.yml")
+    assert rc == 0 and "changed=0" in out, out
 
 
 def test_a_bundle_that_fails_its_gate_fails_the_apply_and_the_server_hears_it(bench):

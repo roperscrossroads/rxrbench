@@ -7,3 +7,16 @@ bench_health_soak: 10
 bench_wait_good: 180
 # The bundle is not pushed: the server is told, and the device fetches it.
 routes: {flash: hawkbit}
+# What the device's own client needs to do that: where the server is, the name it asks under
+# (its address on the route, as the registry has it) and its security token, the same one
+# the run makes the server hold for it (bench_hawkbit_token). The file is the device's to
+# keep across updates; its content stays out of every output.
+linux:
+  files:
+    /data/hawkbit/config:
+      mode: "600"
+      content: |
+        SERVER={{ bench_hawkbit_device_url }}
+        CONTROLLER_ID={{ bench_routes.flash.addr }}
+        TARGET_TOKEN={{ bench_hawkbit_token }}
+        REBOOT_ON_UNHEALTHY=1

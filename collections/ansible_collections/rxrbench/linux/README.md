@@ -37,6 +37,22 @@ linux:
   os: {id: poky, version_id: "5.0.4"}                   # /etc/os-release fields it must show
 ```
 
+A device of any of the three families may hold **declared files**: small text files that are
+the device's own to keep across updates (a client's config on its data partition), each
+compared by SHA-256 and mode over ssh and written whole when it differs, before anything else
+is done to the device. Their content is never read back and never in an output, so a file may
+hold a secret. A file an image carries belongs in the image.
+
+```yaml
+linux:
+  files:
+    /data/app/config:
+      mode: "600"                                       # the default
+      content: |
+        NAME=node-a
+        KEY={{ node_a_key }}
+```
+
 A RAUC device may also take its bundle by a route that carries it to the device itself (an
 update server the device polls): `routes: {flash: <bearer>}`, with that route in its registry
 entry. The copy and the install are then the route's; the slot the device boots, and its

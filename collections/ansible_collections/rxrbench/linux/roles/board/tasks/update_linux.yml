@@ -3,6 +3,9 @@
 # it runs is read and compared with what the layout declares for it (`linux.os`, fields of
 # /etc/os-release); a device that differs is named, because the way to change it is to
 # re-image it (`just card`).
+- name: The files the layout declares
+  ansible.builtin.include_tasks: files.yml
+
 - name: Read the device
   ansible.builtin.include_tasks: facts_linux.yml
 

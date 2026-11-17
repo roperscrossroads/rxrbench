@@ -10,6 +10,12 @@ bench_devreg_tool: "{{ bench_repo }}/devreg/devreg.py"
 # The server the route speaks to. A test starts a stand-in and passes its own address
 # (`-e`); a real site keeps the login in a *.sops.yaml file.
 bench_hawkbit: {url: "http://127.0.0.1:8080", user: bench, password: made-up}
+# The device's security token on the server. The run makes the server hold the device with
+# it, and the device's client config declares the same one (host_vars). A real site keeps it
+# in a *.sops.yaml file, one per device.
+bench_hawkbit_token: made-up-token-for-the-example
+# Where the device finds the server, which need not be where this machine does.
+bench_hawkbit_device_url: "http://updates.example.org:8080"
 # The route's tool, from this repository: a simulated bench has no installed host tools.
 bench_delivery_tool: "{{ bench_repo }}/collections/ansible_collections/rxrbench/hawkbit/host/bin/hawkbit_route.py"
 # A simulated device is asked to poll every few seconds: it has taken a delivery and rebooted

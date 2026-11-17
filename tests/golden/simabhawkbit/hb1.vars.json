@@ -91,6 +91,8 @@
   "url": "http://127.0.0.1:8080",
   "user": "bench"
  },
+ "bench_hawkbit_device_url": "http://updates.example.org:8080",
+ "bench_hawkbit_token": "made-up-token-for-the-example",
  "bench_health_soak": 10,
  "bench_health_unit": "boot-health-check.service",
  "bench_host_key_paths": [

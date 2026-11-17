@@ -36,8 +36,25 @@ argument_specs:
       linux: &linux
         type: dict
         description: >-
-          The device's declared Linux state: the C(os-release) fields it must match
-          (C(rxrbench.linux)'s README).
+          The device's declared Linux state: the C(os-release) fields it must match and the
+          C(files) it holds (C(rxrbench.linux)'s README).
+  files:
+    short_description: "Bring a board's declared files to their declared state"
+    description:
+      - >-
+        The files a layout declares for a Linux device (C(linux.files)), each compared by digest and
+        mode over ssh and written whole when it differs. Their content stays out of every task's output.
+    options:
+      bench_apply_allowed: &bench_apply_allowed
+        type: bool
+        description: >-
+          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
+          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
+          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
+          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_board: *bench_board
+      bench_routes: *bench_routes
+      linux: *linux
   locate_led:
     short_description: "Show which board it is (led)"
     description:
@@ -75,13 +92,7 @@ argument_specs:
         The device's escrowed host key (C(board_escrowed): id, value), given back over ssh. A device
         that already holds it is left alone.
     options:
-      bench_apply_allowed: &bench_apply_allowed
-        type: bool
-        description: >-
-          C(true) lets C(just apply) (and every other writing play) write to this layout's boards; without it
-          a layout can only be planned. Every writing play passes one gate (C(playbooks/tasks/gate.yml)) and
-          hands the go-ahead to each writing module (C(apply_allowed)), which refuses without it. (Documented
-          with the other layout variables in C(docs/LAYOUT.md).)
+      bench_apply_allowed: *bench_apply_allowed
       bench_host_key_paths: *bench_host_key_paths
       bench_routes: *bench_routes
       board_escrowed: &board_escrowed
@@ -98,6 +109,7 @@ argument_specs:
         /etc/os-release); a device that differs is named, because the way to change it is to re-image
         it (C(just card)).
     options:
+      bench_apply_allowed: *bench_apply_allowed
       bench_board: *bench_board
       bench_family: *bench_family
       bench_health_unit: *bench_health_unit
@@ -129,8 +141,9 @@ argument_specs:
         description: >-
           Set by the layout when the device's flash route carries the bundle itself (a plugin's delivering
           route) and this family can take it: the route's C(bearer), the C(tool) that speaks for it on a bench
-          host, the C(formats) it carries and the name of the layout variable holding its C(settings). The
-          bundle is then not copied or installed from the bench host; the device is read over ssh all the same.
+          host, the C(formats) it carries, the device's C(address) on it and the name of the layout variable
+          holding its C(settings). The bundle is then not copied or installed from the bench host; the device
+          is read over ssh all the same.
       bench_delivery_tool:
         type: str
         description: >-

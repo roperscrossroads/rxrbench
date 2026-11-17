@@ -10,6 +10,8 @@
   "url": "http://127.0.0.1:8080",
   "user": "bench"
  },
+ "bench_hawkbit_device_url": "http://updates.example.org:8080",
+ "bench_hawkbit_token": "made-up-token-for-the-example",
  "bench_health_soak": 10,
  "bench_led_path": "/run/leds/act",
  "bench_tests": [
@@ -28,6 +30,14 @@
  "firmware": {
   "family": "linux_slotguard",
   "image": "sim-ab"
+ },
+ "linux": {
+  "files": {
+   "/data/hawkbit/config": {
+    "content": "SERVER={{ bench_hawkbit_device_url }}\nCONTROLLER_ID={{ bench_routes.flash.addr }}\nTARGET_TOKEN={{ bench_hawkbit_token }}\nREBOOT_ON_UNHEALTHY=1\n",
+    "mode": "600"
+   }
+  }
  },
  "routes": {
   "flash": "hawkbit"

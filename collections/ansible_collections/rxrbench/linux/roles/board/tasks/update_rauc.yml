@@ -9,6 +9,11 @@
 # nothing else: the device is read before and after over the route it would otherwise be
 # written by (bench_routes.read).
 
+# Before the bundle: a device that takes it from a delivering route fetches it with a client
+# whose config is one of these files.
+- name: The files the layout declares
+  ansible.builtin.include_tasks: files.yml
+
 - name: Stage the bundle
   ansible.builtin.copy:
     src: "{{ bench_bundle }}"

@@ -1,0 +1,18 @@
+---
+# The files a layout declares for a Linux device (`linux.files`): each compared by digest and
+# mode over ssh and written whole when it differs. They are the device's own to keep across
+# updates, a client's config on its data partition among them; their content stays out of
+# every task's output.
+- name: The declared files
+  rxrbench.linux.linux_files:
+    route: "{{ bench_routes.shell }}"
+    files: "{{ linux.files }}"
+    apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
+  register: board_files
+  when: (linux | default({})).files is defined
+
+- name: Which files differ
+  ansible.builtin.debug:
+    msg: "{{ bench_board }}: {{ board_files.steps | join(', ') }}"
+  changed_when: board_files.changed
+  when: board_files is not skipped and board_files.steps | length > 0
