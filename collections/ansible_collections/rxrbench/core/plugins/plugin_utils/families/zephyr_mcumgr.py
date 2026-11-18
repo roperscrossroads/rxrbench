@@ -8,6 +8,12 @@ CONSOLES = ("zephyr-shell",)
 
 
 class Family(base.Family):
+    #: Its shell's reboot (`kernel reboot cold`, proven by `kernel uptime`). The table is the
+    #: family's, not one board's, so the console a layout names never reaches it: the family says
+    #: it, the only console it can have. A board without that shell has no broker and is not
+    #: offered a reboot (the exercise asks for a console route).
+    reboot = base.CONSOLES["zephyr-shell"]["reboot"]
+
     def board_row(self, hostvars, row):
         console = (hostvars or {}).get("bench_console")
         if console in CONSOLES:

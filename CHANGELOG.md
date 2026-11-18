@@ -74,6 +74,12 @@
 
 ### Fixed
 
+- **A `zephyr_mcumgr` board with its Zephyr shell is rebooted through it**: `just reboot` and the
+  board exercise's `reboot` send `kernel reboot cold` and prove it by `kernel uptime`, as for every
+  Zephyr shell. The families table is per family, so the console a layout names for one board
+  (`bench_console: zephyr-shell`) never brought its reboot; the family now says it. A board
+  without that shell has no console route and is not offered a reboot.
+
 - **A board unplugged part way through the board exercise read as a failed board, and a play
   could run without end**: a board reached by USB that leaves the bus (and stays away past a 20 s
   grace, so a reboot is not mistaken for it) now ends the run as interrupted: the step it left

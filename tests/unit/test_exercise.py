@@ -460,6 +460,20 @@ def test_a_family_whose_console_the_layout_names_gets_diag():
     assert by_verb(exercise.applicable(shell, IMAGES))["diag"]["applies"]
 
 
+def test_a_zephyr_mcumgr_board_with_its_shell_is_rebooted_through_it():
+    """The family's spec carries its shell's reboot (the families table is per family, so a
+    layout's `bench_console` never reaches it): reboot applies to a board on its console, and
+    not to one with no console route."""
+    from ansible_collections.rxrbench.core.plugins.plugin_utils import families
+    spec = families.specs()["zephyr_mcumgr"]
+    assert spec["reboot"]["reboot"] == "kernel reboot cold" and spec["reboot"]["uptime"]
+    base = {**FULL, "bench_family": "zephyr_mcumgr", "bench_vocabulary": None, "bench_plugin": None,
+            "bench_families": {"zephyr_mcumgr": spec}, "bench_console": "zephyr-shell",
+            "firmware": {"family": "zephyr_mcumgr", "image": "fam-a"}}
+    assert by_verb(exercise.applicable(base, IMAGES))["reboot"]["applies"]
+    assert not by_verb(exercise.applicable({**base, "bench_via": None}, IMAGES))["reboot"]["applies"]
+
+
 # ---- what a write is undone with: this run's own backups, never the newest one ----------------
 
 def test_restores_write_back_this_runs_backups_by_stamp(tmp_path):
