@@ -182,3 +182,61 @@ def test_a_factory_node_has_no_key_to_read_but_takes_the_escrowed_one(node):
     assert r["failed"] and "no private key" in r["msg"]
     r = run(ESCROW)
     assert not r["failed"] and r["changed"] and bytes(node.sec.private_key) == NEW
+
+
+# ---- the wait for the escrowed id after the key write, across the reboot it causes -----------
+
+class _Rebooting:
+    """A board behind its broker: the key write rebooted it, the broker hung up on the
+    connection the module holds, and only a fresh connection reads it again."""
+
+    def __init__(self, ids_after_reconnect):
+        self.alive = False
+        self.reconnects = 0
+        self.ids = list(ids_after_reconnect)
+
+    def reconnect(self):
+        self.reconnects += 1
+        self.alive = True
+
+
+def _clock():
+    t = [0.0]
+
+    def clock():
+        return t[0]
+
+    def sleep(s):
+        t[0] += s
+    return clock, sleep
+
+
+def test_the_wait_for_the_escrowed_id_reconnects_after_the_reboot(monkeypatch):
+    from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
+
+    board = _Rebooting(["0x0a0b0c0d"])
+
+    def state_id(b, _deadline):
+        if not b.alive:
+            raise broker_client.BrokerError("board1: the connection to the broker was lost "
+                                            "([Errno 32] Broken pipe)")
+        return b.ids.pop(0) if b.ids else "0x0a0b0c0d"
+    monkeypatch.setattr(mi, "state_id", state_id)
+    clock, sleep = _clock()
+    seen, why = mi.wait_for_id(board, "0x0a0b0c0d", 5, 60, sleep=sleep, clock=clock)
+    assert (seen, why) == ("0x0a0b0c0d", None)
+    assert board.reconnects == 1
+
+
+def test_a_board_that_never_comes_back_is_said_with_the_last_error(monkeypatch):
+    from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
+
+    board = _Rebooting([])
+
+    def state_id(_b, _deadline):
+        raise broker_client.BrokerError("board1: `meshtastic state`: port closed: Write timeout")
+    monkeypatch.setattr(mi, "state_id", state_id)
+    clock, sleep = _clock()
+    seen, why = mi.wait_for_id(board, "0x0a0b0c0d", 5, 10, sleep=sleep, clock=clock)
+    assert seen is None and "Write timeout" in why
+    assert board.reconnects >= 1

@@ -181,6 +181,30 @@ def read_keys(b, deadline):
         iface.close()
 
 
+def wait_for_id(b, want_id, deadline, settle, sleep=time.sleep, clock=time.monotonic):
+    """Poll the board's id until it is want_id or settle seconds pass: (last id seen, the last
+    error or None). The key write reboots the board, and the broker hangs up on the connection
+    a read was waiting on, so a broker error is followed by a fresh connection, not by more
+    reads on the dead one."""
+    end = clock() + settle
+    seen, why = None, None
+    while clock() < end:
+        try:
+            seen = state_id(b, deadline)
+            if seen == want_id:
+                return seen, None
+        except broker_client.BrokerError as e:
+            why = str(e)
+            try:
+                b.reconnect()
+            except broker_client.BrokerError as e2:
+                why = str(e2)
+        except state.StateError as e:
+            why = str(e)
+        sleep(1.0)
+    return seen, why
+
+
 def write_key(b, deadline, private):
     """Send the key. The node stores it and reboots at once, so the last command's answer may
     never come: that is not a failure. What counts is the id the node comes back with."""
@@ -359,16 +383,7 @@ def main():
                                      f"{want_id}", **result)
             go_ahead(module)
             write_key(b, p["deadline"], want)
-            end = time.monotonic() + p["settle"]
-            seen, why = None, None
-            while time.monotonic() < end:
-                try:
-                    seen = state_id(b, p["deadline"])
-                    if seen == want_id:
-                        break
-                except (broker_client.BrokerError, state.StateError) as e:
-                    why = str(e)
-                time.sleep(1.0)
+            seen, why = wait_for_id(b, want_id, p["deadline"], p["settle"])
             if seen != want_id:
                 module.fail_json(msg=f"{p['board']} did not come back as {want_id} (last seen "
                                      f"{seen}{'; ' + why if why else ''})", **result)

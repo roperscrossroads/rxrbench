@@ -188,6 +188,14 @@ class Board:
     def status(self):
         return self.request(op="status")
 
+    def reconnect(self):
+        """A fresh connection to the same broker, for a caller whose connection the broker
+        hung up on (a read that timed out, a board that rebooted under it)."""
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
+        self._connect()
+
     def release(self, ttl=120.0):
         try:
             r = self.request(op="release", ttl=ttl)
@@ -196,9 +204,7 @@ class Board:
             # this one timed out on a board that takes no input (MCUboot with no app, after
             # `just boot` from another family). Lending the port is idempotent, so ask again
             # on a fresh connection.
-            if self.sock is not None:
-                self.sock.close()
-            self._connect()
+            self.reconnect()
             r = self.request(op="release", ttl=ttl)
         if not r.get("ok"):
             raise BrokerError(f"{self.board}: release: {r.get('error')}")
