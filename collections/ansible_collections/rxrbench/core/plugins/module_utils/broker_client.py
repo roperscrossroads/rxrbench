@@ -150,9 +150,15 @@ class Board:
         while True:
             try:
                 r = self._once(req)
-            except (BrokerError, OSError):
+            except (BrokerError, OSError) as e:
                 if not self.fresh:
-                    raise
+                    if isinstance(e, BrokerError):
+                        raise
+                    # The broker hung up on this connection after an earlier request (a
+                    # write timeout on a board that takes no input closes it): say so as the
+                    # broker's error, which the callers handle, not as a bare socket error.
+                    raise BrokerError(f"{self.board}: the connection to the broker was "
+                                      f"lost ({e})") from e
                 # The first request on a new connection, closed by the broker: it said
                 # "busy" and hung up, and the close was seen before the word.
                 r = {"ok": False, "error": "busy"}
@@ -183,7 +189,17 @@ class Board:
         return self.request(op="status")
 
     def release(self, ttl=120.0):
-        r = self.request(op="release", ttl=ttl)
+        try:
+            r = self.request(op="release", ttl=ttl)
+        except (BrokerError, OSError):
+            # The broker hung up on this connection since its last request: a read before
+            # this one timed out on a board that takes no input (MCUboot with no app, after
+            # `just boot` from another family). Lending the port is idempotent, so ask again
+            # on a fresh connection.
+            if self.sock is not None:
+                self.sock.close()
+            self._connect()
+            r = self.request(op="release", ttl=ttl)
         if not r.get("ok"):
             raise BrokerError(f"{self.board}: release: {r.get('error')}")
         return r["port"]

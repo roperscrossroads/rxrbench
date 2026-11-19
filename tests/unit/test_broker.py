@@ -122,6 +122,31 @@ def test_release_closes_the_port_and_reacquire_reopens_it(rig):
         assert b.exec("meshtastic version") == VERSION
 
 
+def _hang_up(b):
+    """The broker hanging up on a client after a request: what a write timeout on a board
+    that takes no input (MCUboot with no app) does to the connection the read used."""
+    import socket  # pylint: disable=import-outside-toplevel
+    b.sock.shutdown(socket.SHUT_RDWR)
+
+
+def test_a_lost_connection_is_the_brokers_error_not_a_socket_error(rig):
+    _shell, board = rig({"meshtastic version": VERSION})
+    with board as b:
+        assert b.status()["ok"] is True
+        _hang_up(b)
+        with pytest.raises(broker_client.BrokerError, match="connection to the broker was lost"):
+            b.exec("meshtastic version")
+
+
+def test_release_asks_again_on_a_fresh_connection_after_a_hang_up(rig):
+    shell, board = rig({"meshtastic version": VERSION})
+    with board as b:
+        assert b.status()["ok"] is True
+        _hang_up(b)
+        assert b.release(ttl=60) == shell.path
+        assert b.status()["open"] is False
+
+
 def test_a_release_expires_by_itself(rig):
     shell, board = rig({"meshtastic version": VERSION})
     with board as b:
