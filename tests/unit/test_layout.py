@@ -108,6 +108,28 @@ def test_a_bench_host_behind_a_forwarded_port_has_its_port_key_and_known_hosts()
     assert layout.host_connection({"hosts": {"b": {"ssh": "u@b"}}}, "b") == {"ansible_host": "b", "ansible_user": "u"}
 
 
+def test_one_registry_on_two_controllers_makes_each_one_local_on_itself():
+    """A registry read on the workstation and on a bench host that runs CI: each machine is
+    local to itself, by its hostname, and reaches the other over ssh. The workstation's
+    `local:` flag (its hostname is not its key) does not make it local on the bench host."""
+    reg = {"hosts": {"ws": {"local": True, "hostname": "desk"},
+                     "benchpi": {"ssh": "ci@example.org"},
+                     "bench2": {"ssh": "op@bench2"}}}
+    assert layout.local_host(reg, "desk") == "ws"
+    assert layout.local_host(reg, "benchpi") == "benchpi"
+    assert layout.host_connection(reg, "ws", hostname="desk") == {"ansible_connection": "local"}
+    assert layout.host_connection(reg, "benchpi", hostname="desk") == {"ansible_host": "example.org", "ansible_user": "ci"}
+    assert layout.host_connection(reg, "benchpi", hostname="benchpi") == {"ansible_connection": "local"}
+    assert layout.host_connection(reg, "bench2", hostname="benchpi") == {"ansible_host": "bench2", "ansible_user": "op"}
+    with pytest.raises(layout.LayoutError, match="no ssh route"):
+        layout.host_connection(reg, "ws", hostname="benchpi")
+
+
+def test_the_local_flag_still_names_this_machine_when_no_hostname_matches():
+    reg = {"hosts": {"ws": {"local": True}, "b": {"ssh": "u@b"}}}
+    assert layout.host_connection(reg, "ws", hostname="elsewhere") == {"ansible_connection": "local"}
+
+
 def test_a_board_becomes_a_host_on_its_bench_host(widgets, tmp_path):
     d, cfg = make(tmp_path, {"member1": {"host": "benchA"}}, {"member1": widget()})
     r = layout.load_layout(d, cfg, REG)

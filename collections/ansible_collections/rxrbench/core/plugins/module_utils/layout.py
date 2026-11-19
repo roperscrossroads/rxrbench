@@ -82,12 +82,30 @@ def canonical(reg, name):
     return hits[0] if hits else None
 
 
-def host_connection(reg, host):
-    """Ansible connection vars for a bench host, from the registry's hosts table."""
+def local_host(reg, hostname=None):
+    """The registry key of the machine this runs on, by devreg's rule: the hostname first (a
+    host's key, or its `hostname:`), the `local:` flag only when no host matches it. One
+    registry serves several controllers (the workstation, a bench host running CI), so the
+    flag alone would make the same host local on every one of them."""
+    import socket  # pylint: disable=import-outside-toplevel
+    hn = (hostname or socket.gethostname()).split(".")[0].lower()
+    hosts = reg.get("hosts") or {}
+    for name, h in hosts.items():
+        if name.lower() == hn or str((h or {}).get("hostname", "")).lower() == hn:
+            return name
+    for name, h in hosts.items():
+        if (h or {}).get("local"):
+            return name
+    return None
+
+
+def host_connection(reg, host, hostname=None):
+    """Ansible connection vars for a bench host, from the registry's hosts table: local when
+    the host is this machine (local_host), else its ssh route."""
     h = (reg.get("hosts") or {}).get(host)
     if h is None:
         raise LayoutError(f"bench host {host!r} is not in the registry's hosts")
-    if h.get("local"):
+    if host == local_host(reg, hostname):
         return {"ansible_connection": "local"}
     ssh = h.get("ssh")
     if not ssh:
