@@ -71,6 +71,13 @@ class Family(base.Family):
     features = tuple(recipe.FEATURES)
     #: an ESP32 image's config regions: Zephyr's settings store (NVS) and the bulk store
     config_regions = (("storage", "STORAGE"), ("bulk", "MT_BULK"))
+    #: its communication counters, the `health` object of `meshtastic state` (firmware 0.4.55
+    #: on; older firmware has none, and is not judged), sorted by the firmware into operations,
+    #: retries, warnings and errors: a scenario that asks is judged on the errors and keeps the
+    #: change in the rest (core's module_utils/readings.py)
+    health_counters = {"cmd": "meshtastic state", "extract": r"~S(\{.*\})\*[0-9a-f]{4}",
+                       "path": "health", "restart": "up", "optional": True,
+                       "judge": "err", "record": ["ops", "retry", "warn"]}
     #: what `just diag` asks a board of this family (its shell), unless the layout says
     diag_commands = ({"name": "version", "cmd": "meshtastic version"},
                      {"name": "state", "cmd": "meshtastic state"},

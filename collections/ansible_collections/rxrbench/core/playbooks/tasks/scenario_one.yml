@@ -3,6 +3,8 @@
 - name: "Start the scenario {{ scenario.name }}"
   ansible.builtin.set_fact:
     scenario_results: []
+    # outputs steps kept (`keep: <name>`), by board and name, for a later step's `delta`
+    scenario_kept: {}
     scenario_dir: >-
       {{ bench_runs_dir | default(bench_repo ~ '/runs') }}/{{ bench_run }}/scenario/{{ scenario.name }}
 

@@ -452,6 +452,7 @@ def load_layout(layout_dir, config, reg=None):
         if plugin.role_tasks:
             b["vars"]["bench_family_tasks"] = plugin.role_tasks
         b["vars"]["bench_diag_defaults"] = [dict(c) for c in plugin.diag_commands]
+        b["vars"]["bench_health_counters"] = dict(plugin.health_counters) if plugin.health_counters else None
         # A family with no console that runs steps its own way (step_tasks: its USB port is its
         # API, not a shell) is not reached through a broker on that port: its board takes
         # scenario steps through the family's task file. (A family with no console row but a

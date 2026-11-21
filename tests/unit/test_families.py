@@ -175,3 +175,22 @@ def test_code_that_runs_on_a_bench_host_does_not_import_the_families():
         "(bench_families, familyspec.py), docs/PLUGINS.md",
         "read what the module needs from bench_families (Family.spec) instead of importing",
         "a file only the controller runs belongs in CONTROLLER_ONLY, with why in its comment")
+
+
+def test_zephyrtastic_counters_judge_the_errors_of_its_state_line_and_keep_the_rest():
+    from ansible_collections.rxrbench.core.plugins.filter.counters import counter_delta
+    spec = families.plugin("zephyrtastic").health_counters
+    assert spec["cmd"] == "meshtastic state"
+    line = ('uart:~$ meshtastic state\n~S{"v":1,"build":"0123abcd","health":{"up":%d,'
+            '"ops":{"tx":%d,"rx_not_for_us":%d},"retry":{"cad_busy":%d},'
+            '"warn":{"phone_drop":%d},"err":{"tx_fail":%d,"decode_bad":0}}}*4f2a\n')
+    before = line % (100, 4, 0, 0, 0, 0)
+    r = counter_delta(line % (160, 9, 7, 3, 300, 0), before, spec)
+    assert r["why"] == [], "work, bystander DMs, retries and warnings are not errors"
+    assert r["recorded"] == {"ops": {"tx": 5, "rx_not_for_us": 7}, "retry": {"cad_busy": 3},
+                             "warn": {"phone_drop": 300}}
+    assert counter_delta(line % (160, 9, 0, 0, 0, 1), before, spec)["why"] == ["tx_fail grew by 1 (0 -> 1)"]
+    assert "restarted" in counter_delta(line % (5, 0, 0, 0, 0, 0), before, spec)["why"][0]
+    old = '~S{"v":1,"build":"0123abcd","lora":{"chip":1}}*4f2a\n'
+    assert counter_delta(line % (160, 9, 0, 0, 0, 1), old, spec)["why"] == [], \
+        "firmware from before the counters is not judged"

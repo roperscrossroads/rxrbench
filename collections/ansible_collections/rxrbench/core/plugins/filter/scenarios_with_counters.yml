@@ -1,0 +1,15 @@
+---
+DOCUMENTATION:
+  name: scenarios_with_counters
+  short_description: Each scenario with a reading of its boards' counters before and after it
+  description:
+    - "C(scenarios | rxrbench.core.scenarios_with_counters(hostvars, bench_scenario_counters))
+      gives a scenario that asks for it (C(counters: true), or every scenario when the layout's
+      default is true, unless one says C(counters: false)) a C(keep) step on each of its
+      boards that has counters (C(bench_health_counters), from the board's family) before its
+      first step, and a C(delta) step after its last that always runs."
+    - "The allowances are the family's, then the board's C(bench_counters_allow) and
+      C(bench_counters_ignore), then the scenario's C(counters: {allow, ignore}). The logic is
+      module_utils/readings.py."
+  author:
+    - Adam Roper (@roperscrossroads)

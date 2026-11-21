@@ -44,6 +44,7 @@
  "bench_hawkbit_device_host": "192.0.2.2",
  "bench_hawkbit_device_port": "8080",
  "bench_hawkbit_token": "0123456789abcdef0123456789abcdef",
+ "bench_health_counters": null,
  "bench_identity_key": null,
  "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
  "bench_key_escrow": null,

@@ -22,6 +22,7 @@
  "bench_family_facts": {},
  "bench_flasher": "smp",
  "bench_fw_kind": "zq",
+ "bench_health_counters": null,
  "bench_identity_key": null,
  "bench_image": "{{ bench_store }}/zephyr/{{ firmware.image }}",
  "bench_key_escrow": null,

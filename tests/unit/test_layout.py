@@ -381,6 +381,7 @@ def test_a_familys_diagnostics_are_published_for_its_boards(tmp_path, widgets):
     d, cfg = make(tmp_path, {"member1": {"host": "benchA"}}, {"member1": widget()})
     v = layout.load_layout(d, cfg, REG)["boards"]["member1"]["vars"]
     assert [c["name"] for c in v["bench_diag_defaults"]] == ["version", "state"]
+    assert v["bench_health_counters"] is None, "a family with no health counters publishes none"
 
 
 def test_a_layout_that_loosens_the_rf_ceiling_is_refused_and_one_that_tightens_it_carries_the_rules(tmp_path, widgets, lora_bands):

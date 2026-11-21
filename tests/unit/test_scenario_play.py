@@ -32,7 +32,17 @@ def bench(tmp_path):
         asked["n"] += 1
         return "nodes: 2\n0x0a0b0c0d\n0x01020304" if asked["n"] >= 3 else "nodes: 1\n0x0a0b0c0d"
 
-    shell = FakeShell({"node ask 0x01020304": "asked", "node list": nodedb}, ring=4096)
+    def failing(_shell):
+        asked["fail"] = asked.get("fail", 0) + 1
+        return "failed"
+
+    def health(_shell):
+        asked["up"] = asked.get("up", 10) + 1
+        return 'counters\n{"up": %d, "fail": %d, "tx": %d}' % (asked["up"], asked.get("fail", 0),
+                                                            asked["up"])
+
+    shell = FakeShell({"node ask 0x01020304": "asked", "node list": nodedb, "node fail": failing,
+                       "health": health}, ring=4096)
     console = mb.Console("n1", mb.path_opener(shell.path), str(tmp_path / "n1.log"))
     broker = mb.Broker(console, str(tmp_path / "run" / "n1.sock"))
     t = threading.Thread(target=broker.run, daemon=True)
@@ -130,3 +140,65 @@ def test_a_role_left_unbound_refuses_the_run_and_names_the_boards_that_fit(bench
         {"bench_layout_dir": layout, "bench_test_bindings": {"peer": {}}})
     assert rc != 0 and "no board is bound to role a; boards that fit it: n1" in out, out
     assert not (tmp / "runs").exists(), "nothing ran, not even the inline scenario"
+
+
+HEALTH = {"cmd": "health", "extract": r"(\{.*\})", "restart": "up", "ignore": ["tx"]}
+
+
+def test_a_step_judges_how_counters_moved_since_a_kept_reading(bench):
+    tmp, sock, _asked = bench
+    rc, out = run(tmp, sock, [{"name": "clean", "steps": [
+        {"board": "n1", "cmd": "health", "keep": "h"},
+        {"board": "n1", "cmd": "node ask 0x01020304", "expect": "asked"},
+        {"board": "n1", "cmd": "health", "delta": {**HEALTH, "against": "h"}}]}])
+    assert rc == 0, out
+    rec, _d = record(tmp, "clean")
+    assert rec["passed"] and rec["steps"][2]["deltas"] == {"up": 1, "fail": 0, "tx": 1}
+
+
+def test_a_counter_that_grew_fails_the_step_with_the_reason(bench):
+    tmp, sock, _asked = bench
+    rc, out = run(tmp, sock, [{"name": "dirty", "steps": [
+        {"board": "n1", "cmd": "health", "keep": "h"},
+        {"board": "n1", "cmd": "node fail"},
+        {"board": "n1", "cmd": "health", "delta": {**HEALTH, "against": "h"}}]}])
+    assert rc != 0, out
+    rec, _d = record(tmp, "dirty")
+    assert not rec["passed"] and rec["steps"][2]["why"] == ["fail grew by 1 (0 -> 1)"]
+
+
+def test_counters_true_reads_each_board_with_counters_before_and_after(bench):
+    tmp, sock, _asked = bench
+    rc, out = run(tmp, sock, [
+        {"name": "fine", "counters": True, "steps": [
+            {"board": "n1", "cmd": "node ask 0x01020304", "expect": "asked"}]},
+        {"name": "sends fail", "counters": True, "steps": [
+            {"board": "n1", "cmd": "node fail", "expect": "failed"}]},
+        {"name": "not asked", "steps": [
+            {"board": "n1", "cmd": "node fail", "expect": "failed"}]}],
+        {"bench_health_counters": HEALTH})
+    assert rc != 0 and "failed: sends fail" in out, out
+    rec, _d = record(tmp, "fine")
+    assert rec["passed"] and [s["name"] for s in rec["steps"]] == [
+        "01-n1-counters-before", "02-n1", "03-n1-counters-after"]
+    rec, _d = record(tmp, "sends fail")
+    assert not rec["passed"] and rec["steps"][-1]["why"] == ["fail grew by 1 (0 -> 1)"]
+    rec, _d = record(tmp, "not asked")
+    assert rec["passed"] and len(rec["steps"]) == 1
+
+
+def test_the_reading_after_runs_and_is_kept_when_a_step_failed(bench):
+    tmp, sock, _asked = bench
+    rc, out = run(tmp, sock, [{"name": "broke", "counters": True, "steps": [
+        {"board": "n1", "cmd": "node fail", "expect": "failed"},
+        {"board": "n1", "cmd": "node list", "expect": "0xdeadbeef"},
+        {"board": "n1", "cmd": "node ask 0x01020304", "expect": "asked"}]}],
+        {"bench_health_counters": HEALTH, "bench_counters_allow": {"fail": 1}})
+    assert rc != 0, out
+    rec, _d = record(tmp, "broke")
+    names = [s["name"] for s in rec["steps"]]
+    assert names == ["01-n1-counters-before", "02-n1", "03-n1", "05-n1-counters-after"], \
+        "the step after the failure did not run; the reading after did"
+    assert not rec["passed"]
+    assert rec["steps"][-1]["passed"] and rec["steps"][-1]["deltas"]["fail"] == 1, \
+        "the board's allowance let one failure through, and the change is kept"

@@ -73,6 +73,7 @@
  },
  "bench_flasher": "rauc",
  "bench_fw_kind": "linux",
+ "bench_health_counters": null,
  "bench_health_soak": 10,
  "bench_health_unit": "boot-health-check.service",
  "bench_host_key_paths": [

@@ -22,6 +22,7 @@
  "bench_family_facts": {},
  "bench_flasher": "sim",
  "bench_fw_kind": "zephcore",
+ "bench_health_counters": null,
  "bench_identity_key": "role",
  "bench_image": "{{ bench_store }}/{{ firmware.family }}/sim-{{ firmware.role }}",
  "bench_key_escrow": "console",

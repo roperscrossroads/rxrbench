@@ -35,7 +35,7 @@
   # a failed step ends the scenario: the steps after it are not run (judged here, at each
   # step, since the include's loop is expanded before any step has run)
   when:
-    - scenario_results | rejectattr('passed') | list | length == 0
+    - scenario_results | rejectattr('passed') | list | length == 0 or step.always | default(false)
     - hostvars[step.board].bench_via is not none
 
 # A board with no console and no ssh: its family's step tasks (bench_step_tasks), which
@@ -45,7 +45,7 @@
     name: "{{ hostvars[step.board].bench_plugin }}.board"
     tasks_from: "{{ hostvars[step.board].bench_step_tasks }}"
   when:
-    - scenario_results | rejectattr('passed') | list | length == 0
+    - scenario_results | rejectattr('passed') | list | length == 0 or step.always | default(false)
     - hostvars[step.board].bench_via is none
 
 - name: "What its family said for step {{ step_index + 1 }}"
@@ -53,16 +53,51 @@
     step_said: "{{ board_step_said }}"
   when:
     # the same test as the include's: a step skipped after a failure keeps no earlier result
-    - scenario_results | rejectattr('passed') | list | length == 0
+    - scenario_results | rejectattr('passed') | list | length == 0 or step.always | default(false)
     - hostvars[step.board].bench_via is none
     - board_step_said is defined
     - board_step_said is not skipped
 
+# A step's output kept under a name (`keep`), for a later step on the same board to compare its
+# own with (`delta`: {against: <name>, and counter_delta's spec}): counters read before and after
+# a test, judged by how much they moved (plugins/filter/counters.py says how). A step with
+# `always: true` runs even after a failed one (the readings after a scenario); a failed scenario
+# stays failed whatever it says.
+- name: "The result of step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    step_result: >-
+      {{ (step_said.results[0] if step_said.results is defined
+          else {'name': step_name, 'cmd': step.cmd, 'output': '',
+                'passed': false, 'why': [step_said.msg | default('the step did not run')]})
+         | combine({'board': step.board}) }}
+  when: step_said is not skipped
+
+- name: "Keep the output of step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    scenario_kept: "{{ scenario_kept | combine({step.board ~ '/' ~ step.keep: step_result.output}) }}"
+  when:
+    - step_said is not skipped
+    - step.keep is defined
+    - step_result.passed
+
+- name: "Judge how the counters moved in step {{ step_index + 1 }}"
+  ansible.builtin.set_fact:
+    step_result: >-
+      {{ step_result | combine({'deltas': verdict.deltas, 'recorded': verdict.recorded,
+                                'note': verdict.note | default(''),
+                                'passed': step_result.passed and verdict.why | length == 0,
+                                'why': (step_result.why | default([])) + verdict.why}) }}
+  vars:
+    verdict: >-
+      {{ step_result.output | rxrbench.core.counter_delta(
+           scenario_kept[step.board ~ '/' ~ step.delta.against] | default(none),
+           step.delta) }}
+  when:
+    - step_said is not skipped
+    - step.delta is defined
+    - step_result.passed
+
 - name: "Keep what was said in step {{ step_index + 1 }}"
   ansible.builtin.set_fact:
-    scenario_results: >-
-      {{ scenario_results + [(step_said.results[0] if step_said.results is defined
-                              else {'name': step_name, 'cmd': step.cmd, 'output': '',
-                                    'passed': false, 'why': [step_said.msg | default('the step did not run')]})
-                             | combine({'board': step.board})] }}
+    scenario_results: "{{ scenario_results + [step_result] }}"
   when: step_said is not skipped

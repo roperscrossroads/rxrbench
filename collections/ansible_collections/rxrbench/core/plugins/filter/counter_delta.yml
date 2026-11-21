@@ -1,0 +1,17 @@
+---
+DOCUMENTATION:
+  name: counter_delta
+  short_description: How much a device's counters moved between two readings, judged
+  description:
+    - "C(after | rxrbench.core.counter_delta(before, spec)) reads the counters out of two outputs
+      of the same command (C(extract), a regex whose first group is a JSON object; C(path),
+      dotted keys to the counters in it) and returns C({deltas, why}): each counter's change,
+      and the reasons the change is not allowed."
+    - "Every key may grow by C(allow[key]) (C(*) for the rest; default 0); C(ignore) keys are
+      reported, never judged; when C(restart) (an uptime) went down the device restarted between
+      the readings, which is a reason in itself. With C(optional), a first reading without the
+      counters (firmware from before them) is not judged, and C(note) says so."
+    - "A scenario step's C(delta) is judged by it, against the output a C(keep) step kept
+      (playbooks/scenario.yml)."
+  author:
+    - Adam Roper (@roperscrossroads)

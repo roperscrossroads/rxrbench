@@ -2,7 +2,11 @@
 # Run a layout's scenarios: steps across devices, judged in order. The library tests the layout
 # binds (bench_test_bindings: <site>/tests/<name>.yml, each role a board) run as scenarios named
 # after the test, after the inline ones (docs/ARCHITECTURE.md#runs-tests-and-campaigns). bench_scenarios is a list of
-# {name, steps}, each step {board, cmd, expect, refuse, rc, timeout, within, name}: the command
+# {name, steps, counters}, each step {board, cmd, expect, refuse, rc, timeout, within, name,
+# keep, delta, always}: `keep: <name>` keeps the step's output, `delta: {against: <name>, ...}`
+# judges how the counters in this output moved from the kept one (plugins/filter/counters.py),
+# `always: true` runs a step even after one before it failed; `counters: true` wraps a scenario
+# in such readings on each of its boards whose family has counters. The command
 # runs on the board `board` names, through whatever carries a command to it (its broker, ssh,
 # or for a board with neither its family's own step tasks: a stock firmware's API),
 # and `within` gives the step that many seconds to come true (asked again every second). A
@@ -46,6 +50,18 @@
         - name: Only those
           ansible.builtin.set_fact:
             scenarios_all: "{{ scenarios_all | selectattr('name', 'in', bench_scenario_only) | list }}"
+
+    # A scenario with `counters: true` (or every scenario, under bench_scenario_counters,
+    # unless it says `counters: false`) reads the counters of each board it names whose family
+    # has them (bench_health_counters) before its first step and again after its last, and
+    # fails when one it judges grew more than allowed: a test that passed while a board failed
+    # its sends, dropped frames or restarted did not pass (module_utils/readings.py).
+    - name: The counter readings around the scenarios that ask for them
+      ansible.builtin.set_fact:
+        scenarios_all: >-
+          {{ scenarios_all | rxrbench.core.scenarios_with_counters(
+               hostvars, bench_scenario_counters | default(false)) }}
+      run_once: true
 
     - name: The layout declares scenarios
       ansible.builtin.assert:

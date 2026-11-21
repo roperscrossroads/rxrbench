@@ -55,6 +55,7 @@
  },
  "bench_flasher": "rauc",
  "bench_fw_kind": "linux",
+ "bench_health_counters": null,
  "bench_health_soak": 0,
  "bench_health_unit": null,
  "bench_host_key_paths": [

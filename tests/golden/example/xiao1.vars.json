@@ -69,6 +69,19 @@
  "bench_family_tasks": "zephyrtastic",
  "bench_flasher": "uf2",
  "bench_fw_kind": "port",
+ "bench_health_counters": {
+  "cmd": "meshtastic state",
+  "extract": "~S(\\{.*\\})\\*[0-9a-f]{4}",
+  "judge": "err",
+  "optional": true,
+  "path": "health",
+  "record": [
+   "ops",
+   "retry",
+   "warn"
+  ],
+  "restart": "up"
+ },
  "bench_identity_key": "class",
  "bench_image": "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}",
  "bench_key_escrow": "tunnel",

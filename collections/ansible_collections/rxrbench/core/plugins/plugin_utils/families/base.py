@@ -98,6 +98,11 @@ class Family:
     #: or None.
     reset_command = None
 
+    #: The device's error counters, for a scenario's health readings (`health: true`): {cmd,
+    #: and plugins/filter/counters.py's spec: extract, path, ignore, allow, restart,
+    #: optional}. Published as bench_health_counters; None: its boards have none.
+    health_counters = None
+
     #: Config regions of an ESP32 image of this family (name, key in its flash map), or None.
     #: The map is the build's flash.json, or a merged image's own partition table (each data
     #: partition by its label in capitals: `spiffs` is `SPIFFS`).

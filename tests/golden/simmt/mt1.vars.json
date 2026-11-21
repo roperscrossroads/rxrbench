@@ -16,6 +16,7 @@
  "bench_family": "meshtastic",
  "bench_family_facts": {},
  "bench_fw_kind": "meshtastic",
+ "bench_health_counters": null,
  "bench_identity_key": null,
  "bench_key_escrow": "serial",
  "bench_kind": "container",
