@@ -177,6 +177,7 @@ def test_code_that_runs_on_a_bench_host_does_not_import_the_families():
         "a file only the controller runs belongs in CONTROLLER_ONLY, with why in its comment")
 
 
+@pytest.mark.plugins
 def test_zephyrtastic_counters_judge_the_errors_of_its_state_line_and_keep_the_rest():
     from ansible_collections.rxrbench.core.plugins.filter.counters import counter_delta
     spec = families.plugin("zephyrtastic").health_counters
