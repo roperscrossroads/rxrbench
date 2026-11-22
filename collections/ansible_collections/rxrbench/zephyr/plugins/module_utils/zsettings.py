@@ -62,6 +62,7 @@ def read(board, name, deadline=8.0, secret=None):
     return shown if secret and lines[0] == REDACTED else lines[0]
 
 
+DIGEST_ASKS = 3
 DIGEST_LINE = re.compile(r"^digest (\S+) (?:(none)|(\d+) ([0-9a-f]{64}))\s*$")
 
 
@@ -69,11 +70,16 @@ def digest(board, name, command, deadline=8.0):
     """(length, SHA-256 hex) of the board's `name`, from the firmware's own `<command> <name>`
     ("digest <name> <length> <sha256>", or "digest <name> none"): None when it holds no such
     setting. The value itself never crosses the console."""
-    out = board.exec(f"{command} {name}", deadline=deadline)
-    for line in out.splitlines():
-        m = DIGEST_LINE.match(line.strip())
-        if m and m.group(1) == name:
-            return None if m.group(2) else (int(m.group(3)), m.group(4))
+    # The command only reads, so it is asked again when no digest line comes back: a board
+    # that has just booted prints its WiFi join ("Connected", "zapp 3.0: up") on the console
+    # whenever it likes, and a message that lands inside the digest line splits it (seen on
+    # a Pico W). A board without the command still fails, after the last ask.
+    for _ in range(DIGEST_ASKS):
+        out = board.exec(f"{command} {name}", deadline=deadline)
+        for line in out.splitlines():
+            m = DIGEST_LINE.match(line.strip())
+            if m and m.group(1) == name:
+                return None if m.group(2) else (int(m.group(3)), m.group(4))
     raise SettingsError(f"{name}: `{command} {name}` printed no digest line")
 
 

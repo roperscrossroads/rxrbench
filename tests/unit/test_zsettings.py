@@ -115,6 +115,25 @@ def test_a_firmware_without_the_digest_command_is_an_error_not_a_match():
         zsettings.differs(b, "tls/cert", "x", secret="x", digest_command="zapp digest")
 
 
+def test_a_digest_line_split_by_the_boards_own_console_message_is_asked_again():
+    """A just-booted board prints its WiFi join whenever it likes; one that lands inside the
+    digest line splits it. The read-only command is asked again."""
+    class Split(DigestShell):
+        asks = 0
+
+        def exec(self, cmd, deadline=8.0, secret=None):
+            if cmd.startswith("zapp digest"):
+                Split.asks += 1
+                if Split.asks == 1:
+                    return "digest wConnected\nzapp 3.0: up\nifi/psk 3 abc\n"
+            return super().exec(cmd, deadline, secret)
+
+    b = Split()
+    b.store["wifi/psk"] = "key"
+    assert zsettings.digest(b, "wifi/psk", "zapp digest") == zsettings.digest_of("key")
+    assert Split.asks == 2
+
+
 def test_a_wifi_key_is_a_declared_secret_of_its_own_kind():
     from ansible_collections.rxrbench.zephyr.plugins.plugin_utils.families import zephyr_settings
     fam = zephyr_settings.Family()

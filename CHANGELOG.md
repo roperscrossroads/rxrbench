@@ -74,6 +74,11 @@
 
 ### Fixed
 
+- **A digest line split by the board's own console message is asked again**: a just-booted
+  Zephyr board may print a message (a WiFi join) in the middle of the `digest` command's reply,
+  which then matched no digest line and failed the step. The read-only command is asked up to
+  three times; a firmware without the command still fails.
+
 - **A `zephyr_mcumgr` board with its Zephyr shell is rebooted through it**: `just reboot` and the
   board exercise's `reboot` send `kernel reboot cold` and prove it by `kernel uptime`, as for every
   Zephyr shell. The families table is per family, so the console a layout names for one board
