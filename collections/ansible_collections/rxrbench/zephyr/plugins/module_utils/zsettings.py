@@ -42,6 +42,19 @@ class Truncated(SettingsError):
 READ_ASKS = 3
 
 
+def _ask(board, command, asks, **kw):
+    """One read-only command's output. A just-booted board's console message can land inside the
+    echo of what was typed, and the broker then answers "no echo"; the command only reads, so it
+    is typed again. The last refusal is raised."""
+    for left in range(asks - 1, -1, -1):
+        try:
+            return board.exec(command, **kw)
+        except broker_client.BrokerError as e:
+            if "no echo" not in str(e) or not left:
+                raise
+    raise AssertionError("asks must be at least 1")
+
+
 def read(board, name, deadline=8.0, secret=None):
     """The setting's value as a string, or None when the board has no such setting. The
     broker's marker read gives the lines between the command's echo and the marker. `secret`
@@ -55,7 +68,8 @@ def read(board, name, deadline=8.0, secret=None):
     # was then taken for the SSID and the plan reported drift). The command only reads, so it is
     # asked again; a reply that never comes back whole is an error, not a guess.
     for _ in range(READ_ASKS):
-        out = board.exec(f"settings read string {name}", deadline=deadline, secret=shown)
+        out = _ask(board, f"settings read string {name}", READ_ASKS, deadline=deadline,
+                   secret=shown)
         lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
         cut = any(ln.startswith(TRUNCATED) for ln in lines)
         lines = [ln for ln in lines if not ln.startswith(TRUNCATED)]
@@ -87,7 +101,7 @@ def digest(board, name, command, deadline=8.0):
     # whenever it likes, and a message that lands inside the digest line splits it (seen on
     # a Pico W). A board without the command still fails, after the last ask.
     for _ in range(DIGEST_ASKS):
-        out = board.exec(f"{command} {name}", deadline=deadline)
+        out = _ask(board, f"{command} {name}", DIGEST_ASKS, deadline=deadline)
         for line in out.splitlines():
             m = DIGEST_LINE.match(line.strip())
             if m and m.group(1) == name:
