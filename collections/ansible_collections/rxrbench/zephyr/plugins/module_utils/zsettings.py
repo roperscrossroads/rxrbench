@@ -39,6 +39,9 @@ class Truncated(SettingsError):
     that it is longer than MAX_SHOWN (so it is not any value the shell could check)."""
 
 
+READ_ASKS = 3
+
+
 def read(board, name, deadline=8.0, secret=None):
     """The setting's value as a string, or None when the board has no such setting. The
     broker's marker read gives the lines between the command's echo and the marker. `secret`
@@ -47,10 +50,19 @@ def read(board, name, deadline=8.0, secret=None):
     # A secret longer than the shell shows is printed only to MAX_SHOWN: that part is what the
     # broker must keep out of its log (the read then fails, below).
     shown = secret[:MAX_SHOWN] if secret and len(secret) > MAX_SHOWN else secret
-    out = board.exec(f"settings read string {name}", deadline=deadline, secret=shown)
-    lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
-    cut = any(ln.startswith(TRUNCATED) for ln in lines)
-    lines = [ln for ln in lines if not ln.startswith(TRUNCATED)]
+    # The shell prints a value on one line. More than one means the board's own console message
+    # landed in the reply (a just-booted board's WiFi join, seen on a Pico W, where the message
+    # was then taken for the SSID and the plan reported drift). The command only reads, so it is
+    # asked again; a reply that never comes back whole is an error, not a guess.
+    for _ in range(READ_ASKS):
+        out = board.exec(f"settings read string {name}", deadline=deadline, secret=shown)
+        lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+        cut = any(ln.startswith(TRUNCATED) for ln in lines)
+        lines = [ln for ln in lines if not ln.startswith(TRUNCATED)]
+        if len(lines) <= 1:
+            break
+    else:
+        raise SettingsError(f"{name}: `settings read string` never answered with one line")
     if not lines:
         return ""
     if lines[0].startswith(NOT_FOUND):

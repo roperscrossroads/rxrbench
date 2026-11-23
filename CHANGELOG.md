@@ -79,6 +79,11 @@
   which then matched no digest line and failed the step. The read-only command is asked up to
   three times; a firmware without the command still fails.
 
+- **A settings read with the board's own console message in it is asked again**: the same message
+  landing in `settings read string` was taken for the value, so a clean board planned a change
+  (the hardware CI's `restore-regions` on a Pico W). A value is one line; a reply of more lines
+  is asked again up to three times, then is an error.
+
 - **A `zephyr_mcumgr` board with its Zephyr shell is rebooted through it**: `just reboot` and the
   board exercise's `reboot` send `kernel reboot cold` and prove it by `kernel uptime`, as for every
   Zephyr shell. The families table is per family, so the console a layout names for one board

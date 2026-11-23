@@ -115,6 +115,36 @@ def test_a_firmware_without_the_digest_command_is_an_error_not_a_match():
         zsettings.differs(b, "tls/cert", "x", secret="x", digest_command="zapp digest")
 
 
+def test_a_read_with_the_boards_own_console_message_in_it_is_asked_again():
+    """A just-booted board's WiFi join landed in a read's reply and was taken for the value."""
+    class Noisy(Shell):
+        asks = 0
+
+        def exec(self, cmd, deadline=8.0, secret=None):
+            out = super().exec(cmd, deadline, secret)
+            if cmd.startswith("settings read string"):
+                self.asks += 1
+                if self.asks == 1:
+                    return "zapp 3.0: up\n\n" + out
+            return out
+
+    b = Noisy()
+    b.store["wifi/ssid"] = "mint"
+    assert zsettings.read(b, "wifi/ssid") == "mint"
+    assert b.asks == 2
+
+
+def test_a_read_that_never_comes_back_whole_is_an_error_not_a_guess():
+    class AlwaysNoisy(Shell):
+        def exec(self, cmd, deadline=8.0, secret=None):
+            return "zapp 3.0: up\n" + super().exec(cmd, deadline, secret)
+
+    b = AlwaysNoisy()
+    b.store["wifi/ssid"] = "mint"
+    with pytest.raises(zsettings.SettingsError, match="never answered with one line"):
+        zsettings.read(b, "wifi/ssid")
+
+
 def test_a_digest_line_split_by_the_boards_own_console_message_is_asked_again():
     """A just-booted board prints its WiFi join whenever it likes; one that lands inside the
     digest line splits it. The read-only command is asked again."""
