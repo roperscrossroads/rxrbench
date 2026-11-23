@@ -83,7 +83,8 @@
   landing in `settings read string` was taken for the value, so a clean board planned a change
   (the hardware CI's `restore-regions` on a Pico W). A value is one line; a reply of more lines
   is asked again up to three times, then is an error. A message that splits the command's echo
-  (the broker's "no echo") is typed again the same way, for reads and digests only.
+  or the end marker (the broker's "no echo" or "timeout") is typed again the same way, for reads
+  and digests only.
 
 - **A `zephyr_mcumgr` board with its Zephyr shell is rebooted through it**: `just reboot` and the
   board exercise's `reboot` send `kernel reboot cold` and prove it by `kernel uptime`, as for every

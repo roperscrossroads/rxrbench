@@ -135,7 +135,8 @@ def test_a_read_with_the_boards_own_console_message_in_it_is_asked_again():
     assert b.asks == 2
 
 
-def test_a_read_whose_echo_a_console_message_split_is_typed_again():
+@pytest.mark.parametrize("why", ["no echo", "timeout"])
+def test_a_read_whose_echo_or_end_marker_a_console_message_split_is_typed_again(why):
     class SplitEcho(Shell):
         asks = 0
 
@@ -143,7 +144,7 @@ def test_a_read_whose_echo_a_console_message_split_is_typed_again():
             if cmd.startswith("settings read string"):
                 self.asks += 1
                 if self.asks == 1:
-                    raise broker_client.BrokerError(f"board: `{cmd}`: no echo")
+                    raise broker_client.BrokerError(f"board: `{cmd}`: {why}")
             return super().exec(cmd, deadline, secret)
 
     b = SplitEcho()
@@ -159,6 +160,20 @@ def test_a_console_that_never_echoes_still_fails():
 
     with pytest.raises(broker_client.BrokerError, match="no echo"):
         zsettings.read(Silent(), "wifi/ssid")
+
+
+def test_another_broker_error_is_not_asked_again():
+    class Closed(Shell):
+        asks = 0
+
+        def exec(self, cmd, deadline=8.0, secret=None):
+            self.asks += 1
+            raise broker_client.BrokerError(f"board: `{cmd}`: port closed")
+
+    b = Closed()
+    with pytest.raises(broker_client.BrokerError, match="port closed"):
+        zsettings.read(b, "wifi/ssid")
+    assert b.asks == 1
 
 
 def test_a_read_that_never_comes_back_whole_is_an_error_not_a_guess():

@@ -44,13 +44,13 @@ READ_ASKS = 3
 
 def _ask(board, command, asks, **kw):
     """One read-only command's output. A just-booted board's console message can land inside the
-    echo of what was typed, and the broker then answers "no echo"; the command only reads, so it
-    is typed again. The last refusal is raised."""
+    echo of what was typed ("no echo") or inside the broker's end marker ("timeout"). The command
+    only reads, so it is typed again. The last refusal is raised, so a hung console still fails."""
     for left in range(asks - 1, -1, -1):
         try:
             return board.exec(command, **kw)
         except broker_client.BrokerError as e:
-            if "no echo" not in str(e) or not left:
+            if not left or not any(why in str(e) for why in ("no echo", "timeout")):
                 raise
     raise AssertionError("asks must be at least 1")
 
