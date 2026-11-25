@@ -21,7 +21,7 @@
 classes:
   1:
     name: xiao-node
-    summary: XIAO cluster member; verifies and requires cluster signatures
+    summary: XIAO node; signs and verifies packets and synced config, requires signed config
     board: xiao_ble/nrf52840
     board_tag: xiao
     hw_model: 88
@@ -41,7 +41,13 @@ classes:
       - overlay-cluster-sig-required.conf
       - overlay-ble-peer.conf
       - overlay-led-status.conf
+      - overlay-cluster-sign.conf
+      - overlay-xeddsa-sign.conf
       - overlay-quiet-first-boot.conf
+    # Signing fits only with terse asserts (file and line, no message): ~38 KB of flash on the
+    # 741 KB app slot. On Zephyr 4.5 that is the assert-level choice, not ASSERT_VERBOSE=n.
+    defines:
+      CONFIG_ASSERT_MODULE_DEFAULT_LEVEL_TERSE: "y"
 
   2:
     name: r8-node-updater
@@ -175,29 +181,8 @@ classes:
     dtc_overlays: [coredump-big.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
-  7:
-    name: xiao-node-sig-optional
-    summary: XIAO member that verifies but does not require cluster signatures
-    board: xiao_ble/nrf52840
-    board_tag: xiao
-    hw_model: 88
-    build_dir: build-xiao-c2
-    notes: "ble (XIAO, a cluster that verifies but does not REQUIRE signatures)"
-    flasher: uf2
-    shield: wio_sx1262_xiao
-    class_in_recipe: true
-    overlays:
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
-      - overlay-health.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
-      - overlay-xeddsa.conf
-      - overlay-ble-peer.conf
-      - overlay-led-status.conf
-      - overlay-quiet-first-boot.conf
+  # 7: retired 2026-11-25 (was xiao-node-sig-optional, a XIAO that verified but did not require
+  # signed synced config). Class 1 signs since then; the number is never reused.
 
   8:
     name: r8-scanner
