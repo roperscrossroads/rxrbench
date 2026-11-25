@@ -43,6 +43,8 @@ def test_catalog_renders_the_old_recipe(cid):
     # What the old build scripts added on top of the string, and render() adds itself.
     assert got.pop("CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION") == '"0.4.38+0"'
     assert got.pop("ZEPHYR_EXTRA_MODULES") == "/tree"
+    # Added since the reference strings: the class's bundle name, quoted (a Kconfig string).
+    assert got.pop("CONFIG_MESHTASTIC_FLEET_BUNDLE") == f'"{cls["name"]}"'
     # Since the catalog became the only copy of the recipes, a class's overlays
     # are allowed to grow: render() must pass the catalog's list, in the catalog's order, and
     # the test below keeps it equal to the firmware's own CI. The old recipe's overlays must
@@ -129,13 +131,17 @@ def _fleet_scenarios():
         return {}
     tests = yaml.safe_load(open(SAMPLE))["tests"]
     out = {}
+    by_name = {cls["name"]: cid for cid, cls in CATALOG.items() if cls.get("name")}
     for name, t in tests.items():
-        m = re.fullmatch(r"sample\.meshtastic\.fleet\.c(\d+)", name)
-        if m:
+        # A class's scenario is named after its number (fleet.c<N>) or, since the bundle
+        # names, after its bundle (fleet.<name>).
+        m = re.fullmatch(r"sample\.meshtastic\.fleet\.(?:c(\d+)|([a-z0-9-]+))", name)
+        cid = (int(m.group(1)) if m.group(1) else by_name.get(m.group(2))) if m else None
+        if cid is not None:
             args = t.get("extra_args") or []
             args = args if isinstance(args, list) else [args]
             d = dict(str(a).split("=", 1) for a in args if "=" in str(a))
-            out[int(m.group(1))] = (t, {k.strip(): v.strip().strip('"') for k, v in d.items()})
+            out[cid] = (t, {k.strip(): v.strip().strip('"') for k, v in d.items()})
     return out
 
 
@@ -149,3 +155,16 @@ def test_the_firmware_ci_builds_each_class_as_the_catalog_says(cid):
     assert args.get("EXTRA_DTC_OVERLAY_FILE", "") == ";".join(cls.get("dtc_overlays") or [])
     assert args.get("SHIELD") == cls.get("shield")
     assert cls["board"] in t.get("platform_allow", [])
+
+
+def test_every_class_has_a_unique_bundle_name():
+    """Layouts, the firmware and people name a class by its bundle (docs: CLASS-NAMING)."""
+    names = [cls.get("name") for cls in CATALOG.values()]
+    assert all(n and re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", n) for n in names), names
+    assert len(set(names)) == len(names), "two classes share a bundle name"
+
+
+def test_the_bundle_name_reaches_the_build():
+    cid, cls = 15, CATALOG[15]
+    argv = recipe.render(cid, cls, "/tree", "0.4.38", "build-x", key_file=KEY)
+    assert f'-DCONFIG_MESHTASTIC_FLEET_BUNDLE="{cls["name"]}"' in argv

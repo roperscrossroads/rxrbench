@@ -10,6 +10,7 @@ Build-system rules this encodes:
 - -DZEPHYR_EXTRA_MODULES=<tree> is what makes west compile <tree>. Without it the module
   resolves to the manifest's main/ whatever app path is given, silently.
 - A class whose overlays do not state the fleet class takes it, and the signed TLV, as defines.
+- Every named class passes its bundle name (`name`) as CONFIG_MESHTASTIC_FLEET_BUNDLE.
 """
 import hashlib
 import json
@@ -54,6 +55,10 @@ def defines_for(class_id, cls, features, tree, version, key_file):
         if not key_file:
             raise RecipeError("a signed class needs the signing key path")
         d.append(("SB_CONFIG_BOOT_SIGNATURE_KEY_FILE", f'"{key_file}"'))
+    if cls.get("name"):
+        # The class's bundle name, which the firmware prints beside the number
+        # (`meshtastic version`: "class: 15 (r8-gateway)"). A Kconfig string: quoted.
+        d.append(("CONFIG_MESHTASTIC_FLEET_BUNDLE", f'"{cls["name"]}"'))
     if cls.get("class_in_recipe"):
         d.append(("CONFIG_MESHTASTIC_FLEET_CLASS", str(int(class_id))))
         d.append(("CONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS",

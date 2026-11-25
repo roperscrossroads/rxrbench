@@ -29,6 +29,22 @@ def _untemplated(sec):
     return sec
 
 
+
+def resolve_class(value, classes):
+    """The class number a layout means by `value`: a number (or its string), or a class's
+    bundle name (the catalog's `name`). None when it names no class of the catalog."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value if value in classes else None
+    v = str(value).strip()
+    if v.isdigit():
+        return int(v) if int(v) in classes else None
+    for cid, cls in classes.items():
+        if cls.get("name") == v:
+            return int(cid)
+    return None
+
 class Family(base.Family):
     #: a UF2 board's bootloader is this plugin's to update (roles/board/tasks/bootloader_uf2.yml)
     bootloader_tasks = {"uf2": "bootloader_uf2"}
@@ -159,6 +175,18 @@ class Family(base.Family):
         return [dict(s) for s in self.secrets]
 
     def board_facts(self, hostvars, groups):
+        facts = self._board_facts(hostvars, groups)
+        # A layout may name its class by number or by bundle name; what the tasks and the
+        # site's templates use (the store key class-N, the version probe) is the number.
+        fw = hostvars.get("firmware") or {}
+        if fw.get("family") == "zephyrtastic" and fw.get("class") is not None:
+            classes = self.catalog([CATALOG])["classes"]
+            cid = resolve_class(fw.get("class"), classes)
+            facts["firmware_class"] = cid
+            facts["firmware_bundle"] = (classes.get(cid) or {}).get("name") if cid is not None else None
+        return facts
+
+    def _board_facts(self, hostvars, groups):
         """A head's preset is its brain's to set (the brain re-sends it), so the radio step
         leaves it alone; a listener sweeps presets, so where its radio is now is not where it
         is stored to be."""
@@ -243,9 +271,12 @@ class Family(base.Family):
 
     def image(self, fw, catalog):
         """A class of the catalog, with the board's features applied to its recipe."""
-        cls = catalog["families"]["zephyrtastic"]["classes"].get(fw.get("class"))
+        classes = catalog["families"]["zephyrtastic"]["classes"]
+        cid = resolve_class(fw.get("class"), classes)
+        cls = classes.get(cid) if cid is not None else None
         if cls is None:
-            return None, [f"class {fw.get('class')!r} is not in the catalog"]
+            return None, [f"class {fw.get('class')!r} is not in the catalog (a number or a "
+                          f"bundle name: {', '.join(sorted(str(c.get('name')) for c in classes.values()))})"]
         problems = []
         try:
             recipe.overlays_for(cls, fw.get("features"))

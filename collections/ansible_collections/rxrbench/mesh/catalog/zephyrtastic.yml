@@ -1,6 +1,9 @@
 ---
 # What each fleet class is built from. Data, not a shell string: recipe.py renders the argv.
 #
+#   name             the bundle name people use for the class (docs/CLASS-NAMING in the
+#                    zephyrtastic tooling); layouts may name a class by it, the firmware
+#                    prints it, and the recipe passes it as CONFIG_MESHTASTIC_FLEET_BUNDLE
 #   board            the Zephyr board target
 #   board_tag        must equal the registry's policy.board_tag for the board being flashed
 #   hw_model         meshtastic HardwareModel the image reports
@@ -17,7 +20,7 @@
 
 classes:
   1:
-    name: xiao-member
+    name: xiao-node
     summary: XIAO cluster member; verifies and requires cluster signatures
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -41,7 +44,7 @@ classes:
       - overlay-quiet-first-boot.conf
 
   2:
-    name: r8-courier
+    name: r8-node-updater
     summary: V4-R8 courier; SMP central and firmware depot
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -77,7 +80,7 @@ classes:
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   4:
-    name: v4-member
+    name: v4-node
     summary: Heltec V4 cluster member
     board: heltec_wifi_lora32_v4/esp32s3/procpu
     board_tag: heltec-v4
@@ -111,7 +114,7 @@ classes:
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   5:
-    name: v4-listener
+    name: v4-scanner
     summary: Heltec V4 RF listener; scanner autostart, no cluster
     board: heltec_wifi_lora32_v4/esp32s3/procpu
     board_tag: heltec-v4
@@ -139,7 +142,7 @@ classes:
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   6:
-    name: r8-member
+    name: r8-node
     summary: Heltec V4-R8 cluster member
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -173,7 +176,7 @@ classes:
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   7:
-    name: xiao-member-unsigned-cluster
+    name: xiao-node-sig-optional
     summary: XIAO member that verifies but does not require cluster signatures
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -197,7 +200,7 @@ classes:
       - overlay-quiet-first-boot.conf
 
   8:
-    name: r8-listener
+    name: r8-scanner
     summary: V4-R8 RF listener; 100000-record PSRAM ring, GNSS clock, no cluster
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -228,7 +231,7 @@ classes:
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   9:
-    name: xiao-listener
+    name: xiao-scanner
     summary: XIAO RF listener; 1024-record RAM ring, no peer link, no cluster
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -251,7 +254,7 @@ classes:
       - overlay-led-status.conf
 
   10:
-    name: xiao-relay
+    name: xiao-node-bridge
     summary: XIAO cross-preset relay, receiving half
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -275,7 +278,7 @@ classes:
       - overlay-relay.conf
 
   11:
-    name: xiao-ear
+    name: xiao-worker-rx
     summary: XIAO cross-preset relay ear; transmit compiled out
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -301,7 +304,7 @@ classes:
       - overlay-relay-ear.conf
 
   12:
-    name: xiao-head
+    name: xiao-worker
     summary: XIAO keyless radio head
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -326,7 +329,7 @@ classes:
       - overlay-attachment-head.conf
 
   13:
-    name: v3-head
+    name: v3-worker
     summary: Heltec V3 keyless radio head
     board: heltec_wifi_lora32_v3/esp32s3/procpu
     board_tag: heltec-v3
