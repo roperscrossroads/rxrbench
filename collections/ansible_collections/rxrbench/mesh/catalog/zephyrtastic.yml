@@ -12,7 +12,8 @@
 #   overlays         EXTRA_CONF_FILE, in order (later overlays win)
 #   dtc_overlays     EXTRA_DTC_OVERLAY_FILE
 #   sysbuild         SB_CONFIG_* settings
-#   class_in_recipe  true when no overlay states the class: it and the signed TLV go in as defines
+#   class_in_recipe  the class number and its signed TLV go in as defines (every class since
+#                    firmware 0.4.78: no overlay or board conf states a class any more)
 #   build_dir        the conventional build directory (relative to the workspace) for this class
 #   notes            the longer description, with how the image is operated
 #
@@ -21,6 +22,7 @@
 classes:
   1:
     name: xiao-node
+    class_in_recipe: true
     summary: XIAO node; signs and verifies packets and synced config, requires signed config
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -30,17 +32,11 @@ classes:
     flasher: uf2
     shield: wio_sx1262_xiao
     overlays: &xiao_member
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
       - overlay-health.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sig-required.conf
       - overlay-ble-peer.conf
-      - overlay-led-status.conf
       - overlay-cluster-sign.conf
       - overlay-xeddsa-sign.conf
       - overlay-quiet-first-boot.conf
@@ -51,6 +47,7 @@ classes:
 
   2:
     name: r8-node-updater
+    class_in_recipe: true
     summary: V4-R8 courier; SMP central and firmware depot
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -73,20 +70,17 @@ classes:
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sign.conf
       - overlay-xeddsa-sign.conf
       - overlay-cluster-sig-required.conf
-      - overlay-led-status.conf
       - overlay-quiet-first-boot.conf
     dtc_overlays: [depot.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   4:
     name: v4-node
+    class_in_recipe: true
     summary: Heltec V4 cluster member
     board: heltec_wifi_lora32_v4/esp32s3/procpu
     board_tag: heltec-v4
@@ -107,8 +101,6 @@ classes:
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sign.conf
@@ -121,6 +113,7 @@ classes:
 
   5:
     name: v4-scanner
+    class_in_recipe: true
     summary: Heltec V4 RF listener; scanner autostart, no cluster
     board: heltec_wifi_lora32_v4/esp32s3/procpu
     board_tag: heltec-v4
@@ -142,13 +135,12 @@ classes:
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
     dtc_overlays: [coredump-big.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   6:
     name: r8-node
+    class_in_recipe: true
     summary: Heltec V4-R8 cluster member
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -165,18 +157,14 @@ classes:
       - overlay-cluster.conf
       - overlay-ota-ble.conf
       - overlay-ota-ble-secure.conf
-      - overlay-v4r8-member.conf
+      - overlay-v4-member.conf
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sign.conf
       - overlay-xeddsa-sign.conf
       - overlay-cluster-sig-required.conf
-      - overlay-led-status.conf
       - overlay-quiet-first-boot.conf
     dtc_overlays: [coredump-big.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
@@ -186,6 +174,7 @@ classes:
 
   8:
     name: r8-scanner
+    class_in_recipe: true
     summary: V4-R8 RF listener; 100000-record PSRAM ring, GNSS clock, no cluster
     board: heltec_wifi_lora32_v4_r8/esp32s3/procpu
     board_tag: heltec-v4r8
@@ -203,20 +192,17 @@ classes:
       - overlay-ota-ble-secure.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-scanner.conf
       - overlay-listener.conf
       - overlay-v4r8-listener.conf
-      - overlay-led-status.conf
       - overlay-quiet-first-boot.conf
     dtc_overlays: [coredump-big.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
   9:
     name: xiao-scanner
+    class_in_recipe: true
     summary: XIAO RF listener; 1024-record RAM ring, no peer link, no cluster
     board: xiao_ble/nrf52840
     board_tag: xiao
@@ -226,17 +212,11 @@ classes:
     flasher: uf2
     shield: wio_sx1262_xiao
     overlays:
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-scanner.conf
       - overlay-listener.conf
       - overlay-xiao-listener.conf
-      - overlay-led-status.conf
 
   10:
     name: xiao-node-bridge
@@ -250,16 +230,10 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
       - overlay-health.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-ble-peer.conf
-      - overlay-led-status.conf
       - overlay-relay.conf
 
   11:
@@ -276,16 +250,10 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
       - overlay-health.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-ble-peer.conf
-      - overlay-led-status.conf
       - overlay-relay-ear.conf
 
   12:
@@ -303,14 +271,8 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
-      - overlay-ota-shell.conf
-      - overlay-ota-ble.conf
-      - overlay-ota-ble-secure.conf
       - overlay-health.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-ble-peer.conf
-      - overlay-led-status.conf
       - overlay-attachment-head.conf
 
   13:
@@ -332,8 +294,6 @@ classes:
       - overlay-pm-off.conf
       - overlay-nomqtt.conf
       - overlay-ble-peer.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
       - overlay-led-status.conf
       - overlay-attachment-head.conf
       - overlay-quiet-first-boot.conf
@@ -358,10 +318,6 @@ classes:
       - overlay-nonet.conf
       - overlay-pm-off.conf
       - overlay-nomqtt.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
-      - overlay-led-status.conf
       - overlay-quiet-first-boot.conf
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
@@ -388,8 +344,4 @@ classes:
       - overlay-mqtt.conf
       - overlay-sparkplug.conf
       - overlay-sparkplug-tls.conf
-      - overlay-rf.conf
-      - overlay-bench.conf
-      - overlay-node-id-from-key.conf
-      - overlay-led-status.conf
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}

@@ -34,7 +34,30 @@ def old_defines(build):
     return d, argv[argv.index("-b") + 1]
 
 
-@pytest.mark.parametrize("cid", sorted(int(k) for k in OLD))
+# Overlays the firmware folded into a base (firmware 0.4.78): prj.conf for every board, the
+# sample's board conf for the rest. A recipe no longer lists them, and the image is the same.
+FOLDED = {
+    "*": {"overlay-rf.conf", "overlay-bench.conf"},
+    "xiao_ble/nrf52840": {"overlay-ota-shell.conf", "overlay-ota-ble.conf",
+                          "overlay-ota-ble-secure.conf", "overlay-led-status.conf"},
+    "heltec_wifi_lora32_v4_r8/esp32s3/procpu": {"overlay-node-id-from-key.conf",
+                                                "overlay-led-status.conf"},
+    "heltec_vision_master_e290/esp32s3/procpu": {"overlay-node-id-from-key.conf",
+                                                 "overlay-led-status.conf"},
+}
+# Overlays merged into another (the same file but for the class number, now a define).
+RENAMED = {"overlay-v4r8-member.conf": "overlay-v4-member.conf"}
+# Classes retired since the reference strings: class 7 (the unsigned-cluster XIAO) once XIAOs
+# could sign as class 1.
+RETIRED = {7}
+# Defines a class gained since the reference strings, with why.
+ADDED = {
+    # Class 1 signs; it fits on the XIAO only with terse asserts.
+    1: {"CONFIG_ASSERT_MODULE_DEFAULT_LEVEL_TERSE": "y"},
+}
+
+
+@pytest.mark.parametrize("cid", sorted(int(k) for k in OLD if int(k) not in RETIRED))
 def test_catalog_renders_the_old_recipe(cid):
     cls = CATALOG[cid]
     want, board = old_defines(OLD[str(cid)]["build"])
@@ -51,7 +74,18 @@ def test_catalog_renders_the_old_recipe(cid):
     # all still be there, in their order.
     conf, old_conf = got.pop("EXTRA_CONF_FILE").split(";"), want.pop("EXTRA_CONF_FILE").split(";")
     assert conf == cls["overlays"]
+    folded = FOLDED["*"] | FOLDED.get(cls["board"], set())
+    old_conf = [RENAMED.get(c, c) for c in old_conf if c not in folded]
+    assert not folded & set(conf), "a folded overlay is listed again"
     assert [c for c in conf if c in old_conf] == old_conf
+    # Every class states its number and signed TLV in the recipe (since firmware 0.4.78); an old
+    # recipe that had them from an overlay or the board conf did not pass them.
+    assert got.pop("CONFIG_MESHTASTIC_FLEET_CLASS") == str(cid)
+    assert got.pop("CONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS") == f'"--custom-tlv 0x00A0 0x{cid:02x}"'
+    want.pop("CONFIG_MESHTASTIC_FLEET_CLASS", None)
+    want.pop("CONFIG_MCUBOOT_EXTRA_IMGTOOL_ARGS", None)
+    for k, v in ADDED.get(cid, {}).items():
+        assert got.pop(k) == v
     assert got == want
     assert cls["board"] == board == OLD[str(cid)]["board"]
     assert cls["hw_model"] == OLD[str(cid)]["hw_model"]
@@ -73,7 +107,8 @@ def test_every_class_has_what_other_tools_read():
 def test_every_old_class_is_in_the_catalog():
     """The reference recipes are a migration check: every class they had is still here. A
     class added since (14, the E290) is the catalog's own and has no old recipe to match."""
-    assert set(int(k) for k in OLD) <= set(CATALOG)
+    assert set(int(k) for k in OLD) - RETIRED <= set(CATALOG)
+    assert not RETIRED & set(CATALOG), "a retired class is back in the catalog"
 
 
 def test_the_brain_feature_appends_its_overlay_once():
