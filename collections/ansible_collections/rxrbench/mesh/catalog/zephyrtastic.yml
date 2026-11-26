@@ -32,6 +32,9 @@ classes:
     flasher: uf2
     shield: wio_sx1262_xiao
     overlays: &xiao_member
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
       - overlay-health.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
@@ -70,6 +73,7 @@ classes:
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
+      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sign.conf
       - overlay-xeddsa-sign.conf
@@ -161,6 +165,7 @@ classes:
       - overlay-health.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
+      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-cluster-sign.conf
       - overlay-xeddsa-sign.conf
@@ -192,6 +197,7 @@ classes:
       - overlay-ota-ble-secure.conf
       - overlay-coredump-flash.conf
       - overlay-battery.conf
+      - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-scanner.conf
       - overlay-listener.conf
@@ -212,6 +218,9 @@ classes:
     flasher: uf2
     shield: wio_sx1262_xiao
     overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-scanner.conf
@@ -230,6 +239,9 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
       - overlay-health.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
@@ -250,6 +262,9 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
       - overlay-health.conf
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
@@ -271,6 +286,9 @@ classes:
     shield: wio_sx1262_xiao
     class_in_recipe: true
     overlays:
+      - overlay-ota-shell.conf
+      - overlay-ota-ble.conf
+      - overlay-ota-ble-secure.conf
       - overlay-health.conf
       - overlay-ble-peer.conf
       - overlay-attachment-head.conf
@@ -318,6 +336,7 @@ classes:
       - overlay-nonet.conf
       - overlay-pm-off.conf
       - overlay-nomqtt.conf
+      - overlay-node-id-from-key.conf
       - overlay-quiet-first-boot.conf
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
@@ -344,4 +363,5 @@ classes:
       - overlay-mqtt.conf
       - overlay-sparkplug.conf
       - overlay-sparkplug-tls.conf
+      - overlay-node-id-from-key.conf
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}

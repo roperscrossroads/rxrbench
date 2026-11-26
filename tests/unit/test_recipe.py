@@ -38,12 +38,12 @@ def old_defines(build):
 # sample's board conf for the rest. A recipe no longer lists them, and the image is the same.
 FOLDED = {
     "*": {"overlay-rf.conf", "overlay-bench.conf"},
-    "xiao_ble/nrf52840": {"overlay-ota-shell.conf", "overlay-ota-ble.conf",
-                          "overlay-ota-ble-secure.conf", "overlay-led-status.conf"},
-    "heltec_wifi_lora32_v4_r8/esp32s3/procpu": {"overlay-node-id-from-key.conf",
-                                                "overlay-led-status.conf"},
-    "heltec_vision_master_e290/esp32s3/procpu": {"overlay-node-id-from-key.conf",
-                                                 "overlay-led-status.conf"},
+    # Not the OTA overlays: a board conf applies to a plain (non-MCUboot) build too, which
+    # would drop them with warnings.
+    "xiao_ble/nrf52840": {"overlay-led-status.conf"},
+    # Not node-id-from-key: it needs MESHTASTIC_PKI, which a plain build of the board lacks.
+    "heltec_wifi_lora32_v4_r8/esp32s3/procpu": {"overlay-led-status.conf"},
+    "heltec_vision_master_e290/esp32s3/procpu": {"overlay-led-status.conf"},
 }
 # Overlays merged into another (the same file but for the class number, now a define).
 RENAMED = {"overlay-v4r8-member.conf": "overlay-v4-member.conf"}
