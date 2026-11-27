@@ -323,12 +323,24 @@ def _fallback_summary(ident, survey, got):
             if ident["fields"].get(f) in names} | {"no_state_line": True}
 
 
+def _state_value(line, key):
+    """A state key's value: `a.b` reads `b` inside the object `a`; None when absent."""
+    value = line
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
 def summarize(line, survey):
-    """What a survey keeps of a state line: `keep` {probe key: state key}, and `flags`
-    {probe key: state key} that are true when the line has the key at all."""
+    """What a survey keeps of a state line: `keep` {probe key: state key, `a.b` for a key inside
+    an object}, and `flags` {probe key: state key} that are true when the line has the key at
+    all."""
     if not line:
         return None
-    keep = {k: line[key] for k, key in survey["keep"].items() if line.get(key) is not None}
+    keep = {k: _state_value(line, key) for k, key in survey["keep"].items()
+            if _state_value(line, key) is not None}
     keep.update({k: True for k, key in (survey.get("flags") or {}).items() if key in line})
     return keep
 

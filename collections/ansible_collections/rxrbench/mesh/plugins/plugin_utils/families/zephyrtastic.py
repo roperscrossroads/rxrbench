@@ -77,7 +77,9 @@ class Family(base.Family):
     #: its state line is asked of a Zephyr console on any of these kinds of USB device
     survey = {"kinds": ["zephyr-cdc", "esp32-usb-jtag", "esp32-usb-cdc"],
               "keep": {"node_id": "id", "board": "board", "class": "class", "build": "build",
-                       "image": "image", "features": "feat"},
+                       "image": "image", "features": "feat",
+                       # the front end detected at boot (firmware with lora.fem in its state line)
+                       "fem": "lora.fem"},
               "flags": {"brain": "brain", "head": "head", "scanner": "scan"}}
     #: an image goes on a board only as the class, with the features, the layout declares;
     #: the class is also in the image's signed TLV
