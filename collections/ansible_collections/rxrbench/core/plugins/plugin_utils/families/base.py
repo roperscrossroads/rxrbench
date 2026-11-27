@@ -2,7 +2,7 @@
 
 A family's plugin subclasses Family and overrides what it knows. Generic code (the inventory,
 the layout checks, the RF rules, the flashers, the role, the tools) calls these and never
-names a family. A plugin imports only leaf modules (recipe, intents, attach, artifact, enums):
+names a family. A plugin imports only leaf modules (recipe, intents, hub, artifact, enums):
 layout, rfrules and flash import this package, so the other direction would be a cycle.
 
 The hooks are added one concern at a time; a hook nobody calls yet is listed here so the
@@ -80,6 +80,10 @@ class Family:
 
     #: Groups a feature puts a board in, beyond `feature_<name>`.
     feature_groups = {}
+
+    #: {old name: current name} of features renamed: an image staged, a board built or a
+    #: layout written under the old name is the same feature (identity, image checks, groups).
+    feature_aliases = {}
 
     #: The task file, in the plugin's `board` role, that runs a scenario step on a board of
     #: this family that has no console and no ssh (its own API): handed `step` and
@@ -198,11 +202,12 @@ class Family:
         identity = None
         if row["state_command"] and self.state is not None:
             identity = {"command": row["state_command"], "features": list(self.features),
-                        **self.state}
+                        "feature_aliases": dict(self.feature_aliases), **self.state}
         elif self.identity_probe:
             identity = dict(self.identity_probe)
         return {"console": row["console"], "identity_key": row["identity_key"], "identity": identity,
-                "image": {"match": list(self.image_match), "bytes_check": self.image_bytes_check},
+                "image": {"match": list(self.image_match), "bytes_check": self.image_bytes_check,
+                          "feature_aliases": dict(self.feature_aliases)},
                 "regions": [list(r) for r in self.config_regions] if self.config_regions else None,
                 "reboot": self.reboot or console.get("reboot"),
                 "reset_command": self.reset_command,

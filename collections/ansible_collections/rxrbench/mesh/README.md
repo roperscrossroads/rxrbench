@@ -34,9 +34,9 @@ its config in its vocabulary's block:
 
 ```yaml
 # <site>/layouts/<layout>/host_vars/heltec1.yml
-firmware: {family: zephyrtastic, class: 4, features: [brain]}   # built here from the catalog
-zephyrtastic:                   # the family's block: brain, head, listener, cluster, intents, led
-  brain: {heads: {xiao1: MEDIUM_FAST}}
+firmware: {family: zephyrtastic, class: 4, features: [hub]}   # built here from the catalog
+zephyrtastic:                   # the family's block: hub, worker, listener, cluster, intents, led
+  hub: {workers: {xiao1: MEDIUM_FAST}}
 meshtastic:                     # the vocabulary's block: the stock `--export-config` schema
   owner: heltec1
   config:
@@ -60,13 +60,20 @@ storage:
   zephcore: {epoch: 1, keep_identity: true}
 ```
 
-**Recipe features are part of an image's identity.** A brain and a plain member of one class
+**Recipe features are part of an image's identity.** A hub and a plain member of one class
 and build report the same class, version and build id; only the feature list tells them apart.
+
+**Renamed: brain -> hub, head -> worker.** For one release the old spellings are
+read as the new: `features: [brain]`, `zephyrtastic: {brain: {heads: ...}}` and `{head: {brain:
+X}}` in a layout; the `brain`/`head` objects and features of a board's state line; an image
+staged as `class-N-brain-<build>` (the store key falls back to it when no `class-N-hub-<build>`
+is staged). A hub is sent `meshtastic hub preset`, and `meshtastic attach preset` when its
+firmware does not know the new verb (0.4.79 and older).
 
 Layout variables this plugin reads: `bench_manage_channels` (`false` leaves every channel
 alone), `board_led_mode` and `board_led_colors` (the bench LED), and core's
 `bench_secret_policy` (`{identity: {escrow: false}}` leaves a node's key alone). Groups a
-zephyrtastic board joins beyond the generic ones: `brains`, `heads`, `listeners`, `stock`,
+zephyrtastic board joins beyond the generic ones: `hubs`, `workers`, `listeners`, `stock`,
 `cluster_<name>`.
 
 ## What the layout checks add
@@ -81,9 +88,9 @@ zephyrtastic board joins beyond the generic ones: `brains`, `heads`, `listeners`
 - **The boot radio.** A stock MeshCore release transmits on its build's defaults before apply
   sets the radio. Its catalog entry records that (`boot_radio`): a first flash or a switch to
   it is refused where that breaks the site's rules, unless the board says `bench_boot_radio_ok`.
-- **Preset width.** A zephyrtastic preset must fit the band, a brain's presets for its heads
+- **Preset width.** A zephyrtastic preset must fit the band, a hub's presets for its workers
   too.
-- **Roles.** A brain and its heads name each other; a board with heads has the `brain`
+- **Roles.** A hub and its workers name each other; a board with workers has the `hub`
   feature; `intents: none` declares no role beside it; `is_managed: true` needs an `admin_key`
   beside it.
 
@@ -96,7 +103,7 @@ zephyrtastic board joins beyond the generic ones: `brains`, `heads`, `listeners`
 | `admin_keys` | declared | zephyrtastic | `meshtastic.config.security.admin_key`, compared as a set |
 | `admin_password` | declared | zephcore, meshcore | compared by the fingerprint zephcore prints; stock MeshCore prints none, so it is written after a restore and never checked |
 
-`just secrets <layout>` shows which are as they should be. A keyless zephyrtastic head holds
+`just secrets <layout>` shows which are as they should be. A keyless zephyrtastic worker holds
 none.
 
 ### Admin keys and managed nodes

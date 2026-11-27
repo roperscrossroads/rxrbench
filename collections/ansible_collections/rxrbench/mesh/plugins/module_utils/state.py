@@ -51,7 +51,7 @@ def _preset(name, what):
 
 def version_facts(output):
     """Build, board, image and class from `meshtastic version`: every firmware has it, a
-    keyless head included. Enough to say what a board runs when it has no state line."""
+    keyless worker included. Enough to say what a board runs when it has no state line."""
     image = _one(r"^image:\s+(\d+\.\d+\.\d+\+\d+) ", output, "the image version", required=False)
     return {"state_supported": False,
             "build": _one(r"^build:\s+(\S+)", output, "the build id"),
@@ -128,7 +128,7 @@ def key_kind(k):
     return {"psk": "secret", "fingerprint": k[2:]}
 
 
-def _head_preset(n):
+def _worker_preset(n):
     return None if n < 0 else enums.name(enums.MODEM_PRESET, n, "PRESET")
 
 
@@ -172,18 +172,26 @@ def state_facts(output):
         ],
         "managed": bool(j["managed"]) if "managed" in j else None,
     }
-    if "brain" in j:
-        facts["brain"] = {
-            "max_heads": j["brain"]["max"],
-            "heads": [{"attachment": h["a"], "node_id": h["node"], "link_up": bool(h["up"]),
-                       "preset": _head_preset(h["p"]),
-                       # What the brain stores for the head and re-sends when the head
-                       # reports another (firmware 0.4.39 on; older firmware has no "w").
-                       "wanted_preset": _head_preset(h.get("w", -1))}
-                      for h in j["brain"]["heads"]],
+    # A hub and its workers (renamed from brain and head; firmware from before the
+    # rename says "brain"/"heads" and "head"/"brain", read the same for one release).
+    hub = j.get("hub")
+    workers_key = "workers"
+    if hub is None and "brain" in j:
+        hub, workers_key = j["brain"], "heads"
+    if hub is not None:
+        facts["hub"] = {
+            "max_workers": hub["max"],
+            "workers": [{"number": w["a"], "node_id": w["node"], "link_up": bool(w["up"]),
+                         "preset": _worker_preset(w["p"]),
+                         # What the hub stores for the worker and re-sends when the worker
+                         # reports another (firmware 0.4.39 on; older firmware has no "w").
+                         "wanted_preset": _worker_preset(w.get("w", -1))}
+                        for w in hub.get(workers_key) or []],
         }
-    if "head" in j:
-        facts["head"] = {"brain": j["head"]["brain"]}
+    if "worker" in j:
+        facts["worker"] = {"hub": j["worker"]["hub"]}
+    elif "head" in j:
+        facts["worker"] = {"hub": j["head"]["brain"]}
     if "scan" in j:
         facts["scanner"] = {
             "tx_gate_shut": bool(j["scan"]["shut"]), "sweeping": bool(j["scan"]["sweep"]),

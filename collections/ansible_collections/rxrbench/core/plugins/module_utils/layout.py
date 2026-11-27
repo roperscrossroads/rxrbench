@@ -201,6 +201,7 @@ def groups_for(hostvars, fw_kind):
     if key and key in fw:
         g.append(f"{key}_{fw[key]}")
     for f in fw.get("features") or []:
+        f = plugin.feature_aliases.get(f, f)
         g.append(plugin.feature_groups.get(f, f"feature_{f}"))
     g += [x for x in plugin.groups(hostvars) if x not in g]
     return g

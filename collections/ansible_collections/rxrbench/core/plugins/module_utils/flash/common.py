@@ -138,7 +138,8 @@ def image_identity(manifest):
                                                  if k and manifest.get(k) is not None})
     # An image built from a recipe has exactly the features its manifest lists: none, if none.
     if familyspec.exact_features(manifest["family"]):
-        ident["features"] = sorted(manifest.get("features") or [])
+        ident["features"] = familyspec.canon_features(
+            familyspec.feature_aliases(manifest["family"]), manifest.get("features"))
     return ident
 
 

@@ -196,26 +196,45 @@ def test_a_board_the_registry_mutes_may_not_be_given_tx(tmp_path):
     assert "must never transmit" in msg
 
 
-@pytest.mark.plugins
-def test_a_brain_and_its_heads_must_agree(tmp_path):
-    brain = member(brain={"heads": {"head1": "MEDIUM_FAST"}})
-    brain["firmware"]["features"] = ["brain"]
-    head = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": {"head": {"brain": "member1"}},
-            "meshtastic": {"config": {"lora": dict(LORA)}}}
-    boards = {"brain1": {"host": "benchA"}, "head1": {"host": "benchA"}}
-    msg = refused(tmp_path, boards, {"brain1": brain, "head1": head})
-    assert "head head1 does not declare brain brain1" in msg
-    assert "its brain member1 is not a board in this layout" in msg
+# The blocks as a layout writes them now (hub, worker), and before the rename (brain, head):
+# both spellings are read alike for one release.
+SPELLINGS = {
+    "new": (lambda workers: {"hub": {"workers": workers}}, lambda hub: {"worker": {"hub": hub}}, "hub"),
+    "old": (lambda workers: {"brain": {"heads": workers}}, lambda hub: {"head": {"brain": hub}}, "brain"),
+}
 
 
 @pytest.mark.plugins
-def test_heads_need_the_brain_feature(tmp_path):
-    brain = member(brain={"heads": {}})
-    brain["zephyrtastic"]["brain"]["heads"] = {"head1": "MEDIUM_FAST"}
-    head = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": {"head": {"brain": "brain1"}},
-            "meshtastic": {"config": {"lora": dict(LORA)}}}
+@pytest.mark.parametrize("spelling", sorted(SPELLINGS))
+def test_a_hub_and_its_workers_must_agree(tmp_path, spelling):
+    hub_block, worker_block, feature = SPELLINGS[spelling]
+    hub = member(**hub_block({"head1": "MEDIUM_FAST"}))
+    hub["firmware"]["features"] = [feature]
+    worker = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": worker_block("member1"),
+              "meshtastic": {"config": {"lora": dict(LORA)}}}
     boards = {"brain1": {"host": "benchA"}, "head1": {"host": "benchA"}}
-    assert "lacks the 'brain' feature" in refused(tmp_path, boards, {"brain1": brain, "head1": head})
+    msg = refused(tmp_path, boards, {"brain1": hub, "head1": worker})
+    assert "worker head1 does not declare hub brain1" in msg
+    assert "its hub member1 is not a board in this layout" in msg
+
+
+@pytest.mark.plugins
+@pytest.mark.parametrize("spelling", sorted(SPELLINGS))
+def test_workers_need_the_hub_feature(tmp_path, spelling):
+    hub_block, worker_block, _feature = SPELLINGS[spelling]
+    hub = member(**hub_block({"head1": "MEDIUM_FAST"}))
+    worker = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": worker_block("brain1"),
+              "meshtastic": {"config": {"lora": dict(LORA)}}}
+    boards = {"brain1": {"host": "benchA"}, "head1": {"host": "benchA"}}
+    assert "lacks the 'hub' feature" in refused(tmp_path, boards, {"brain1": hub, "head1": worker})
+
+
+@pytest.mark.plugins
+def test_a_block_in_both_spellings_is_refused(tmp_path):
+    hub = member(hub={"workers": {}}, brain={"heads": {}})
+    hub["firmware"]["features"] = ["hub"]
+    msg = refused(tmp_path, {"brain1": {"host": "benchA"}}, {"brain1": hub})
+    assert "declares both zephyrtastic.hub and its old name zephyrtastic.brain" in msg
 
 
 def test_every_problem_is_reported_at_once(tmp_path, widgets, lora_bands):
@@ -343,12 +362,14 @@ def test_a_board_may_be_declared_by_a_directory_of_files(tmp_path):
 
 
 @pytest.mark.plugins
-def test_a_head_takes_no_config_and_a_listener_no_live_check(tmp_path):
+@pytest.mark.parametrize("spelling", sorted(SPELLINGS))
+def test_a_worker_takes_no_config_and_a_listener_no_live_check(tmp_path, spelling):
     """The family narrows a board's row and publishes its facts; the role reads those, never a
     group name."""
-    brain = member(brain={"heads": {"head1": "MEDIUM_FAST"}})
-    brain["firmware"]["features"] = ["brain"]
-    head = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": {"head": {"brain": "brain1"}},
+    hub_block, worker_block, feature = SPELLINGS[spelling]
+    brain = member(**hub_block({"head1": "MEDIUM_FAST"}))
+    brain["firmware"]["features"] = [feature]
+    head = {"firmware": {"family": "zephyrtastic", "class": 12}, "zephyrtastic": worker_block("brain1"),
             "meshtastic": {"config": {"lora": dict(LORA)}}}
     listener = member(listener={"presets": ["SHORT_FAST"]})
     boards = {"brain1": {"host": "benchA"}, "head1": {"host": "benchA"}, "member1": {"host": "benchA"}}
@@ -363,6 +384,11 @@ def test_a_head_takes_no_config_and_a_listener_no_live_check(tmp_path):
     assert facts["radio_skip"] == [] and facts["radio_check_live"] is False
     assert (facts["led_mode"], facts["led_color"]) == ("in-use", "yellow"), "a listener's LED"
     assert r["head1"]["vars"]["bench_led_color"] == "cyan" and r["brain1"]["vars"]["bench_led_color"] == "magenta"
+    assert r["brain1"]["vars"]["bench_hub_workers"] == {"head1": "MEDIUM_FAST"}
+    assert r["head1"]["vars"]["bench_hub_workers"] is None
+    assert r["brain1"]["vars"]["bench_firmware_features"] == ["hub"]
+    assert r["brain1"]["vars"]["bench_firmware_features_old"] == ["brain"]
+    assert "hubs" in r["brain1"]["groups"] and "workers" in r["head1"]["groups"]
     assert r["member1"]["vars"]["bench_family_tasks"] == "zephyrtastic"
 
 

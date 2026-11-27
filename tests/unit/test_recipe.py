@@ -46,7 +46,11 @@ FOLDED = {
     "heltec_vision_master_e290/esp32s3/procpu": {"overlay-led-status.conf"},
 }
 # Overlays merged into another (the same file but for the class number, now a define).
-RENAMED = {"overlay-v4r8-member.conf": "overlay-v4-member.conf"}
+RENAMED = {"overlay-v4r8-member.conf": "overlay-v4-member.conf",
+           # brain/head/ear became hub/worker/worker-rx
+           "overlay-attachment-brain.conf": "overlay-hub.conf",
+           "overlay-attachment-head.conf": "overlay-worker.conf",
+           "overlay-relay-ear.conf": "overlay-worker-rx.conf"}
 # Classes retired since the reference strings: class 7 (the unsigned-cluster XIAO) once XIAOs
 # could sign as class 1.
 RETIRED = {7}
@@ -111,11 +115,11 @@ def test_every_old_class_is_in_the_catalog():
     assert not RETIRED & set(CATALOG), "a retired class is back in the catalog"
 
 
-def test_the_brain_feature_appends_its_overlay_once():
+def test_the_hub_feature_appends_its_overlay_once_under_either_name():
     cls = CATALOG[4]
-    o = recipe.overlays_for(cls, ["brain", "brain"])
-    assert o[-1] == "overlay-attachment-brain.conf" and o.count(o[-1]) == 1
-    assert o[:-1] == cls["overlays"]
+    for feats in (["hub", "hub"], ["brain"], ["brain", "hub"]):
+        o = recipe.overlays_for(cls, feats)
+        assert o[-1] == "overlay-hub.conf" and o.count(o[-1]) == 1
 
 
 def test_an_unknown_feature_is_an_error():
@@ -141,7 +145,9 @@ def test_the_image_key_follows_what_changes_the_image_and_nothing_else():
     assert k == recipe.image_key(4, CATALOG[4], "abc123", "0.4.38+0")
     assert k != recipe.image_key(4, CATALOG[4], "abc124", "0.4.38")
     assert k != recipe.image_key(4, CATALOG[4], "abc123", "0.4.39")
-    assert k != recipe.image_key(4, CATALOG[4], "abc123", "0.4.38", ["brain"])
+    assert k != recipe.image_key(4, CATALOG[4], "abc123", "0.4.38", ["hub"])
+    assert recipe.image_key(4, CATALOG[4], "abc123", "0.4.38", ["hub"]) == \
+        recipe.image_key(4, CATALOG[4], "abc123", "0.4.38", ["brain"])
     assert k != recipe.image_key(6, CATALOG[6], "abc123", "0.4.38")
     assert len(k) == 16
 

@@ -98,7 +98,12 @@ def test_a_family_refuses_an_image_that_is_not_what_the_layout_declares():
     refuse = familyspec.image_refusals
     assert refuse("zephyrtastic", {"class": 4, "features": []}, {"class": 4}) == []
     assert "class 6" in refuse("zephyrtastic", {"class": 6}, {"class": 4})[0]
-    assert "['brain']" in refuse("zephyrtastic", {"class": 4, "features": ["brain"]}, {"class": 4})[0]
+    assert "['hub']" in refuse("zephyrtastic", {"class": 4, "features": ["hub"]}, {"class": 4})[0]
+    # a feature's former name is the feature, in the image and in the layout
+    assert refuse("zephyrtastic", {"class": 4, "features": ["brain"]},
+                  {"class": 4, "features": ["hub"]}) == []
+    assert refuse("zephyrtastic", {"class": 4, "features": ["hub"]},
+                  {"class": 4, "features": ["brain"]}) == []
     assert refuse("zephcore", {"role": "repeater"}, {"role": "repeater"}) == []
     assert "role 'companion'" in refuse("zephcore", {"role": "companion"}, {"role": "repeater"})[0]
     assert refuse("bitpirate", {"class": 1}, {"image": "x"}) == []
@@ -142,10 +147,14 @@ def test_every_family_resolves_to_data_a_bench_host_can_use():
 @pytest.mark.plugins
 def test_a_family_describes_and_tags_what_the_survey_found():
     zt = families.plugin("zephyrtastic")
-    probe = {"node_id": "0x0a0b0c0d", "board": "xiao_ble", "class": 12, "build": "abc", "head": True}
     boards = {"xiao": {"mcu": "nrf52840", "zephyr_boards": ["xiao_ble"]}}
-    assert {"fw:zephyrtastic", "mcu:nrf52840", "class:12", "board:xiao_ble", "role:head"} <= zt.survey_tags(probe, boards)
-    assert zt.survey_describe(probe) == "zephyrtastic class 12 on xiao_ble, build abc, node 0x0a0b0c0d, head"
+    # a worker, as its state line says it now (worker) and before the rename (head)
+    for key in ("worker", "head"):
+        probe = {"node_id": "0x0a0b0c0d", "board": "xiao_ble", "class": 12, "build": "abc", key: True}
+        assert {"fw:zephyrtastic", "mcu:nrf52840", "class:12", "board:xiao_ble", "role:worker"} \
+            <= zt.survey_tags(probe, boards)
+        assert zt.survey_describe(probe) == \
+            "zephyrtastic class 12 on xiao_ble, build abc, node 0x0a0b0c0d, worker"
     st = families.plugin("meshtastic")
     assert "fw:stock-meshtastic" in st.survey_tags({"hw_model": "X", "has_bluetooth": True})
     assert st.survey_describe({}) == ""

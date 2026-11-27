@@ -95,23 +95,40 @@ def test_unknown_fields_are_refused():
         identity.make("zephyrtastic", colour="red")
 
 
-def test_a_brain_and_a_plain_member_of_one_class_and_build_are_different_images():
+def test_a_hub_and_a_plain_member_of_one_class_and_build_are_different_images():
     """Same class, same build id, same version: only the recipe feature tells them apart."""
     from ansible_collections.rxrbench.core.plugins.module_utils.flash import common
     state = {"board": "b", "image": "0.4.42+0", "build": "347cacb2", "class": 6,
-             "feat": ["brain", "cluster", "ble_peer", "phoneapi"]}
-    brain = of_state(state, "zephyrtastic")
-    assert brain["features"] == ["brain"]
+             "feat": ["hub", "cluster", "ble_peer", "phoneapi"]}
+    hub = of_state(state, "zephyrtastic")
+    assert hub["features"] == ["hub"]
     manifest = {"family": "zephyrtastic", "format": "esp-parts", "file": "f", "class": 6,
                 "version": "0.4.42", "build": "347cacb2"}
     plain_image = common.image_identity(manifest)
     assert plain_image["features"] == []
-    assert identity.same(brain, plain_image) is False
-    assert identity.differences(brain, plain_image) == {"features": (["brain"], [])}
-    assert identity.same(brain, common.image_identity({**manifest, "features": ["brain"]})) is True
+    assert identity.same(hub, plain_image) is False
+    assert identity.differences(hub, plain_image) == {"features": (["hub"], [])}
+    assert identity.same(hub, common.image_identity({**manifest, "features": ["hub"]})) is True
     # firmware that does not list features is not compared on them
     old = of_state({k: v for k, v in state.items() if k != "feat"}, "zephyrtastic")
     assert identity.same(old, plain_image) is True
+
+
+def test_a_feature_under_its_former_name_is_the_same_feature():
+    """A board built before the rename says brain; an image staged then lists brain: both
+    are the hub feature, on either side."""
+    from ansible_collections.rxrbench.core.plugins.module_utils.flash import common
+    state = {"board": "b", "image": "0.4.42+0", "build": "347cacb2", "class": 6,
+             "feat": ["brain", "cluster"]}
+    old_board = of_state(state, "zephyrtastic")
+    assert old_board["features"] == ["hub"]
+    manifest = {"family": "zephyrtastic", "format": "esp-parts", "file": "f", "class": 6,
+                "version": "0.4.42", "build": "347cacb2"}
+    for staged in (["brain"], ["hub"]):
+        image = common.image_identity({**manifest, "features": staged})
+        assert image["features"] == ["hub"]
+        assert identity.same(old_board, image) is True
+        assert identity.same(of_state({**state, "feat": ["hub"]}, "zephyrtastic"), image) is True
 
 
 def test_an_images_build_counter_is_part_of_its_version_as_a_board_reports_it():

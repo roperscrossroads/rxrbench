@@ -137,15 +137,15 @@ def test_admin_keys_the_sites_secrets_give_at_run_time_pass_the_layout_check(tmp
 
 
 @pytest.mark.plugins
-def test_a_keyless_head_takes_no_security_settings(tmp_path):
-    brain = member(brain={"heads": {"head1": "MEDIUM_FAST"}})
-    brain["firmware"]["features"] = ["brain"]
-    head = with_security({"admin_key": [KEY]})
-    head["firmware"]["class"] = 12
-    head["zephyrtastic"] = {"head": {"brain": "brain1"}}
+def test_a_keyless_worker_takes_no_security_settings(tmp_path):
+    hub = member(hub={"workers": {"head1": "MEDIUM_FAST"}})
+    hub["firmware"]["features"] = ["hub"]
+    worker = with_security({"admin_key": [KEY]})
+    worker["firmware"]["class"] = 12
+    worker["zephyrtastic"] = {"worker": {"hub": "brain1"}}
     boards = {"brain1": {"host": "benchA"}, "head1": {"host": "benchA"}}
-    assert "head1: a keyless head has no phone API" in refused(tmp_path, boards,
-                                                              {"brain1": brain, "head1": head})
+    assert "head1: a keyless worker has no phone API" in refused(tmp_path, boards,
+                                                                {"brain1": hub, "head1": worker})
 
 
 @pytest.mark.plugins

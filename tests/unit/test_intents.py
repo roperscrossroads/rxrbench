@@ -24,6 +24,19 @@ def test_the_listing_is_parsed():
     assert r["none"] == ["head", "brain", "courier", "relay", "scan"]
 
 
+NEW_LISTING = """worker     none  (mtattach/brain)
+hub        none  (mtattach/want mtattach/allow)
+worker-rx  set   peer 0x0d1d2d3d  (mtear/peer)
+intents: 1 set
+"""
+
+
+def test_the_listing_with_the_new_names_is_parsed():
+    r = intents.parse(NEW_LISTING)
+    assert r["set"] == {"worker-rx": "peer 0x0d1d2d3d"}
+    assert r["none"] == ["worker", "hub"]
+
+
 def test_a_node_that_remembers_nothing():
     r = intents.parse("peer     none  (blepeer/central)\nintents: 0 set\n")
     assert r["set"] == {} and r["count"] == 0
@@ -53,6 +66,8 @@ def test_only_none_is_a_declaration():
 
 def test_a_role_declared_beside_intents_none_is_a_contradiction():
     assert intents.conflicts({"intents": "none", "brain": {"heads": {}}}) == ["brain"]
+    assert intents.conflicts({"intents": "none", "hub": {"workers": {}}}) == ["hub"]
+    assert intents.conflicts({"intents": "none", "worker": {"hub": "h1"}}) == ["worker"]
     assert intents.conflicts({"intents": "none", "listener": {"presets": []}, "cluster": "c1"}) == \
         ["cluster", "listener"]
     assert intents.conflicts({"intents": "none"}) == []

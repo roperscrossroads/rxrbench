@@ -158,7 +158,7 @@ def test_each_family_says_what_its_probe_found(widgets):
 def test_our_firmware_and_stock_firmware_say_what_they_are():
     zt = {"node_id": "0x0a0b0c0d", "board": "xiao_ble", "class": 12, "head": True}
     t = hwsurvey.tags({"class": hwsurvey.classify(XIAO_APP), "probes": {"zephyrtastic": zt}}, BOARDS, families.survey_tags)
-    assert {"fw:zephyrtastic", "mcu:nrf52840", "class:12", "role:head"} <= set(t)
+    assert {"fw:zephyrtastic", "mcu:nrf52840", "class:12", "role:worker"} <= set(t)
     st = {"hw_model": "SEEED_XIAO_S3", "has_bluetooth": True, "firmware_version": "2.7.26"}
     t = hwsurvey.tags({"class": hwsurvey.classify(XIAO_STOCK), "probes": {"meshtastic": st}}, family_tags=families.survey_tags)
     assert {"fw:stock-meshtastic", "hw:SEEED_XIAO_S3", "radio:ble"} <= set(t)

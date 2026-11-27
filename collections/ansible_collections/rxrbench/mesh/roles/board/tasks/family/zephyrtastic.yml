@@ -1,6 +1,6 @@
 ---
 # A zephyrtastic board's own state, included by its vocabulary's task file after the radio and
-# the identity, before the config: the bench LED, the roles it remembers, a brain's heads, a
+# the identity, before the config: the bench LED, the roles it remembers, a hub's workers, a
 # listener's presets.
 
 # The bench LED: in use, and what the board is for (bench_led_mode, bench_led_color: the
@@ -20,8 +20,8 @@
     - not (ansible_check_mode and (board_flashed.family_switch | default(false)
            or board_flashed.first_flash | default(false)))
 
-# The roles a node remembers across reboots (the BLE peer it dials, its brain, its heads, the
-# ear's peer, the courier's arm, the relay, a pinned list, a cluster document): a plain node
+# The roles a node remembers across reboots (the BLE peer it dials, its hub, its workers, the
+# rx-only worker's peer, the courier's arm, the relay, a pinned list, a cluster document): a plain node
 # declares it has none (`zephyrtastic.intents: none`), and what it remembers from an earlier
 # layout is forgotten, with the reboot that follows. Before the roles below, which set theirs.
 - name: The roles the node remembers
@@ -32,18 +32,20 @@
     intents: "{{ zephyrtastic.intents }}"
   when: zephyrtastic.intents is defined
 
-# A brain stores the preset it wants of each head and puts a head back on it whenever the
-# head reports another. Each head's node id is read from the head itself, through its broker.
-- name: The preset the brain wants of each head
-  rxrbench.mesh.zephyrtastic_attach:
+# A hub stores the preset it wants of each worker and puts a worker back on it whenever the
+# worker reports another. Each worker's node id is read from the worker itself, through its
+# broker. bench_hub_workers is the family's fact: `zephyrtastic.hub.workers`, or the old
+# `zephyrtastic.brain.heads`.
+- name: The preset the hub wants of each worker
+  rxrbench.mesh.zephyrtastic_hub:
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
     board: "{{ bench_board }}"
     socket: "{{ bench_socket | default(omit) }}"
-    heads: "{{ zephyrtastic.brain.heads }}"
-    head_sockets: >-
-      {{ dict(zephyrtastic.brain.heads | list | zip(zephyrtastic.brain.heads | list | map('extract', hostvars)
+    workers: "{{ bench_hub_workers }}"
+    worker_sockets: >-
+      {{ dict(bench_hub_workers | list | zip(bench_hub_workers | list | map('extract', hostvars)
               | map(attribute='bench_socket', default=''))) }}
-  when: zephyrtastic.brain.heads is defined
+  when: bench_hub_workers | default(none) is not none
 
 - name: The presets the listener sweeps
   rxrbench.mesh.zephyrtastic_scan:

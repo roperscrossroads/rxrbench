@@ -258,16 +258,18 @@ def test_a_presets_width_must_fit_the_band():
     assert meshrf.preset_problems("n1", "SHORT_TURBO", narrowed)
 
 
-def test_a_brains_heads_presets_are_judged_and_a_heads_own_is_not():
+def test_a_hubs_workers_presets_are_judged_and_a_workers_own_is_not():
     from ansible_collections.rxrbench.core.plugins.module_utils import rfrules
     from ansible_collections.rxrbench.core.plugins.plugin_utils import families
     rules = rfrules.with_region({**rfrules.defaults(), **EU})
     zep = families.plugin("zephyrtastic")
-    brain = {"meshtastic": {"config": {"lora": {"modem_preset": "LONG_FAST", "tx_power": 2}}},
-             "zephyrtastic": {"brain": {"heads": {"head1": "MEDIUM_FAST", "head2": "SHORT_TURBO"}}}}
-    (bad,) = zep.rf_check("brain1", brain, rules)
-    assert "the preset it sets on head head2 SHORT_TURBO" in bad
-    head = {"meshtastic": {"config": {"lora": {"modem_preset": "SHORT_TURBO", "tx_power": 2}}},
-            "zephyrtastic": {"head": {"brain": "brain1"}}}
-    assert zep.rf_check("head2", head, rules) == [], "a head's preset is its brain's to set"
+    lora = {"meshtastic": {"config": {"lora": {"modem_preset": "LONG_FAST", "tx_power": 2}}}}
+    for block in ({"hub": {"workers": {"head1": "MEDIUM_FAST", "head2": "SHORT_TURBO"}}},
+                  {"brain": {"heads": {"head1": "MEDIUM_FAST", "head2": "SHORT_TURBO"}}}):
+        (bad,) = zep.rf_check("brain1", {**lora, "zephyrtastic": block}, rules)
+        assert "the preset it sets on worker head2 SHORT_TURBO" in bad
+    for block in ({"worker": {"hub": "brain1"}}, {"head": {"brain": "brain1"}}):
+        head = {"meshtastic": {"config": {"lora": {"modem_preset": "SHORT_TURBO", "tx_power": 2}}},
+                "zephyrtastic": block}
+        assert zep.rf_check("head2", head, rules) == [], "a worker's preset is its hub's to set"
     assert families.plugin("meshtastic").rf_check("n1", head, rules), "stock judges its own"

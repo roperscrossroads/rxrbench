@@ -1,6 +1,6 @@
 ---
 # A board that speaks the Meshtastic vocabulary (families zephyrtastic and stock meshtastic):
-# radio, the zephyrtastic brain/listener config where declared, owner/device/channels and the
+# radio, the zephyrtastic hub/listener config where declared, owner/device/channels and the
 # admin keys where its family writes config (config_via), and the read-back that proves it.
 # The order matters: a node that is made managed (security.is_managed) takes nothing local
 # afterwards, so that is the last write of the last step.
@@ -10,7 +10,7 @@
     apply_allowed: "{{ bench_apply_allowed | default(false) | bool }}"
     board: "{{ bench_board }}"
     socket: "{{ bench_socket | default(omit) }}"
-    # The family may keep some fields for itself (a head's preset is its brain's to set):
+    # The family may keep some fields for itself (a worker's preset is its hub's to set):
     # bench_radio_skip. Whether what is read back must match what is stored: a listener's
     # radio sweeps presets, so its family says bench_radio_check_live: false.
     lora: >-
@@ -24,7 +24,7 @@
 # The node's identity key, from the site's escrow (just keys-export), right after the radio and
 # before anything is authored: a board flashed with another layout or family, or erased, has
 # a new key and is a new node until it gets its own back. A board with no escrow, a keyless
-# head, or a layout that leaves the identity alone (bench_secret_policy) is left with the key it has.
+# worker, or a layout that leaves the identity alone (bench_secret_policy) is left with the key it has.
 - name: Is the node's identity key escrowed
   ansible.builtin.stat:
     path: "{{ board_identity_file }}"
@@ -50,7 +50,7 @@
     - board_identity_escrow_file.stat.exists | default(false)
     - board_identity_escrowed | length > 0
 
-# What the family's own block declares for this board (roles it remembers, a brain's heads,
+# What the family's own block declares for this board (roles it remembers, a hub's workers,
 # a listener's presets, its LED): after the radio and the identity, before the config.
 - name: The family's own state
   ansible.builtin.include_tasks: "family/{{ bench_family_tasks }}.yml"

@@ -4,10 +4,10 @@ DOCUMENTATION = r"""
 module: zephyrtastic_intents
 short_description: The roles a zephyrtastic node remembers across reboots
 description:
-  - A node keeps its role intents in its config, in Zephyr's settings store (the BLE peer it dials, the brain it reports
-    to, the heads it wants, the ear's receiving half, the courier's arm, the relay's direction,
+  - A node keeps its role intents in its config, in Zephyr's settings store (the BLE peer it dials, the hub it reports
+    to, the workers it wants, the rx-only worker's receiving half, the courier's arm, the relay's direction,
     a pinned preset list, a cluster document) and restores them at boot. None keys off a
-    declared setting, so a board moved from a rig layout to a plain one kept dialling its old
+    declared setting, so a board moved from a hub setup layout to a plain one kept dialling its old
     peers. A plain profile declares C(zephyrtastic.intents) C(none); this module reads what
     the node remembers (C(meshtastic intents)), and when anything is set, forgets it all
     (C(meshtastic intents clear)), waits for the reboot that follows, and reads again.

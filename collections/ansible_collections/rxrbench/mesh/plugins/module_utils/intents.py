@@ -1,22 +1,23 @@
 """The roles a zephyrtastic node remembers (`meshtastic intents`), and the plan to forget them.
 
-A node keeps its role intents in its config (Zephyr's settings store): the BLE peer it dials, the brain it reports
-to, the heads it wants, the ear's receiving half, the courier's arm, the relay's direction,
-a pinned preset list, a cluster document. None keys off a declared setting, so a board moved
-from a rig layout to a plain one kept them. A plain profile declares
+A node keeps its role intents in its config (Zephyr's settings store): the BLE peer it dials, the hub it reports
+to, the workers it wants, the rx-only worker's receiving half, the courier's arm, the relay's
+direction, a pinned preset list, a cluster document. None keys off a declared setting, so a
+board moved from a hub setup layout to a plain one kept them. A plain profile declares
 `zephyrtastic: {intents: none}`, and this brings the board to that: `meshtastic intents`
 lists what is set, `meshtastic intents clear` forgets it all and reboots.
 
 The listing, one intent per line, then a tally:
 
     peer     set   target 0x0a0b0c0d last 0x0a0b0c0d  (blepeer/central)
-    head     none  (mtattach/brain)
+    worker   none  (mtattach/brain)
     ...
     intents: 1 set
 """
 import re
 
-LINE = re.compile(r"^(?P<name>[a-z]+)\s+(?P<state>set|none)\b\s*(?P<detail>.*?)\s*(?:\((?P<keys>[^)]*)\))?\s*$")
+# An intent's name: a word, or words joined by `-`/`_` (worker-rx).
+LINE = re.compile(r"^(?P<name>[a-z][a-z_-]*)\s+(?P<state>set|none)\b\s*(?P<detail>.*?)\s*(?:\((?P<keys>[^)]*)\))?\s*$")
 TALLY = re.compile(r"^intents:\s+(\d+)\s+set\b")
 
 INTENT_COMMAND = "meshtastic intents"
@@ -57,7 +58,7 @@ def parse(text):
 def plan(declared, listing):
     """(commands, before, after) for a declared `intents:` value against the listing. Only
     `none` is a declaration today: everything else a layout wants is declared by the module
-    that sets it (brain, listener, ...), and this one must not be asked to forget it."""
+    that sets it (hub, listener, ...), and this one must not be asked to forget it."""
     if declared != "none":
         raise IntentsError(f"intents: {declared!r} is not a declaration this tool knows; `none` "
                            "is the only one (a role is declared by its own setting)")
@@ -72,5 +73,6 @@ def conflicts(zephyrtastic):
     `intents: none`: the two cannot both be meant (clear, then set, every apply)."""
     if (zephyrtastic or {}).get("intents") != "none":
         return []
-    return sorted(k for k in ("brain", "head", "listener", "cluster", "ear", "relay", "courier")
+    return sorted(k for k in ("hub", "worker", "brain", "head", "listener", "cluster", "ear",
+                              "relay", "courier")
                   if k in (zephyrtastic or {}))

@@ -17,7 +17,7 @@ def test_inventory_values_come_out_of_their_wrapper():
 
 
 @pytest.mark.plugins
-def test_the_symbols_are_those_of_the_running_build_class_and_brainness(tmp_path, monkeypatch):
+def test_the_symbols_are_those_of_the_running_build_class_and_hubness(tmp_path, monkeypatch):
     monkeypatch.setattr(debug, "REPO", str(tmp_path))
     for key, cls, feats in (("class-5-abc", 5, []), ("class-4-abc", 4, []),
                             ("class-4-brain-abc", 4, ["brain"])):
@@ -28,8 +28,11 @@ def test_the_symbols_are_those_of_the_running_build_class_and_brainness(tmp_path
         dbg = tmp_path / ".build" / "debug" / "zephyrtastic" / key
         dbg.mkdir(parents=True)
         (dbg / "zephyr.elf").write_bytes(b"\x7fELF")
-    elf, build = debug.symbols_for("zephyrtastic", {"build": "abc", "class": 4, "brain": {}})
-    assert build == "abc" and elf.endswith("class-4-brain-abc/zephyr.elf")
+    # a hub staged before the rename (class-4-brain-, features [brain]), on a board whose
+    # firmware says brain, or hub
+    for st in ({"brain": {}}, {"hub": {}}, {"feat": ["hub"]}):
+        elf, build = debug.symbols_for("zephyrtastic", {"build": "abc", "class": 4, **st})
+        assert build == "abc" and elf.endswith("class-4-brain-abc/zephyr.elf")
     elf, _ = debug.symbols_for("zephyrtastic", {"build": "abc", "class": 4})
     assert elf.endswith("class-4-abc/zephyr.elf")
     assert debug.symbols_for("zephyrtastic", {"build": "zzz", "class": 4}) == (None, None)

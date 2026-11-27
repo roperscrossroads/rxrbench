@@ -135,7 +135,14 @@ def symbols_for(family, st):
     board's state line has it. The symbols are the one ELF file staged beside the image
     (`.build/debug/<family>/<image>/`), whatever the build named it."""
     ident = families.of(family)["identity_key"]
-    feats = families.plugin(family).features
+    plugin = families.plugin(family)
+    feats = plugin.features
+    # a feature by its current name, whether the line, or the manifest, uses its former one
+    aliases = plugin.feature_aliases
+
+    def canon(names):
+        return {aliases.get(n, n) for n in names}
+    on_board = canon(list(st.get("feat") or []) + list(st))
     store = os.path.join(REPO, ".build", "store", family)
     for name in sorted(os.listdir(store)) if os.path.isdir(store) else []:
         try:
@@ -144,7 +151,7 @@ def symbols_for(family, st):
         except (OSError, ValueError):
             continue
         if m.get("build") == st.get("build") and (not ident or m.get(ident) == st.get(ident)) and \
-                all((f in (m.get("features") or [])) == (f in st) for f in feats):
+                all((f in canon(m.get("features") or [])) == (f in on_board) for f in feats):
             dbg = os.path.join(REPO, ".build", "debug", family, name)
             elves = sorted(e for e in os.listdir(dbg) if e.endswith(".elf")) if os.path.isdir(dbg) else []
             if len(elves) == 1:

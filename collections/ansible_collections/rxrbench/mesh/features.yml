@@ -64,10 +64,10 @@ features:
       unit: [tests/unit/test_netconfig.py]
   - id: mesh.intents
     kind: capability
-    summary: zephyrtastic intents, LED, scan and the attach (BLE) helpers
-    paths: [plugins/module_utils/intents.py, plugins/module_utils/attach.py, plugins/modules/zephyrtastic_*.py]
+    summary: zephyrtastic intents, LED, scan and the hub (link) helpers
+    paths: [plugins/module_utils/intents.py, plugins/module_utils/hub.py, plugins/modules/zephyrtastic_*.py]
     tests:
-      unit: [tests/unit/test_intents.py, tests/unit/test_led.py, tests/unit/test_attach.py]
+      unit: [tests/unit/test_intents.py, tests/unit/test_led.py, tests/unit/test_hub.py]
   - id: mesh.uf2-bootloader
     kind: capability
     summary: the XIAO nRF52840 UF2 bootloader (OTAFIX) planned and updated; nRF ids

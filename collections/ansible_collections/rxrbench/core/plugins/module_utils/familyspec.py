@@ -14,6 +14,8 @@ as `bench_families`; a module takes it as its `families` argument and calls `loa
                      features [..]                    the features an identity lists (others in
                                                       the line are not what tells images apart)
                      strip_build                      `1.2.3+0` is `1.2.3`
+                     feature_aliases {old: new}       a feature's former name, read as its
+                                                      current one (a line, a manifest, a layout)
                      fallback {command, require, fields {field: regex}, optional, ints}
                                                       firmware from before the state line
                    or, for firmware with no state line that answers on its console in
@@ -28,6 +30,7 @@ as `bench_families`; a module takes it as its `families` argument and calls `loa
                      timeout                          seconds before the probe is killed
     image          match [..]   manifest fields that must equal the board's declaration
                    bytes_check  {field, args}: the field read from the image's own bytes
+                   feature_aliases {old: new}: as under identity, for images and layouts
     regions        [[name, flash map key], ..] of its config regions, the first one essential
     reboot         {reboot, dialect, expect_reply, uptime, banner}; uptime is {command, pattern,
                    scale} or {state_key}, or None when the board cannot say how long it has been
@@ -105,6 +108,18 @@ def with_identity(exclude=None):
     return [f for f, s in _TABLE.items() if f != exclude and (s or {}).get("identity")]
 
 
+def canon_features(aliases, feats):
+    """A feature list in its current names, sorted, each once: a feature renamed since an image
+    was built or a layout written (`aliases`, {old: new}) is the same feature."""
+    aliases = aliases or {}
+    return sorted({aliases.get(f, f) for f in feats or []})
+
+
+def feature_aliases(family):
+    """{old name: current name} of a family's image features."""
+    return (of(family)["image"] or {}).get("feature_aliases") or {}
+
+
 def image_refusals(family, manifest, declared):
     """Why an image must not go on a board declared `declared` (its `firmware:` block): a
     field the family tells its images apart by differs."""
@@ -112,7 +127,8 @@ def image_refusals(family, manifest, declared):
     for field in of(family)["image"]["match"]:
         have, want = manifest.get(field), declared.get(field)
         if field == "features":
-            have, want = sorted(have or []), sorted(want or [])
+            aliases = feature_aliases(family)
+            have, want = canon_features(aliases, have), canon_features(aliases, want)
             if have != want:
                 out.append(f"the image has features {have}; the layout declares {want} for this board")
         elif have != want:
@@ -132,7 +148,9 @@ def fields_of_line(spec, j):
     for field, key in (spec.get("fields") or {}).items():
         if field == "features":
             if key in j:
-                out[field] = sorted(set(j[key] or []) & set(spec.get("features") or []))
+                aliases = spec.get("feature_aliases") or {}
+                out[field] = sorted(set(canon_features(aliases, j[key]))
+                                    & set(spec.get("features") or []))
         elif j.get(key) is not None:
             out[field] = j[key]
     if spec.get("strip_build"):

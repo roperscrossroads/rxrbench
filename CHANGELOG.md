@@ -72,6 +72,24 @@
   second image for `update-there-and-back` must provide all the board's image lists, and the
   verb says which features no other image has when none does.
 
+### Changed
+
+- **zephyrtastic: brain is now hub, head is now worker**, as the firmware names them. A layout
+  declares `features: [hub]`, `zephyrtastic: {hub: {workers: {...}}}` on a hub and `{worker:
+  {hub: X}}` on a worker, and a worker's profile is `worker`; the groups are `hubs` and
+  `workers`; the module is `rxrbench.mesh.zephyrtastic_hub` (was `zephyrtastic_attach`), its
+  options `workers`, `worker_sockets` and `link_wait`. The catalog builds the hub, worker and
+  rx-only worker images from `overlay-hub.conf`, `overlay-worker.conf` and
+  `overlay-worker-rx.conf`, which needs zephyrtastic with the same names. For one release
+  the old names still work: a layout's `features: [brain]`, `brain: {heads: ...}` and
+  `head: {brain: X}` (a board may not declare both spellings); a state line's `brain`/`head`
+  objects and features; an image staged as `class-N-brain-<build>` (the image path falls
+  back to it when no `class-N-hub-<build>` is staged; `stage_image.py --feature brain` stages
+  under `hub`); and firmware that has only `meshtastic attach preset` is sent that when it
+  does not know `meshtastic hub preset`. A family may now name a feature's former names
+  (`Family.feature_aliases`), and core reads them as the feature wherever features are
+  compared: a board's identity, an image's, a layout's declaration and its groups.
+
 ### Fixed
 
 - **A digest line split by the board's own console message is asked again**: a just-booted

@@ -14,4 +14,4 @@ tools/enroll.py: alias aliases board board_type boards bootloader_usb bridge chi
 tools/usbipd_attach.py: app devices host match modes reach serial_by_id usb usb_pid usb_vid
 tools/plug_relay.py: aliases board bootloader bridge busid busids busy chip chip_id class description devices esptool host ids keys kind mac manufacturer match mcu pending probe probes product registered reported serial tags until usb usb_pid usb_vid v version
 tools/labels.py: boards description devices family hosts hostvars match registry
-tools/debug.py: build devices features hosts hostvars identity_key match output serial_by_id state_command
+tools/debug.py: build devices feat features hosts hostvars identity_key match output serial_by_id state_command

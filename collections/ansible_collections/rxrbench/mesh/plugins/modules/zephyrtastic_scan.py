@@ -55,7 +55,7 @@ presets:
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.rxrbench.core.plugins.module_utils import broker_client
-from ansible_collections.rxrbench.mesh.plugins.module_utils import attach, state
+from ansible_collections.rxrbench.mesh.plugins.module_utils import hub, state
 
 
 def read_scanner(board, deadline):
@@ -81,7 +81,7 @@ def main():
     try:
         with broker_client.Board(p["board"], path=p["socket"]) as b:
             before = read_scanner(b, p["deadline"])
-            cmds, delta = attach.plan_scan(p["presets"], before)
+            cmds, delta = hub.plan_scan(p["presets"], before)
             result = {"changed": bool(cmds), "commands": cmds, "presets": before["presets"]}
             if cmds:
                 result["diff"] = {"before": {"presets": delta[0]}, "after": {"presets": delta[1]}}
@@ -95,7 +95,7 @@ def main():
                 module.fail_json(msg=f"the board did not take: it sweeps {after['presets']}, "
                                      f"declared {p['presets']}", **result)
             module.exit_json(**result)
-    except (broker_client.BrokerError, state.StateError, attach.AttachError) as e:
+    except (broker_client.BrokerError, state.StateError, hub.HubError) as e:
         module.fail_json(msg=str(e))
 
 

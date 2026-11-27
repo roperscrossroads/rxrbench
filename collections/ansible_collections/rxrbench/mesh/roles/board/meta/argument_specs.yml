@@ -165,6 +165,12 @@ argument_specs:
         description: >-
           How the board's identity key is escrowed, for a family's own tasks. (Documented with the other
           layout variables in C(docs/LAYOUT.md).)
+      bench_hub_workers: &bench_hub_workers
+        type: dict
+        description: >-
+          The workers a zephyrtastic hub declares, C({board: PRESET}), from the family's facts
+          (C(zephyrtastic.hub.workers), or C(zephyrtastic.brain.heads) before the rename); null
+          on a board that is not a hub.
       bench_led: &bench_led
         type: str
         description: >-
@@ -224,7 +230,7 @@ argument_specs:
     description:
       - >-
         A board that speaks the Meshtastic vocabulary (families zephyrtastic and stock meshtastic):
-        radio, the zephyrtastic brain/listener config where declared, owner/device/channels and the
+        radio, the zephyrtastic hub/listener config where declared, owner/device/channels and the
         admin keys where its family writes config (config_via), and the read-back that proves it. The
         order matters: a node that is made managed (security.is_managed) takes nothing local
         afterwards, so that is the last write of the last step.
@@ -234,6 +240,7 @@ argument_specs:
       bench_config_via: *bench_config_via
       bench_family: *bench_family
       bench_family_tasks: *bench_family_tasks
+      bench_hub_workers: *bench_hub_workers
       bench_key_escrow: *bench_key_escrow
       bench_led: *bench_led
       bench_led_color: *bench_led_color
@@ -250,7 +257,7 @@ argument_specs:
       bench_radio_skip: &bench_radio_skip
         type: list
         description: >-
-          LoRa fields the radio step leaves to another board (a head's preset is its brain's).
+          LoRa fields the radio step leaves to another board (a worker's preset is its hub's).
       bench_rf_rules: *bench_rf_rules
       bench_socket: *bench_socket
       board_flashed: *board_flashed

@@ -73,7 +73,7 @@ def test_every_writing_play_passes_the_gate_before_its_first_write(name):
 #: immediately before the first write, so a read, a plan or a board that already matches passes.
 WRITERS_AT_WRITE = ("meshtastic_radio", "meshtastic_config", "meshtastic_identity", "meshtastic_net_config",
                     "meshcore_config", "meshcore_identity", "meshcore_radio", "meshcore_storage",
-                    "zephyrtastic_attach", "zephyrtastic_intents", "zephyrtastic_led", "linux_host_key")
+                    "zephyrtastic_hub", "zephyrtastic_intents", "zephyrtastic_led", "linux_host_key")
 
 
 @pytest.mark.parametrize("name", WRITERS_AT_WRITE)

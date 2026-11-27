@@ -27,7 +27,7 @@ def test_a_xiao_member():
     assert f["device"]["rebroadcast_mode"] == "NONE"
 
 
-def test_a_head_and_a_brain():
+def test_a_worker_and_a_hub():
     assert state.legacy_facts(FIX["xiao1"])["class"] == 12
     assert state.legacy_facts(FIX["xiao1"])["lora"]["modem_preset"] == "MEDIUM_FAST"
     assert state.legacy_facts(FIX["board3"])["class"] == 6
@@ -109,12 +109,18 @@ def test_the_state_line_becomes_the_same_facts_shape():
                                 "uplink_enabled": True, "downlink_enabled": True,
                                 "psk": "default", "expanded": False}
     assert f["channels"][2]["psk"] == "secret" and f["channels"][2]["fingerprint"] == "9f8e7d6c"
-    assert f["brain"]["heads"] == [
-        {"attachment": 1, "node_id": "0x1c2c3c4c", "link_up": True, "preset": "MEDIUM_FAST",
+    # a hub as firmware from before the rename says it ("brain", "heads")
+    assert f["hub"]["workers"] == [
+        {"number": 1, "node_id": "0x1c2c3c4c", "link_up": True, "preset": "MEDIUM_FAST",
          "wanted_preset": "SHORT_FAST"},
-        # the second head is as firmware before 0.4.39 reports it: no "w"
-        {"attachment": 2, "node_id": "0x00000001", "link_up": False, "preset": None,
+        # the second worker is as firmware before 0.4.39 reports it: no "w"
+        {"number": 2, "node_id": "0x00000001", "link_up": False, "preset": None,
          "wanted_preset": None}]
+    assert f["hub"]["max_workers"] == 4 and "brain" not in f
+    # and as it says it now: the same facts
+    new = state.state_facts(framed(J.replace('"brain":{"max":4,"heads":', '"hub":{"max":4,"workers":')
+                                   .replace('"feat":["brain"', '"feat":["hub"')))
+    assert new["hub"] == f["hub"]
     assert f["scanner"]["presets"] == ["MEDIUM_FAST", "SHORT_FAST"]
     assert f["cluster"] == {"channel_index": 2, "entries": 1, "doc_hash": "2b93a530"}
     assert f["managed"] is False

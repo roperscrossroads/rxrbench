@@ -16,7 +16,8 @@ image is. The identity comes from the build itself, never from an argument:
                      and app.signed.bin, the app alone, for an update over MCUmgr
 
 The store key is <family>/class-<class>[-<feature>...]-<build>, so two builds never share a
-directory, and a class built with a feature (a brain) is not mistaken for the plain class.
+directory, and a class built with a feature (a hub) is not mistaken for the plain class. A
+feature's former name (`--feature brain`) is taken and staged under its current one (hub).
 """
 import argparse
 import json
@@ -31,6 +32,7 @@ REPO = os.path.abspath(os.path.join(HERE, *[".."] * 5))
 sys.path.insert(0, os.path.join(REPO, "collections"))
 from ansible_collections.rxrbench.core.plugins.module_utils import identity, layout, site  # noqa: E402
 from ansible_collections.rxrbench.core.plugins.plugin_utils import registry  # noqa: E402
+from ansible_collections.rxrbench.mesh.plugins.module_utils import recipe  # noqa: E402
 site.load_env()
 try:
     WS = site.firmware_source("zephyrtastic")["workspace"]
@@ -57,10 +59,11 @@ def main():
     ap.add_argument("build")
     ap.add_argument("--board-tag", required=True, help="the registry's policy.board_tag")
     ap.add_argument("--feature", action="append", default=[],
-                    help="what the build has beyond its class recipe (e.g. brain); part of "
-                         "the store key")
+                    help="what the build has beyond its class recipe (e.g. hub; the old name "
+                         "brain is taken as hub); part of the store key")
     ap.add_argument("--store", default=os.path.join(REPO, ".build", "store"))
     a = ap.parse_args()
+    a.feature = recipe.canon(a.feature)
     build = os.path.abspath(a.build)
     app = os.path.join(build, "meshtastic", "zephyr")
     signed = os.path.join(app, "zephyr.signed.bin")

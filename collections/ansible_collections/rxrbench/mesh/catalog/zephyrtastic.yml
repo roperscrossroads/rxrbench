@@ -250,14 +250,14 @@ classes:
 
   11:
     name: xiao-worker-rx
-    summary: XIAO cross-preset relay ear; transmit compiled out
+    summary: XIAO rx-only worker for the cross-preset relay; transmit compiled out
     board: xiao_ble/nrf52840
     board_tag: xiao
     hw_model: 88
     build_dir: build-xiao-ear11
     notes: >-
-      XIAO relay EAR: forwards heard broadcast text over the peer link, transmit compiled out; `meshtastic ear
-      peer <id>`
+      XIAO rx-only worker (was the relay ear): forwards heard broadcast text over the peer link, transmit
+      compiled out; `meshtastic worker-rx peer <id>`
     flasher: uf2
     shield: wio_sx1262_xiao
     class_in_recipe: true
@@ -269,18 +269,18 @@ classes:
       - overlay-node-id-from-key.conf
       - overlay-xeddsa.conf
       - overlay-ble-peer.conf
-      - overlay-relay-ear.conf
+      - overlay-worker-rx.conf
 
   12:
     name: xiao-worker
-    summary: XIAO keyless radio head
+    summary: XIAO keyless radio worker
     board: xiao_ble/nrf52840
     board_tag: xiao
     hw_model: 88
     build_dir: build-xiao-head12
     notes: >-
-      XIAO keyless radio HEAD: forwards every heard frame undecoded to its brain over
-      the peer link, retunes on request; no keys, no NodeDB, no identity on the air; `meshtastic attach brain
+      XIAO keyless radio WORKER: forwards every heard frame undecoded to its hub over
+      the link, retunes on request; no keys, no NodeDB, no identity on the air; `meshtastic worker hub
       <id>`
     flasher: uf2
     shield: wio_sx1262_xiao
@@ -291,18 +291,18 @@ classes:
       - overlay-ota-ble-secure.conf
       - overlay-health.conf
       - overlay-ble-peer.conf
-      - overlay-attachment-head.conf
+      - overlay-worker.conf
 
   13:
     name: v3-worker
-    summary: Heltec V3 keyless radio head
+    summary: Heltec V3 keyless radio worker
     board: heltec_wifi_lora32_v3/esp32s3/procpu
     board_tag: heltec-v3
     hw_model: 43
     build_dir: build-heltec-v3-head13
     notes: >-
-      Heltec V3 keyless radio HEAD: class 12's role on the V3 --
-      forwards every heard frame undecoded to its brain, transmits what its brain hands it; no keys, no
+      Heltec V3 keyless radio WORKER: class 12's role on the V3 --
+      forwards every heard frame undecoded to its hub, transmits what its hub hands it; no keys, no
       NodeDB; dram0 ~76 %
     flasher: esptool
     class_in_recipe: true
@@ -313,7 +313,7 @@ classes:
       - overlay-nomqtt.conf
       - overlay-ble-peer.conf
       - overlay-led-status.conf
-      - overlay-attachment-head.conf
+      - overlay-worker.conf
       - overlay-quiet-first-boot.conf
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 

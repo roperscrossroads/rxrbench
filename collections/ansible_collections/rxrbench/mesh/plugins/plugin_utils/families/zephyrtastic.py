@@ -3,15 +3,21 @@ import os
 
 from ansible_collections.rxrbench.core.plugins.module_utils import rfrules, site
 from ansible_collections.rxrbench.core.plugins.plugin_utils.families import base
-from ansible_collections.rxrbench.mesh.plugins.module_utils import config, intents, meshrf, recipe
+from ansible_collections.rxrbench.mesh.plugins.module_utils import config, hub, intents, meshrf, recipe
 
 #: This collection's own catalog (catalog/zephyrtastic.yml).
 CATALOG = os.path.abspath(os.path.join(os.path.dirname(__file__), *[".."] * 3, "catalog"))
 
 #: The bench LED's colour by group, first match wins; a layout's `board_led_colors` replaces the
 #: list (a site adds its clusters' colours there), a board's `zephyrtastic.led.color` beats both.
-LED_COLORS = [{"group": "brains", "color": "magenta"}, {"group": "heads", "color": "cyan"},
+LED_COLORS = [{"group": "hubs", "color": "magenta"}, {"group": "workers", "color": "cyan"},
               {"group": "listeners", "color": "yellow"}, {"group": "boards", "color": "red"}]
+
+
+#: (key of the survey's probe, the role it means): a state line's `hub`/`worker` objects, and
+#: `brain`/`head` from firmware before the rename, are the same roles.
+SURVEY_ROLES = (("hub", "hub"), ("brain", "hub"), ("worker", "worker"), ("head", "worker"),
+                ("scanner", "listener"))
 
 
 def _untemplated(sec):
@@ -48,9 +54,11 @@ def resolve_class(value, classes):
 class Family(base.Family):
     #: a UF2 board's bootloader is this plugin's to update (roles/board/tasks/bootloader_uf2.yml)
     bootloader_tasks = {"uf2": "bootloader_uf2"}
-    #: an image with the brain feature puts its board among the brains
-    feature_groups = {"brain": "brains"}
-    #: roles/board/tasks/family/zephyrtastic.yml: the LED, intents, a brain's heads, a listener's presets
+    #: an image with the hub feature puts its board among the hubs
+    feature_groups = {"hub": "hubs"}
+    #: a feature's former name (brain, now hub) is the same feature
+    feature_aliases = dict(recipe.FEATURE_ALIASES)
+    #: roles/board/tasks/family/zephyrtastic.yml: the LED, intents, a hub's workers, a listener's presets
     role_tasks = "zephyrtastic"
 
     reset_command = "meshtastic resets"
@@ -80,12 +88,14 @@ class Family(base.Family):
                        "image": "image", "features": "feat",
                        # the front end detected at boot (firmware with lora.fem in its state line)
                        "fem": "lora.fem"},
-              "flags": {"brain": "brain", "head": "head", "scanner": "scan"}}
+              # a hub, a worker (before the rename: brain, head), a listener
+              "flags": {"hub": "hub", "worker": "worker", "brain": "brain", "head": "head",
+                        "scanner": "scan"}}
     #: an image goes on a board only as the class, with the features, the layout declares;
     #: the class is also in the image's signed TLV
     image_match = ("class", "features")
     image_bytes_check = {"field": "class", "args": ["--class"]}
-    #: the recipe features an image's identity lists (a brain is told from a plain member by them)
+    #: the recipe features an image's identity lists (a hub is told from a plain member by them)
     features = tuple(recipe.FEATURES)
     #: an ESP32 image's config regions: Zephyr's settings store (NVS) and the bulk store
     config_regions = (("storage", "STORAGE"), ("bulk", "MT_BULK"))
@@ -117,15 +127,15 @@ class Family(base.Family):
             t.add(f"class:{probe['class']}")
         if board:
             t.add(f"board:{board}")
-        for role in ("brain", "head", "scanner"):
-            if role in probe:
-                t.add(f"role:{'listener' if role == 'scanner' else role}")
+        for key, role in SURVEY_ROLES:
+            if key in probe:
+                t.add(f"role:{role}")
         return t
 
     def survey_describe(self, probe):
         if not probe.get("node_id"):
             return ""
-        roles = [r for r in ("brain", "head", "scanner") if probe.get(r)]
+        roles = sorted({role for key, role in SURVEY_ROLES if probe.get(key)})
         return (f"zephyrtastic class {probe.get('class')} on {probe.get('board')}, build "
                 f"{probe.get('build')}, node {probe.get('node_id')}"
                 + (f", {'/'.join(roles)}" if roles else ""))
@@ -150,14 +160,14 @@ class Family(base.Family):
                                              "psk": "default"}]}}
 
     def groups(self, hostvars):
-        """From the board's `zephyrtastic:` block: a stock board, a head, a listener, a
+        """From the board's `zephyrtastic:` block: a stock board, a worker, a listener, a
         cluster member."""
         zep = hostvars.get("zephyrtastic") or {}
         g = []
         if zep.get("stock"):
             g.append("stock")
-        if zep.get("head"):
-            g.append("heads")
+        if hub.is_worker(zep):
+            g.append("workers")
         if zep.get("listener"):
             g.append("listeners")
         if zep.get("cluster"):
@@ -165,14 +175,14 @@ class Family(base.Family):
         return g
 
     def board_row(self, hostvars, row):
-        """A keyless head has no phone API: it takes no config and escrows no key."""
-        if (hostvars.get("zephyrtastic") or {}).get("head"):
+        """A keyless worker has no phone API: it takes no config and escrows no key."""
+        if hub.is_worker(hostvars.get("zephyrtastic")):
             return {**row, "config_via": None}
         return row
 
     def board_secrets(self, hostvars):
-        """A keyless head holds none: it has no identity key and takes no channels."""
-        if (hostvars.get("zephyrtastic") or {}).get("head"):
+        """A keyless worker holds none: it has no identity key and takes no channels."""
+        if hub.is_worker(hostvars.get("zephyrtastic")):
             return []
         return [dict(s) for s in self.secrets]
 
@@ -186,16 +196,24 @@ class Family(base.Family):
             cid = resolve_class(fw.get("class"), classes)
             facts["firmware_class"] = cid
             facts["firmware_bundle"] = (classes.get(cid) or {}).get("name") if cid is not None else None
+            # The features in their current names (the store key), and in the names an image
+            # staged before a rename carries (family_zephyrtastic.yml's bench_image falls back
+            # to that spelling when no image of the new one is staged).
+            old = {new: o for o, new in self.feature_aliases.items()}
+            facts["firmware_features"] = recipe.canon(sorted(fw.get("features") or []))
+            facts["firmware_features_old"] = sorted(old.get(f, f) for f in facts["firmware_features"])
         return facts
 
     def _board_facts(self, hostvars, groups):
-        """A head's preset is its brain's to set (the brain re-sends it), so the radio step
+        """A worker's preset is its hub's to set (the hub re-sends it), so the radio step
         leaves it alone; a listener sweeps presets, so where its radio is now is not where it
-        is stored to be."""
+        is stored to be. `hub_workers`: the workers a hub declares ({board: preset}), in
+        either spelling of the block, or None."""
         zep = hostvars.get("zephyrtastic") or {}
         led = zep.get("led") or {}
         colors = hostvars.get("board_led_colors") or LED_COLORS
-        return {"radio_skip": ["modem_preset"] if zep.get("head") else [],
+        return {"radio_skip": ["modem_preset"] if hub.is_worker(zep) else [],
+                "hub_workers": hub.declared_workers(zep),
                 "radio_check_live": not zep.get("listener"),
                 "led_mode": led.get("mode") or hostvars.get("board_led_mode") or "in-use",
                 "led_color": led.get("color")
@@ -205,18 +223,18 @@ class Family(base.Family):
         return meshrf.meshtastic_declared(name, hostvars, managed)
 
     def rf_check(self, name, hostvars, rules):
-        """The preset a board transmits on, and the presets a brain sets on its heads (it
-        re-sends them, and a head's own radio step leaves its preset alone): each must be one
+        """The preset a board transmits on, and the presets a hub sets on its workers (it
+        re-sends them, and a worker's own radio step leaves its preset alone): each must be one
         the firmware has, and fit the band."""
         zep = hostvars.get("zephyrtastic") or {}
-        out = meshrf.meshtastic_rf_check(name, hostvars, rules, own=not zep.get("head"))
-        for head, preset in sorted((((zep.get("brain") or {}).get("heads")) or {}).items()):
-            out += meshrf.preset_problems(name, preset, rules, f"the preset it sets on head {head}")
+        out = meshrf.meshtastic_rf_check(name, hostvars, rules, own=not hub.is_worker(zep))
+        for worker, preset in sorted((hub.declared_workers(zep) or {}).items()):
+            out += meshrf.preset_problems(name, preset, rules, f"the preset it sets on worker {worker}")
         return out
 
     def check_layout(self, all_hostvars):
-        """Cross-board consistency: every head a brain names exists and names that brain back,
-        a board with heads has the brain feature, a board that declares `intents: none`
+        """Cross-board consistency: every worker a hub names exists and names that hub back,
+        a board with workers has the hub feature, a board that declares `intents: none`
         declares no role beside it, and a board's security config can be written and do not
         lock every admin out (a managed node needs an admin key)."""
         out = []
@@ -224,30 +242,35 @@ class Family(base.Family):
             zep = hv.get("zephyrtastic") or {}
             sec = ((hv.get("meshtastic") or {}).get("config") or {}).get("security")
             if sec is not None:
-                if zep.get("head"):
-                    out.append(f"{name}: a keyless head has no phone API and takes no "
+                if hub.is_worker(zep):
+                    out.append(f"{name}: a keyless worker has no phone API and takes no "
                                "meshtastic.config.security")
                 else:
                     try:
                         config.check_security(_untemplated(sec))
                     except config.ConfigError as e:
                         out.append(f"{name}: {e}")
-            heads = ((zep.get("brain") or {}).get("heads")) or {}
-            if heads and "brain" not in ((hv.get("firmware") or {}).get("features") or []):
-                out.append(f"{name}: declares heads but its firmware lacks the 'brain' feature")
-            for h in heads:
+            for old, new in (("brain", "hub"), ("head", "worker")):
+                if old in zep and new in zep:
+                    out.append(f"{name}: declares both zephyrtastic.{new} and its old name "
+                               f"zephyrtastic.{old}; keep {new}")
+            workers = hub.declared_workers(zep) or {}
+            feats = recipe.canon((hv.get("firmware") or {}).get("features"))
+            if workers and "hub" not in feats:
+                out.append(f"{name}: declares workers but its firmware lacks the 'hub' feature")
+            for w in workers:
+                wz = (all_hostvars.get(w) or {}).get("zephyrtastic") or {}
+                if w not in all_hostvars:
+                    out.append(f"{name}: worker {w} is not a board in this layout")
+                elif hub.declared_hub(wz) != name:
+                    out.append(f"{name}: worker {w} does not declare hub {name}")
+            h = hub.declared_hub(zep)
+            if h is not None:
                 hz = (all_hostvars.get(h) or {}).get("zephyrtastic") or {}
                 if h not in all_hostvars:
-                    out.append(f"{name}: head {h} is not a board in this layout")
-                elif (hz.get("head") or {}).get("brain") != name:
-                    out.append(f"{name}: head {h} does not declare brain {name}")
-            b = (zep.get("head") or {}).get("brain")
-            if b is not None:
-                bz = (all_hostvars.get(b) or {}).get("zephyrtastic") or {}
-                if b not in all_hostvars:
-                    out.append(f"{name}: its brain {b} is not a board in this layout")
-                elif name not in (((bz.get("brain") or {}).get("heads")) or {}):
-                    out.append(f"{name}: brain {b} does not list it as a head")
+                    out.append(f"{name}: its hub {h} is not a board in this layout")
+                elif name not in (hub.declared_workers(hz) or {}):
+                    out.append(f"{name}: hub {h} does not list it as a worker")
             roles = intents.conflicts(zep)
             if roles:
                 out.append(f"{name}: declares intents: none and a role ({', '.join(roles)}): "

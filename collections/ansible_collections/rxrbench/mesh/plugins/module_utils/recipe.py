@@ -17,11 +17,16 @@ import json
 
 FEATURES = {
     # feature -> overlays appended to the class's
-    "brain": ["overlay-attachment-brain.conf"],
+    # a node that uses workers (was `brain`, and overlay-attachment-brain.conf)
+    "hub": ["overlay-hub.conf"],
     # bring-up: the LoRa transceiver driver at DEBUG (its interrupts and configuration on
     # the console); a feature so the image has its own identity, never the plain class's
     "lora-debug": ["overlay-lora-debug.conf"],
 }
+
+#: A feature's former name -> its name now: a layout, an image staged or a board built under
+#: the old name is the same feature (kept one release past the bench's roll to the new names).
+FEATURE_ALIASES = {"brain": "hub"}
 
 APP = "samples/meshtastic"
 
@@ -32,12 +37,22 @@ class RecipeError(ValueError):
 
 def overlays_for(cls, features=()):
     out = list(cls.get("overlays") or [])
-    for f in features or ():
+    for f in canon(features):
         if f not in FEATURES:
             raise RecipeError(f"unknown feature {f!r} (known: {sorted(FEATURES)})")
         for o in FEATURES[f]:
             if o not in out:
                 out.append(o)
+    return out
+
+
+def canon(features):
+    """Features in their current names, in the order given, each once."""
+    out = []
+    for f in features or ():
+        f = FEATURE_ALIASES.get(f, f)
+        if f not in out:
+            out.append(f)
     return out
 
 
