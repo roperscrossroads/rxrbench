@@ -63,3 +63,33 @@ def test_what_the_shell_cannot_be_asked_for_is_refused_before_anything_is_sent(b
 def test_a_custom_modem_is_not_replaced_by_a_preset():
     with pytest.raises(radio.RadioError, match="custom modem"):
         radio.plan(WANT, {**FRESH, "use_preset": False})
+
+
+BENCH_DONE = {**FRESH, "modem_preset": "SHORT_FAST", "live_preset": "SHORT_FAST", "tx_power": 2}
+
+
+def test_a_declared_profile_is_applied_once_and_bench_sets_its_own_power():
+    want = {**WANT, "profile": "bench"}
+    cmds, d = radio.plan(want, {**FRESH, "profile": "standard"})
+    # silenced first (the preset and power change), the profile before the power, which it set
+    assert cmds == ["meshtastic lora tx off", "meshtastic lora profile bench",
+                    "meshtastic lora preset ShortFast", "meshtastic lora tx on"]
+    assert d["profile"] == ("standard", "bench")
+    assert radio.plan(want, {**BENCH_DONE, "profile": "bench"}) == ([], {})
+
+
+def test_a_board_without_profiles_is_not_managed_for_one():
+    # firmware from before radio profiles reports none: nothing is sent, nothing differs
+    assert radio.plan({**WANT, "profile": "bench"}, {**BENCH_DONE, "profile": None}) == ([], {})
+
+
+def test_a_profile_alone_changes_nothing_else():
+    cmds, _ = radio.plan({"profile": "crowded"}, {**BENCH_DONE, "profile": "standard"})
+    assert cmds == ["meshtastic lora profile crowded"]
+
+
+@pytest.mark.parametrize("bad", [{"profile": "loud"}, {"profile": "adaptive"},
+                                 {"profile": "bench", "tx_power": 10}])
+def test_an_unknown_or_contradicted_profile_is_refused(bad):
+    with pytest.raises(radio.RadioError):
+        radio.plan(bad, BENCH_DONE)

@@ -25,7 +25,7 @@ options:
     required: true
   lora:
     description: The declared radio config, as in a layout's C(meshtastic.config.lora).
-      Only C(modem_preset), C(tx_power) and C(tx_enabled) are managed here; a key that is
+      Only C(modem_preset), C(tx_power), C(tx_enabled) and C(profile) (firmware with radio profiles) are managed here; a key that is
       absent is left as it is. C(region) and C(use_preset) are accepted and ignored.
     type: dict
     required: true

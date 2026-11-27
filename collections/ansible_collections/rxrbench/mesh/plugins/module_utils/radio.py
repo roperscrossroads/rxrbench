@@ -11,7 +11,9 @@ moment between two commands.
 """
 from . import state
 
-FIELDS = ("modem_preset", "tx_power", "tx_enabled")
+FIELDS = ("modem_preset", "tx_power", "tx_enabled", "profile")
+# The radio profiles `meshtastic lora profile` takes (receive settings; bench also sets 2 dBm).
+PROFILES = ("standard", "battery", "crowded", "bench")
 # The presets the firmware's `meshtastic lora preset` takes by name.
 SETTABLE = ("LONG_FAST", "LONG_SLOW", "LONG_MODERATE", "MEDIUM_SLOW", "MEDIUM_FAST",
             "SHORT_SLOW", "SHORT_FAST", "SHORT_TURBO")
@@ -37,13 +39,20 @@ def check(desired):
     tx = desired.get("tx_enabled")
     if tx is not None and not isinstance(tx, bool):
         raise RadioError(f"tx_enabled must be true or false, got {tx!r}")
+    prof = desired.get("profile")
+    if prof is not None and prof not in PROFILES:
+        raise RadioError(f"profile must be one of {', '.join(PROFILES)}, got {prof!r}")
+    if prof == "bench" and power not in (None, 2):
+        raise RadioError(f"profile bench sets 2 dBm; tx_power {power!r} contradicts it")
 
 
 def diff(desired, actual):
     """{field: (actual, desired)} for every declared field that differs. A field the layout
     does not declare is not managed and never differs."""
     return {f: (actual.get(f), desired[f]) for f in FIELDS
-            if desired.get(f) is not None and actual.get(f) != desired[f]}
+            if desired.get(f) is not None and actual.get(f) != desired[f]
+            # a board whose firmware has no profiles does not report one: not managed there
+            and not (f == "profile" and actual.get(f) is None)}
 
 
 def plan(desired, actual):
@@ -59,7 +68,12 @@ def plan(desired, actual):
     if retune and tx_now:
         cmds.append("meshtastic lora tx off")
         tx_now = False
-    if "tx_power" in d:
+    # The profile first: bench writes 2 dBm itself, and a power declared beside it then
+    # finds nothing to change. A profile never raises the power, so it needs no TX-off.
+    if "profile" in d:
+        cmds.append(f"meshtastic lora profile {desired['profile']}")
+    if "tx_power" in d and not (d.get("profile", (None, None))[1] == "bench"
+                                and desired["tx_power"] == 2):
         cmds.append(f"meshtastic lora power {desired['tx_power']}")
     if "modem_preset" in d:
         cmds.append(f"meshtastic lora preset {state.PRESET_DISPLAY[desired['modem_preset']]}")

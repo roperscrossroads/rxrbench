@@ -101,7 +101,8 @@ def test_the_state_line_becomes_the_same_facts_shape():
         ("a1b2c3d4", "0.4.38+0", 4, "0x1b2b3b4b")
     assert f["lora"] == {"modem_preset": "SHORT_FAST", "use_preset": True,
                          "live_preset": "SHORT_FAST", "region": "US", "tx_power": 2,
-                         "tx_power_is_region_default": False, "tx_enabled": True}
+                         "tx_power_is_region_default": False, "tx_enabled": True,
+                         "profile": None, "fem": None}
     assert f["device"] == {"role": "CLIENT", "rebroadcast_mode": "ALL"}
     assert f["owner"] == {"long_name": 'rig "B"', "short_name": "rB"}
     assert f["channels"][0] == {"index": 0, "name": "ShortFast", "hash": 112, "role": "PRIMARY",

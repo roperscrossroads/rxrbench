@@ -155,6 +155,9 @@ def state_facts(output):
             "tx_power": lora.get("pwr"),
             "tx_power_is_region_default": lora.get("pwr") == 0,
             "tx_enabled": bool(lora.get("tx")),
+            # firmware with radio profiles and front-end detection; None before them
+            "profile": lora.get("prof"),
+            "fem": lora.get("fem"),
         },
         "device": {
             "role": enums.name(enums.DEVICE_ROLE, dev.get("role"), "ROLE"),
