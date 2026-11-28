@@ -25,6 +25,7 @@ def test_a_state_line_is_kept_as_the_familys_survey_says():
     assert us.summarize(None, spec("zephyrtastic")["survey"]) is None
 
 
+@pytest.mark.plugins
 def test_the_detected_front_end_is_kept_from_inside_the_lora_object():
     line = {"v": 1, "id": "0x0a0b0c0d", "board": "heltec_wifi_lora32_v4", "lora": {"fem": "gc1109"}}
     assert us.summarize(line, spec("zephyrtastic")["survey"])["fem"] == "gc1109"
