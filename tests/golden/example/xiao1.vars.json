@@ -61,12 +61,21 @@
  ],
  "bench_family": "zephyrtastic",
  "bench_family_facts": {
+  "firmware_bundle": "xiao-node",
+  "firmware_class": 1,
+  "firmware_features": [],
+  "firmware_features_old": [],
+  "hub_workers": null,
   "led_color": "red",
   "led_mode": "in-use",
   "radio_check_live": true,
   "radio_skip": []
  },
  "bench_family_tasks": "zephyrtastic",
+ "bench_firmware_bundle": "xiao-node",
+ "bench_firmware_class": 1,
+ "bench_firmware_features": [],
+ "bench_firmware_features_old": [],
  "bench_flasher": "uf2",
  "bench_fw_kind": "port",
  "bench_health_counters": {
@@ -82,6 +91,7 @@
   ],
   "restart": "up"
  },
+ "bench_hub_workers": null,
  "bench_identity_key": "class",
  "bench_image": "{{ bench_store }}/{{ firmware.family }}/class-{{ firmware.class }}-{{ builds.zephyrtastic.build }}",
  "bench_key_escrow": "tunnel",
