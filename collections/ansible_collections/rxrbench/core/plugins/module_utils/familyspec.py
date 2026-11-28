@@ -10,6 +10,7 @@ as `bench_families`; a module takes it as its `families` argument and calls `loa
                      command, dialect, null_tokens   how the line is asked for
                      version                          the `v` the line must carry, or None
                      names_family                     the line's `family` must be this family
+                                                      (or a key named here, `a.b` inside an object)
                      fields {identity field: key}     where the line says each field
                      features [..]                    the features an identity lists (others in
                                                       the line are not what tells images apart)
@@ -142,17 +143,38 @@ def exact_features(family):
     return "features" in of(family)["image"]["match"]
 
 
+def value_at(j, key):
+    """A state line's value at `key`: `a.b` is `b` inside the object `a`; None when absent."""
+    value = j
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def names_family_key(spec):
+    """The key whose value must be the family's name, when the spec asks for one: `names_family`
+    true means the reserved `family`; a string names the key (`a.b` inside an object)."""
+    nf = spec.get("names_family")
+    if not nf:
+        return None
+    return nf if isinstance(nf, str) else "family"
+
+
 def fields_of_line(spec, j):
-    """The identity fields a state line's JSON gives, by a family's `identity` spec."""
+    """The identity fields a state line's JSON gives, by a family's `identity` spec. A key may
+    be a path into an object (`fw.build`)."""
     out = {}
     for field, key in (spec.get("fields") or {}).items():
+        value = value_at(j, key)
         if field == "features":
-            if key in j:
+            if value is not None:
                 aliases = spec.get("feature_aliases") or {}
-                out[field] = sorted(set(canon_features(aliases, j[key]))
+                out[field] = sorted(set(canon_features(aliases, value))
                                     & set(spec.get("features") or []))
-        elif j.get(key) is not None:
-            out[field] = j[key]
+        elif value is not None:
+            out[field] = value
     if spec.get("strip_build"):
         out["version"] = identity.strip_build(out.get("version"))
     return out

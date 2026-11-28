@@ -540,7 +540,8 @@ def _read_identity(board, family, spec, deadline):
     if spec.get("version") is not None and j.get("v") != spec["version"]:
         raise stateline.StateError(f"state version {j.get('v')!r}, this tool reads {spec['version']}")
     # A line that names its family is proof only when it names this one.
-    if spec.get("names_family") and j.get("family") != family:
+    named = familyspec.names_family_key(spec)
+    if named and familyspec.value_at(j, named) != family:
         raise NotOurs(f"{who} does not answer as {family} (no `{spec['command']}` line naming it)")
     return identity.make(family, **familyspec.fields_of_line(spec, j))
 

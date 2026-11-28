@@ -118,8 +118,10 @@ zephcore firmware print it (the mesh plugin's families); any firmware may.
   `binascii.crc_hqx(text, 0)`) of the JSON text exactly as printed. A line that is there but fails
   its checksum or is not JSON is refused, never read as "no state".
 - Reserved keys: `v`, the line's version, checked against the family's `state` version when it gives
-  one; `family`, which must name the family when its spec says `names_family`. Every other key is the
-  family's: its `state` hook names the keys for target, version, build and its identity key.
+  one; `family`, which must name the family when its spec says `names_family: true`. Every other key
+  is the family's: its `state` hook names the keys for target, version, build and its identity key.
+  A key may be a path into an object (`fw.build`), and `names_family` may name the key that carries the
+  family's name instead of `family` (`names_family: fw.name`).
 - A family whose firmware cannot format a value may name placeholder tokens (`null_tokens`), read
   as null after the checksum.
 

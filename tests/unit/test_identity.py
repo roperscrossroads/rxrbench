@@ -158,3 +158,23 @@ def test_a_familys_own_identity_field_exists_because_the_family_says_so():
             identity.make("anything", **{sorted(keys)[0]: 1})
     finally:
         familyspec.load(families.specs())
+
+
+def test_a_state_line_field_may_sit_inside_an_object():
+    # A firmware that keeps its image identity in an object (`fw`) names the path to each field.
+    spec = {"fields": {"target": "board", "build": "fw.build", "version": "fw.version"},
+            "strip_build": True}
+    line = {"v": 1, "board": "xiao_ble/nrf52840", "fw": {"build": "69ce812d", "version": "0.1.0+0"}}
+    assert familyspec.fields_of_line(spec, line) == {
+        "target": "xiao_ble/nrf52840", "build": "69ce812d", "version": "0.1.0"}
+    # a path through something that is not an object, or a missing key, gives nothing
+    assert familyspec.fields_of_line(spec, {"v": 1, "board": "b", "fw": "1.2"}) == {
+        "target": "b", "version": None}
+
+
+def test_the_key_that_names_the_family_may_be_given():
+    assert familyspec.names_family_key({}) is None
+    assert familyspec.names_family_key({"names_family": True}) == "family"
+    assert familyspec.names_family_key({"names_family": "fw.name"}) == "fw.name"
+    assert familyspec.value_at({"fw": {"name": "acme"}}, "fw.name") == "acme"
+    assert familyspec.value_at({"fw": None}, "fw.name") is None
