@@ -89,6 +89,9 @@
   does not know `meshtastic hub preset`. A family may now name a feature's former names
   (`Family.feature_aliases`), and core reads them as the feature wherever features are
   compared: a board's identity, an image's, a layout's declaration and its groups.
+- **zephyrtastic: class 7 is retired** (it was `xiao-node-sig-optional`, a XIAO that verified
+  signed synced config but did not require it). Class 1 signs instead. The catalog has no
+  class 7, and the number is not reused.
 
 ### Fixed
 

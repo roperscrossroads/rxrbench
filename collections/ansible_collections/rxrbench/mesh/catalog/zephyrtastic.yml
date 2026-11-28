@@ -174,8 +174,8 @@ classes:
     dtc_overlays: [coredump-big.overlay]
     sysbuild: {BOOT_SIGNATURE_TYPE_ECDSA_P256: true}
 
-  # 7: retired 2026-11-25 (was xiao-node-sig-optional, a XIAO that verified but did not require
-  # signed synced config). Class 1 signs since then; the number is never reused.
+  # 7: retired (was xiao-node-sig-optional, a XIAO that verified but did not require signed
+  # synced config). Class 1 signs; the number is never reused (CHANGELOG.md).
 
   8:
     name: r8-scanner
