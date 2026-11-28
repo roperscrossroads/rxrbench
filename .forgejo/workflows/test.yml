@@ -23,8 +23,8 @@ env:
 jobs:
   unit:
     runs-on: docker
-    container:   # zephyr-arm:20261114
-      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
+    container:   # zephyr-arm:20261123
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:f386a972335df68aead89b51fc5a6210bc9fe2929cd2c94458af590410693d0e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
@@ -57,8 +57,8 @@ jobs:
   sim:
     runs-on: docker
     needs: unit
-    container:   # zephyr-arm:20261114
-      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
+    container:   # zephyr-arm:20261123
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:f386a972335df68aead89b51fc5a6210bc9fe2929cd2c94458af590410693d0e
     env:
       RXRBENCH_ZEPHYR_WORKSPACE: /root/ws
       RXRBENCH_NUTTX_WORKSPACE: /root/ws/nuttx-ws

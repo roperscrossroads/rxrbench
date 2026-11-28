@@ -169,8 +169,8 @@ jobs:
     # Zephyr's SDK (Arm), the native_sim and QEMU host tools and uv's Python come with the image
     # (github.com/roperscrossroads/images, images/zephyr-arm), pinned by digest; the job runs as
     # root in it, so nothing here needs sudo, setup-python or a toolchain download.
-    container:   # zephyr-arm:20261114
-      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
+    container:   # zephyr-arm:20261123
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:f386a972335df68aead89b51fc5a6210bc9fe2929cd2c94458af590410693d0e
     needs: [unit, changes]
     if: >-
       contains(needs.changes.outputs.tests, 'ALL')
@@ -269,8 +269,8 @@ jobs:
     # Zephyr's SDK (Arm), the native_sim and QEMU host tools and uv's Python come with the image
     # (github.com/roperscrossroads/images, images/zephyr-arm), pinned by digest; the job runs as
     # root in it, so nothing here needs sudo, setup-python or a toolchain download.
-    container:   # zephyr-arm:20261114
-      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:12405ab544fbde5128dfe4286cbeb63f2a97ad625bffa3d0ef8ee084b325381e
+    container:   # zephyr-arm:20261123
+      image: ghcr.io/roperscrossroads/zephyr-arm@sha256:f386a972335df68aead89b51fc5a6210bc9fe2929cd2c94458af590410693d0e
     defaults:
       run:
         working-directory: rxrbench
