@@ -60,8 +60,17 @@ def collection_dirs(names=BUNDLED):
     return out
 
 
-def load(names=BUNDLED):
-    """Every feature of the collections named, each with `collection` and `dir` added."""
+def loaded():
+    """The bundled collections, then every other plugin the site loads (its own among them):
+    each family a loaded plugin brings must be covered by that plugin's own index."""
+    from ansible_collections.rxrbench.core.plugins.module_utils import site  # pylint: disable=import-outside-toplevel
+    return tuple(BUNDLED) + tuple(p for p in site.plugins() if p not in BUNDLED)
+
+
+def load(names=None):
+    """Every feature of the collections named (default: loaded()), each with `collection` and
+    `dir` added."""
+    names = loaded() if names is None else names
     feats = []
     for coll, d in collection_dirs(names).items():
         p = os.path.join(d, "features.yml")
