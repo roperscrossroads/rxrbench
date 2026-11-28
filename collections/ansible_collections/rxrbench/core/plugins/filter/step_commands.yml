@@ -1,0 +1,16 @@
+---
+DOCUMENTATION:
+  name: step_commands
+  short_description: The commands of one scenario step, as device_run takes them
+  description:
+    - "C(step | rxrbench.core.step_commands(step_name)): a step's C(cmd) with its C(expect),
+      C(refuse), C(rc), C(timeout), C(await) and C(limits), or each of its C(cmds) (a list of
+      such commands, or of command lines) named C(<step_name>-NN)."
+  author:
+    - Adam Roper (@roperscrossroads)
+EXAMPLES: |
+  commands: "{{ step | rxrbench.core.step_commands(step_name) }}"
+RETURN:
+  _value:
+    description: The commands, in order.
+    type: list

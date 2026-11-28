@@ -4,6 +4,15 @@
 
 ### New
 
+- **A step that waits for what the device prints later, judges its numbers, and sends several
+  commands**: a scenario step's command may start something whose result arrives after the command
+  has returned (a test, a transfer, a tool run). `await: {pattern, within}` sends it once and waits
+  for a later console line matching `pattern`, read from the console log the board's broker keeps
+  (`module_utils/consolelog.py`), instead of asking again the way `within` does. `limits:
+  {<group>: {min, max, eq}}` judges the numbers that line (or `expect`) captures by name; they are
+  recorded as the step's `values`. `cmds:` makes one step of several commands sent in order, the
+  first failure ending them (`device_run`'s `stop_on_failure`): a file sent to a device in lines,
+  each with the reply it must get. `device_run` takes all three; library tests may use `cmds`.
 - **A route that delivers, and `rxrbench.hawkbit`**: a plugin may bring a route that carries an
   image to the device itself (`ROUTE_DELIVERIES`: a bearer, the tool that speaks for it on a
   bench host, the image formats it carries). A device with such an entry under its registry

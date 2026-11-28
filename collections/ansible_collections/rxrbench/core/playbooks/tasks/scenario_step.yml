@@ -1,6 +1,10 @@
 ---
 # One step of a scenario, on the board it names, through whatever carries a command to it.
-# `within` seconds (default 0: one try) are given for the step to come true.
+# `within` seconds (default 0: one try) are given for the step to come true, the step asked
+# again every second. A step's command may instead start something whose result the board prints
+# later (`await: {pattern, within}`: sent once, its output what the console said after it, up to
+# that line) and judge the numbers that line carries (`limits`). A step may be several commands
+# (`cmds`), sent in order, the first failure ending them, recorded as one step.
 - name: "The name kept for step {{ step_index + 1 }}"
   ansible.builtin.set_fact:
     # a step's name is the layout's words; what is kept of it becomes a file name
@@ -16,10 +20,9 @@
       {{ (hostvars[step.board].bench_families[hostvars[step.board].bench_family].console
           | default(none, true)) if step_via == 'console' else omit }}
     route: "{{ hostvars[step.board].bench_routes.shell if step_via == 'ssh' else omit }}"
-    commands:
-      - "{{ {'name': step_name, 'cmd': step.cmd}
-            | combine(step | dict2items | selectattr('key', 'in', ['expect', 'refuse', 'rc', 'timeout'])
-                      | items2dict) }}"
+    # its `cmd`, or each of its `cmds` in order, the first failure ending them
+    commands: "{{ step | rxrbench.core.step_commands(step_name) }}"
+    stop_on_failure: "{{ step.cmds is defined }}"
     fail_on_failure: false
   vars:
     step_via: "{{ hostvars[step.board].bench_via }}"
@@ -66,9 +69,10 @@
 - name: "The result of step {{ step_index + 1 }}"
   ansible.builtin.set_fact:
     step_result: >-
-      {{ (step_said.results[0] if step_said.results is defined
-          else {'name': step_name, 'cmd': step.cmd, 'output': '',
-                'passed': false, 'why': [step_said.msg | default('the step did not run')]})
+      {{ (step_said.results | rxrbench.core.step_merged(step_name) if step_said.results is defined
+          else {'name': step_name, 'output': '', 'passed': false,
+                'cmd': step.cmd | default(step.cmds | default([]) | length ~ ' commands'),
+                'why': [step_said.msg | default('the step did not run')]})
          | combine({'board': step.board}) }}
   when: step_said is not skipped
 

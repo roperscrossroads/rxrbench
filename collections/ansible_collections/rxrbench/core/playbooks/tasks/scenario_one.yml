@@ -14,7 +14,7 @@
   loop_control:
     loop_var: step
     index_var: step_index
-    label: "{{ step.board }}: {{ step.cmd }}"
+    label: "{{ step.board }}: {{ step.cmd | default(step.name | default('commands')) }}"
 
 - name: "Make the directory of {{ scenario.name }}"
   ansible.builtin.file:

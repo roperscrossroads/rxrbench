@@ -66,8 +66,8 @@ def check_test(name, test):
             out.append(f"{name}: step {i + 1} names role {role}, which needs.roles does not declare")
         else:
             used.add(role)
-        if not (step or {}).get("cmd"):
-            out.append(f"{name}: step {i + 1} has no cmd")
+        if not (step or {}).get("cmd") and not (step or {}).get("cmds"):
+            out.append(f"{name}: step {i + 1} has no cmd (or cmds)")
     for role in sorted(set(roles) - used):
         out.append(f"{name}: role {role} is declared but no step names it")
     return out

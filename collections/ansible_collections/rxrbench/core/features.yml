@@ -71,10 +71,12 @@ features:
     summary: the layout's device tests and scenarios, run on the board
     paths: [playbooks/test.yml, playbooks/scenario.yml, playbooks/tasks/scenario_step.yml,
             plugins/modules/device_run.py, plugins/module_utils/testlib.py, plugins/filter/counters.py,
-            plugins/filter/scenarios.py, plugins/module_utils/readings.py]
+            plugins/filter/scenarios.py, plugins/module_utils/readings.py, plugins/module_utils/runner.py,
+            plugins/module_utils/consolelog.py]
     tests:
       unit: [tests/unit/test_device_test_play.py, tests/unit/test_device_test_steps.py, tests/unit/test_testlib.py,
-             tests/unit/test_scenario_play.py, tests/unit/test_counters.py, tests/unit/test_readings.py]
+             tests/unit/test_scenario_play.py, tests/unit/test_counters.py, tests/unit/test_readings.py,
+             tests/unit/test_runner.py, tests/unit/test_consolelog.py]
       hw: [device-test]
   - id: core.verb.locate
     kind: verb

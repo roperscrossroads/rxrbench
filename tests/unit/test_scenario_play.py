@@ -41,8 +41,22 @@ def bench(tmp_path):
         return 'counters\n{"up": %d, "fail": %d, "tx": %d}' % (asked["up"], asked.get("fail", 0),
                                                             asked["up"])
 
+    def job(sh):
+        # a command that returns at once; its result is printed later, among the log lines
+        asked["job"] = asked.get("job", 0) + 1
+        threading.Timer(0.4, lambda: sh.out("\r\njob: 3 parts\r\njob done: rc 0, 12 ms, peak 900 B\r\n"
+                                             + "\x1b[1;32muart:~$ \x1b[m")).start()
+        return "job started"
+
+    def part(n):
+        def handler(_sh):
+            asked.setdefault("parts", []).append(n)
+            return f"part {n}/3"
+        return handler
+
     shell = FakeShell({"node ask 0x01020304": "asked", "node list": nodedb, "node fail": failing,
-                       "health": health}, ring=4096)
+                       "health": health, "job start": job, "part 1": part(1), "part 2": part(2),
+                       "part 3": part(3)}, ring=4096)
     console = mb.Console("n1", mb.path_opener(shell.path), str(tmp_path / "n1.log"))
     broker = mb.Broker(console, str(tmp_path / "run" / "n1.sock"))
     t = threading.Thread(target=broker.run, daemon=True)
@@ -202,3 +216,52 @@ def test_the_reading_after_runs_and_is_kept_when_a_step_failed(bench):
     assert not rec["passed"]
     assert rec["steps"][-1]["passed"] and rec["steps"][-1]["deltas"]["fail"] == 1, \
         "the board's allowance let one failure through, and the change is kept"
+
+
+JOB = r"^job done: rc (?P<rc>-?\d+), (?P<ms>\d+) ms, peak (?P<peak>\d+) B"
+
+
+def test_a_step_awaits_the_line_its_command_prints_later_and_judges_its_numbers(bench):
+    tmp, sock, asked = bench
+    rc, out = run(tmp, sock, [{"name": "job", "steps": [
+        {"name": "run the job", "board": "n1", "cmd": "job start", "refuse": "error",
+         "await": {"pattern": JOB, "within": 10},
+         "limits": {"rc": {"eq": 0}, "ms": {"max": 1000}, "peak": {"max": 4096}}}]}])
+    assert rc == 0, out
+    rec, d = record(tmp, "job")
+    [step] = rec["steps"]
+    assert step["passed"] and step["values"] == {"rc": 0, "ms": 12, "peak": 900}, step
+    assert "job: 3 parts" in step["output"] and step["output"].endswith("peak 900 B"), step
+    assert asked["job"] == 1, "sent once, not asked again while it waited"
+    assert "job done: rc 0" in open(os.path.join(d, "01-run-the-job.txt")).read()
+
+
+def test_a_limit_the_later_line_breaks_fails_the_step_with_the_reason(bench):
+    tmp, sock, asked = bench
+    rc, out = run(tmp, sock, [{"name": "job", "steps": [
+        {"name": "job", "board": "n1", "cmd": "job start",
+         "await": {"pattern": JOB, "within": 10}, "limits": {"peak": {"max": 512}}}]}])
+    assert rc != 0 and "failed: job" in out, out
+    rec, _ = record(tmp, "job")
+    assert rec["steps"][0]["why"] == ["peak 900, over 512"], rec
+
+
+def test_a_step_of_several_commands_runs_them_in_order_and_stops_at_the_first_failure(bench):
+    tmp, sock, asked = bench
+    rc, out = run(tmp, sock, [{"name": "send", "steps": [
+        {"name": "parts", "board": "n1",
+         "cmds": [{"cmd": "part 1", "expect": "^part 1/3"}, "part 2",
+                  {"cmd": "part 3", "expect": "^part 3/3"}]}]}])
+    assert rc == 0, out
+    rec, d = record(tmp, "send")
+    [step] = rec["steps"]
+    assert step["passed"] and step["commands"] == 3 and asked["parts"] == [1, 2, 3], step
+    assert step["output"].splitlines()[:2] == ["> part 1", "part 1/3"], step
+    assert sorted(os.listdir(d)) == ["01-parts.txt", "scenario.json"]
+    asked["parts"] = []
+    rc, out = run(tmp, sock, [{"name": "send", "steps": [
+        {"name": "parts", "board": "n1",
+         "cmds": [{"cmd": "part 1", "expect": "^part 1/3"}, {"cmd": "part 2", "expect": "^never"},
+                  "part 3"]}]}])
+    assert rc != 0 and asked["parts"] == [1, 2], (asked, out)
+

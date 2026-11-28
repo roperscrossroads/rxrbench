@@ -31,6 +31,22 @@ options:
       refuse: {type: str, description: A regular expression the output must not match.}
       rc: {type: int, description: The exit code wanted (Linux only). A test defaults to 0.}
       timeout: {type: float, description: Seconds allowed for this command.}
+      await:
+        description:
+          - "Boards only. A result the board prints after the command has returned: C(pattern), a
+            regular expression a later console line must match, within C(within) seconds
+            (default 30). The command is sent once; its output is what the console said after
+            it, up to and including that line, read from the board's console log."
+        type: dict
+        suboptions:
+          pattern: {type: str, required: true, description: The line awaited.}
+          within: {type: float, description: Seconds to wait for it (default 30).}
+      limits:
+        description:
+          - "Bounds on the numbers C(await)'s pattern (else C(expect)) captures by name:
+            C({<group>: {min, max, eq}}). What was captured is returned as the result's
+            C(values)."
+        type: dict
   board:
     description: A board's name, to reach it through its serial broker.
     type: str
@@ -58,6 +74,11 @@ options:
     description: Fail the task when a test fails. Off, the failures are only reported.
     type: bool
     default: true
+  stop_on_failure:
+    description: After a failed test, run none of the commands after it (each is reported as not
+      run). For commands that only make sense in order, such as a file sent in lines.
+    type: bool
+    default: false
   timeout:
     description: Seconds allowed for a command that names no timeout of its own.
     type: float
@@ -77,7 +98,8 @@ EXAMPLES = r"""
 
 RETURN = r"""
 results:
-  description: One entry per command (name, cmd, output, rc, test, passed, why).
+  description: One entry per command (name, cmd, output, rc, test, passed, why), and C(values),
+    what C(await) or C(expect) captured by name, when it captured anything.
   returned: always
   type: list
   elements: dict
@@ -90,7 +112,7 @@ failed_tests:
 
 from ansible.module_utils.basic import AnsibleModule
 
-from ansible_collections.rxrbench.core.plugins.module_utils import broker_client, runner, ssh
+from ansible_collections.rxrbench.core.plugins.module_utils import broker_client, consolelog, runner, ssh
 
 
 def console_tail(path, size):
@@ -114,7 +136,10 @@ def main():
                 "name": {"type": "str", "required": True},
                 "cmd": {"type": "str", "required": True},
                 "expect": {"type": "str"}, "refuse": {"type": "str"},
-                "rc": {"type": "int"}, "timeout": {"type": "float"}}},
+                "rc": {"type": "int"}, "timeout": {"type": "float"},
+                "await": {"type": "dict", "options": {
+                    "pattern": {"type": "str", "required": True}, "within": {"type": "float"}}},
+                "limits": {"type": "dict"}}},
             "board": {"type": "str"},
             "socket": {"type": "path"},
             "dialect": {"type": "str"},
@@ -122,6 +147,7 @@ def main():
             "console_tail": {"type": "int", "default": 0},
             "read_only": {"type": "bool", "default": False},
             "fail_on_failure": {"type": "bool", "default": True},
+            "stop_on_failure": {"type": "bool", "default": False},
             "timeout": {"type": "float", "default": 20.0},
         },
         mutually_exclusive=[("board", "route")],
@@ -129,7 +155,8 @@ def main():
         supports_check_mode=True,
     )
     p = module.params
-    commands = [{k: v for k, v in c.items() if v is not None} for c in p["commands"]]
+    commands = [{k: ({a: b for a, b in v.items() if b is not None} if k == "await" else v)
+                 for k, v in c.items() if v is not None} for c in p["commands"]]
     # a play hands a family with no console kind on as an empty value
     p["dialect"] = None if p["dialect"] in ("", "None") else p["dialect"]
     try:
@@ -142,15 +169,21 @@ def main():
     try:
         if p["board"]:
             with broker_client.Board(p["board"], path=p["socket"], timeout=p["timeout"] + 60) as b:
+                # a command that awaits a later line reads it from the console log its broker
+                # keeps on this host
+                log = consolelog.ConsoleLog(b.status().get("log")) \
+                    if any(c.get("await") for c in commands) else None
                 results = runner.run_all(
                     commands, lambda cmd, t: (None, b.exec(cmd, deadline=t, **(
-                        {"dialect": p["dialect"]} if p["dialect"] else {}))), p["timeout"])
+                        {"dialect": p["dialect"]} if p["dialect"] else {}))), p["timeout"],
+                    awaiter=log, stop_on_failure=p.get("stop_on_failure") or False)
                 if p["console_tail"] > 0:
                     results.append(console_tail(b.status().get("log"), p["console_tail"]))
         else:
             target = ssh.Target(p["route"])
-            results = runner.run_all(commands, target.run, p["timeout"])
-    except (broker_client.BrokerError, ssh.SshError) as e:
+            results = runner.run_all(commands, target.run, p["timeout"],
+                                     stop_on_failure=p.get("stop_on_failure") or False)
+    except (broker_client.BrokerError, ssh.SshError, OSError) as e:
         module.fail_json(msg=str(e))
     failed = [r["name"] for r in results if not r["passed"]]
     out = {"changed": False, "results": results, "failed_tests": failed}

@@ -210,7 +210,15 @@ tables:
         optional}` judges how the counters in a later output on the same board moved from it.
         `counters: true` (or `{allow, ignore}`) reads each of the scenario's boards whose family
         has counters before the first step and after the last, and fails on judged counters
-        that grew more than allowed. Declared once for the layout (group_vars), since a scenario
+        that grew more than allowed. A command that starts something whose result the board
+        prints later takes `await: {pattern, within}` (boards only): it is sent once, and the
+        step waits up to `within` seconds (default 30) for a later console line to match
+        `pattern`, read from the board's console log; its output is what the console said after
+        the command, up to that line. `limits: {<group>: {min, max, eq}}` judges the numbers that
+        line (else `expect`) captures by name, recorded as the step's `values`. In place of `cmd`,
+        `cmds` is a list of commands (each `{cmd, expect, refuse, rc, timeout, await, limits}`,
+        or a command line), sent in order, the first failure ending them, recorded as one step:
+        a file sent in lines. Declared once for the layout (group_vars), since a scenario
         spans boards
     - name: bench_scenario_counters
       type: bool

@@ -77,7 +77,7 @@ def test_a_tests_own_shape_is_checked(tmp_path):
         "bad: role a: via ['radio']: one of console, ssh, steps",
         "bad: step 1 names board 'z1': a library test names roles ($a), a layout binds them to boards",
         "bad: step 2 names role b, which needs.roles does not declare",
-        "bad: step 3 has no cmd",
+        "bad: step 3 has no cmd (or cmds)",
         "bad: role c is declared but no step names it"]
     _s, why = testlib.bound_scenarios(tests, problems, {"bad": {"a": "z1", "c": "z2"}}, VIEWS)
     assert why == problems, "a bound test with a broken shape is refused with its problems"

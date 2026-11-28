@@ -3,7 +3,11 @@
 # binds (bench_test_bindings: <site>/tests/<name>.yml, each role a board) run as scenarios named
 # after the test, after the inline ones (docs/ARCHITECTURE.md#runs-tests-and-campaigns). bench_scenarios is a list of
 # {name, steps, counters}, each step {board, cmd, expect, refuse, rc, timeout, within, name,
-# keep, delta, always}: `keep: <name>` keeps the step's output, `delta: {against: <name>, ...}`
+# keep, delta, always, await, limits} or, in place of `cmd`, `cmds` (several commands, each
+# {cmd, expect, refuse, rc, timeout, await, limits}, judged in order as one step).
+# `await: {pattern, within}` waits for a line the board prints after the command has returned;
+# `limits: {<group>: {min, max, eq}}` judges the numbers that line (else `expect`) captures by name.
+# And: `keep: <name>` keeps the step's output, `delta: {against: <name>, ...}`
 # judges how the counters in this output moved from the kept one (plugins/filter/counters.py),
 # `always: true` runs a step even after one before it failed; `counters: true` wraps a scenario
 # in such readings on each of its boards whose family has counters. The command
@@ -79,13 +83,14 @@
           - >-
             hostvars[item.board].bench_via is not none
             or hostvars[item.board].bench_step_tasks is defined
+          - (item.cmd is defined) != (item.cmds is defined)
         fail_msg: >-
           {{ item.board }}: not a board of this layout with a console, an ssh route or a
-          family that takes steps another way
+          family that takes steps another way; or a step with neither or both of cmd and cmds
         quiet: true
       loop: "{{ scenarios_all | map(attribute='steps') | flatten }}"
       loop_control:
-        label: "{{ item.board }}: {{ item.cmd }}"
+        label: "{{ item.board }}: {{ item.cmd | default(item.name | default('commands')) }}"
       run_once: true
 
     - name: Run each scenario

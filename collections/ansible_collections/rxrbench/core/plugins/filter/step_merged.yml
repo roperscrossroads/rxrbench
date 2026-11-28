@@ -1,0 +1,17 @@
+---
+DOCUMENTATION:
+  name: step_merged
+  short_description: One scenario step's result from what each of its commands said
+  description:
+    - "C(results | rxrbench.core.step_merged(step_name)): a step of several commands (C(cmds)) is
+      recorded as one result. It passed when every command did; its output is each command's
+      after a C(> <cmd>) line; its reasons carry the command's number; C(values) are every
+      command's captures. A step of one command is its result unchanged."
+  author:
+    - Adam Roper (@roperscrossroads)
+EXAMPLES: |
+  step_result: "{{ step_said.results | rxrbench.core.step_merged(step_name) }}"
+RETURN:
+  _value:
+    description: The step's result (name, cmd, output, passed, why, values).
+    type: dict
